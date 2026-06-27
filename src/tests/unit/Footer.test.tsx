@@ -20,7 +20,6 @@ describe("Footer", () => {
     render(<Footer />);
     for (const [label, href] of [
       ["Home", "/"],
-      ["Menu", "/menu"],
       ["About", "/about"],
       ["Contact", "/contact"],
     ] as const) {

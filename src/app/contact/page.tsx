@@ -23,10 +23,10 @@ export default function ContactPage() {
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
       <header className="max-w-2xl">
-        <p className="font-heading text-sm font-semibold uppercase tracking-[0.3em] text-brand">
+        <p className="font-heading text-sm font-semibold tracking-[0.3em] text-brand">
           Visit Us
         </p>
-        <h1 className="mt-2 text-4xl font-extrabold uppercase tracking-tight sm:text-5xl">
+        <h1 className="mt-2 text-4xl font-extrabold tracking-tight sm:text-5xl">
           Contact &amp; Hours
         </h1>
         <p className="mt-3 text-lg text-muted-foreground">
@@ -38,7 +38,7 @@ export default function ContactPage() {
         {/* Left: details */}
         <div className="space-y-8">
           <section>
-            <h2 className="text-2xl font-bold uppercase tracking-tight">Get in Touch</h2>
+            <h2 className="text-2xl font-bold tracking-tight">Get in Touch</h2>
             <ul className="mt-4 space-y-4 text-lg">
               <li className="flex items-start gap-3">
                 <MapPin className="mt-1 size-6 shrink-0 text-brand" />
@@ -47,7 +47,7 @@ export default function ContactPage() {
                     href={directionsHref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-medium hover:text-brand"
+                    className="font-semibold hover:text-brand"
                   >
                     {address.street}
                     <br />
@@ -65,13 +65,13 @@ export default function ContactPage() {
               </li>
               <li className="flex items-center gap-3">
                 <Phone className="size-6 shrink-0 text-brand" />
-                <a href={telHref(siteConfig.phone)} className="font-medium hover:text-brand">
+                <a href={telHref(siteConfig.phone)} className="font-semibold hover:text-brand">
                   {formatPhone(siteConfig.phone)}
                 </a>
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="size-6 shrink-0 text-brand" />
-                <a href={`mailto:${siteConfig.email}`} className="font-medium hover:text-brand">
+                <a href={`mailto:${siteConfig.email}`} className="font-semibold hover:text-brand">
                   {siteConfig.email}
                 </a>
               </li>
@@ -82,7 +82,7 @@ export default function ContactPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-bold uppercase tracking-tight">Hours</h2>
+            <h2 className="text-2xl font-bold tracking-tight">Hours</h2>
             <table className="mt-4 w-full max-w-md text-lg">
               <tbody>
                 {week.map((row) => (
@@ -94,7 +94,7 @@ export default function ContactPage() {
                         : "text-muted-foreground"
                     }
                   >
-                    <th scope="row" className="py-1.5 text-left font-medium">
+                    <th scope="row" className="py-1.5 text-left font-semibold">
                       {row.label}
                       {row.isToday && (
                         <span className="ml-2 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">

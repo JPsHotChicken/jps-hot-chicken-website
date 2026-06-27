@@ -30,7 +30,6 @@ export default function OpengraphImage() {
             fontWeight: 800,
             letterSpacing: "-2px",
             lineHeight: 1,
-            textTransform: "uppercase",
             display: "flex",
           }}
         >

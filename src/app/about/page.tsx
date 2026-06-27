@@ -15,10 +15,10 @@ export default function AboutPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
       <header className="max-w-2xl">
-        <p className="font-heading text-sm font-semibold uppercase tracking-[0.3em] text-brand">
+        <p className="font-heading text-sm font-semibold tracking-[0.3em] text-brand">
           Our Story
         </p>
-        <h1 className="mt-2 text-4xl font-extrabold uppercase tracking-tight sm:text-5xl">
+        <h1 className="mt-2 text-4xl font-extrabold tracking-tight sm:text-5xl">
           Nashville Heat, Clarksville Home
         </h1>
       </header>
@@ -68,7 +68,7 @@ export default function AboutPage() {
           },
         ].map((item) => (
           <div key={item.title} className="rounded-xl border border-border bg-card p-6">
-            <h2 className="text-xl font-bold uppercase tracking-tight text-brand">
+            <h2 className="text-xl font-bold tracking-tight text-brand">
               {item.title}
             </h2>
             <p className="mt-2 text-base text-muted-foreground">{item.body}</p>
@@ -87,7 +87,7 @@ export default function AboutPage() {
           />
         </div>
         <div className="order-1 md:order-2">
-          <h2 className="text-3xl font-bold uppercase tracking-tight">Come Hang Out</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Come Hang Out</h2>
           <p className="mt-3 text-lg leading-relaxed text-foreground/90">
             Pull up to the counter in {siteConfig.address.city}. Whether it&apos;s a quick
             lunch or a full spread for the table, we&apos;ll get you sorted. Prefer to grab

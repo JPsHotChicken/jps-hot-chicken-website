@@ -40,7 +40,6 @@ export function buildRestaurantJsonLd() {
     },
     openingHoursSpecification,
     sameAs: [siteConfig.socials.instagram, siteConfig.socials.facebook],
-    menu: `${siteConfig.url}/menu`,
     acceptsReservations: false,
   };
 }

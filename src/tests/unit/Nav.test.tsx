@@ -15,13 +15,11 @@ vi.mock("next/link", () => ({
 }));
 
 import { Nav } from "@/components/Nav";
-import { siteConfig } from "@/data/site";
 
 describe("Nav", () => {
   it("renders the primary navigation links", () => {
     render(<Nav />);
     expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "Menu" })).toHaveAttribute("href", "/menu");
     expect(screen.getByRole("link", { name: "About" })).toHaveAttribute("href", "/about");
     expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute(
       "href",
@@ -29,11 +27,11 @@ describe("Nav", () => {
     );
   });
 
-  it("includes the ordering CTA pointing at the third-party URL", () => {
+  it("includes the ordering CTA pointing at the order page", () => {
     render(<Nav />);
-    expect(screen.getByRole("link", { name: /order/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /order now/i })).toHaveAttribute(
       "href",
-      siteConfig.orderingUrl,
+      "/order",
     );
   });
 

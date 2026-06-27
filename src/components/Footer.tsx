@@ -8,8 +8,8 @@ import { FacebookIcon, InstagramIcon } from "@/components/icons";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/menu", label: "Menu" },
   { href: "/about", label: "About" },
+  { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },
 ];
 
@@ -26,7 +26,7 @@ export function Footer() {
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-4">
         {/* Brand + socials */}
         <div className="md:col-span-1">
-          <p className="font-heading text-xl font-bold uppercase tracking-tight">
+          <p className="font-heading text-xl font-bold tracking-tight">
             <span className="text-brand-light">{brandFirst}</span> {brandRest.join(" ")}
           </p>
           <p className="mt-2 text-sm text-background/70">{siteConfig.tagline}</p>
@@ -54,7 +54,7 @@ export function Footer() {
 
         {/* Contact */}
         <div>
-          <h2 className="font-heading text-sm font-semibold uppercase tracking-widest text-background/60">
+          <h2 className="font-heading text-sm font-semibold tracking-widest text-background/60">
             Visit & Contact
           </h2>
           <ul className="mt-4 space-y-3 text-sm">
@@ -88,7 +88,7 @@ export function Footer() {
 
         {/* Hours */}
         <div>
-          <h2 className="flex items-center gap-2 font-heading text-sm font-semibold uppercase tracking-widest text-background/60">
+          <h2 className="flex items-center gap-2 font-heading text-sm font-semibold tracking-widest text-background/60">
             <Clock className="size-4 text-brand-light" /> Hours
           </h2>
           <ul className="mt-4 space-y-1.5 text-sm">
@@ -108,7 +108,7 @@ export function Footer() {
 
         {/* Explore */}
         <div>
-          <h2 className="font-heading text-sm font-semibold uppercase tracking-widest text-background/60">
+          <h2 className="font-heading text-sm font-semibold tracking-widest text-background/60">
             Explore
           </h2>
           <ul className="mt-4 space-y-1 text-sm">

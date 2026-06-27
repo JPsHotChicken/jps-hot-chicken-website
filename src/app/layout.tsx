@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Oswald } from "next/font/google";
+import { Blinker } from "next/font/google";
 
 import "./globals.css";
 import { siteConfig } from "@/data/site";
@@ -7,16 +7,14 @@ import { buildRestaurantJsonLd } from "@/lib/jsonld";
 import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
 
-const inter = Inter({
+// Blinker is a static (non-variable) font. It ships 100/200/300/400/600/700/800/900
+// — note there is NO 500, so we avoid `font-medium` in the UI. Load only the weights
+// the site actually uses: 400 (body), 600 (semibold), 700 (bold), 800 (extrabold).
+const blinker = Blinker({
+  weight: ["400", "600", "700", "800"],
+  subsets: ["latin"],
+  display: "swap",
   variable: "--font-sans",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const oswald = Oswald({
-  variable: "--font-heading",
-  subsets: ["latin"],
-  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -66,7 +64,7 @@ export default function RootLayout({
   const jsonLd = buildRestaurantJsonLd();
 
   return (
-    <html lang="en" className={`${inter.variable} ${oswald.variable} h-full`}>
+    <html lang="en" className={`${blinker.variable} h-full`}>
       <body className="flex min-h-full flex-col">
         <script
           type="application/ld+json"

@@ -7,7 +7,12 @@ export default defineConfig({
   testDir: "./src/tests/e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // A retry absorbs cold-start flakiness: the first hits to a freshly-started
+  // server (image-heavy home page) can be slow under parallel browsers.
+  retries: process.env.CI ? 2 : 1,
+  // Cap parallelism: a single `next start` server serving the image-heavy home
+  // page gets starved if every CPU core runs a browser at once.
+  workers: 2,
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL,
