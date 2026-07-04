@@ -49,7 +49,7 @@ export const siteConfig = {
       city: "Oak Grove",
       state: "KY",
       zip: "42262",
-      //phone: "+1-270-555-0100", // ⚠️ PLACEHOLDER — Fort Campbell / Oak Grove location phone
+      phone: "+1-270-555-0100", // ⚠️ PLACEHOLDER — Fort Campbell / Oak Grove location phone
       orderingUrl: "https://online.skytab.com/76c8815234573fee8849c9b74d24d10a",
       doordashUrl: "https://www.doordash.com/store/jp's-hot-chicken-oak-grove-654727/52036546/?cursor=eyJzdG9yZV9wcmltYXJ5X3ZlcnRpY2FsX2lkcyI6WzEsNCwxNzcsMTkzLDE5NV19&pickup=false",
       uberEatsUrl: "https://www.ubereats.com/store/jps-hot-chicken-oak-grove/VOMPrQmMSH-RHVYUoOLrYA?utm_campaign=place-action-link&utm_medium=organic&utm_source=google",
@@ -63,10 +63,10 @@ export const siteConfig = {
       city: "Clarksville",
       state: "TN",
       zip: "37040",
-      //phone: "+1-931-555-0142", // ⚠️ PLACEHOLDER — Trenton / Clarksville location phone
-      //orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
-      //doordashUrl: "https://www.doordash.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
-      //uberEatsUrl: "https://www.ubereats.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
+      phone: "+1-931-555-0142", // ⚠️ PLACEHOLDER — Trenton / Clarksville location phone
+      orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
+      doordashUrl: "https://www.doordash.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
+      uberEatsUrl: "https://www.ubereats.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
       isNew: true,
     },
   ],
@@ -84,8 +84,8 @@ export const siteConfig = {
     sunday: null,
   },
   socials: {
-    //instagram: "https://instagram.com/jpshotchicken", // ⚠️ PLACEHOLDER
-    //facebook: "https://facebook.com/jpshotchicken", // ⚠️ PLACEHOLDER
+    instagram: "https://instagram.com/jpshotchicken", // ⚠️ PLACEHOLDER
+    facebook: "https://facebook.com/jpshotchicken", // ⚠️ PLACEHOLDER
   },
 } as const;
 
