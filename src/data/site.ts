@@ -25,19 +25,19 @@ export const siteConfig = {
     variant: "brand",
   },
   description:
-    "JP's Hot Chicken serves Nashville-style hot chicken in Clarksville, TN — hand-breaded tenders and sandwiches, dialed from mild to cluckin' hot, with classic Southern sides.",
+    "JP's Hot Chicken serves Nashville-style hot chicken in Clarksville, TN and Oak Grove, KY.",
   url: "https://www.jpshotchicken.com", // ⚠️ PLACEHOLDER — set to the real production domain
-  orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken", // ⚠️ PLACEHOLDER — general "order" link (nav / CTAs)
-  orderingUrlPickup: "https://order.toasttab.com/online/jps-hot-chicken?mode=pickup", // ⚠️ PLACEHOLDER — real pickup ordering link
-  orderingUrlDelivery: "https://order.toasttab.com/online/jps-hot-chicken?mode=delivery", // ⚠️ PLACEHOLDER — real delivery ordering link
-  phone: "+1-931-555-0142", // ⚠️ PLACEHOLDER — set to the real phone number
-  email: "jpshotchicken@gmail.com",
-  address: {
-    street: "123 Main St", // ⚠️ PLACEHOLDER
-    city: "Clarksville",
-    state: "TN",
-    zip: "37040",
-  },
+  //orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken", // ⚠️ PLACEHOLDER — general "order" link (nav / CTAs)
+  //orderingUrlPickup: "https://order.toasttab.com/online/jps-hot-chicken?mode=pickup", // ⚠️ PLACEHOLDER — real pickup ordering link
+  //orderingUrlDelivery: "https://order.toasttab.com/online/jps-hot-chicken?mode=delivery", // ⚠️ PLACEHOLDER — real delivery ordering link
+  //phone: "+1-931-555-0142", // ⚠️ PLACEHOLDER — set to the real phone number
+  //email: "jpshotchicken@gmail.com",
+  // address: {
+  //   street: "123 Main St", // ⚠️ PLACEHOLDER
+  //   city: "Clarksville",
+  //   state: "TN",
+  //   zip: "37040",
+  // },
   // Physical locations, used by the pickup-order page.
   // ⚠️ Set each location's real ordering link.
   locations: [
@@ -49,10 +49,10 @@ export const siteConfig = {
       city: "Oak Grove",
       state: "KY",
       zip: "42262",
-      phone: "+1-270-555-0100", // ⚠️ PLACEHOLDER — Fort Campbell / Oak Grove location phone
-      orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken-oak-grove", // ⚠️ PLACEHOLDER
-      doordashUrl: "https://www.doordash.com/store/jps-hot-chicken-oak-grove", // ⚠️ PLACEHOLDER
-      uberEatsUrl: "https://www.ubereats.com/store/jps-hot-chicken-oak-grove", // ⚠️ PLACEHOLDER
+      //phone: "+1-270-555-0100", // ⚠️ PLACEHOLDER — Fort Campbell / Oak Grove location phone
+      orderingUrl: "https://online.skytab.com/76c8815234573fee8849c9b74d24d10a",
+      doordashUrl: "https://www.doordash.com/store/jp's-hot-chicken-oak-grove-654727/52036546/?cursor=eyJzdG9yZV9wcmltYXJ5X3ZlcnRpY2FsX2lkcyI6WzEsNCwxNzcsMTkzLDE5NV19&pickup=false",
+      uberEatsUrl: "https://www.ubereats.com/store/jps-hot-chicken-oak-grove/VOMPrQmMSH-RHVYUoOLrYA?utm_campaign=place-action-link&utm_medium=organic&utm_source=google",
       isNew: false,
     },
     {
@@ -63,10 +63,10 @@ export const siteConfig = {
       city: "Clarksville",
       state: "TN",
       zip: "37040",
-      phone: "+1-931-555-0142", // ⚠️ PLACEHOLDER — Trenton / Clarksville location phone
-      orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
-      doordashUrl: "https://www.doordash.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
-      uberEatsUrl: "https://www.ubereats.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
+      //phone: "+1-931-555-0142", // ⚠️ PLACEHOLDER — Trenton / Clarksville location phone
+      //orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
+      //doordashUrl: "https://www.doordash.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
+      //uberEatsUrl: "https://www.ubereats.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
       isNew: true,
     },
   ],
@@ -84,8 +84,8 @@ export const siteConfig = {
     sunday: null,
   },
   socials: {
-    instagram: "https://instagram.com/jpshotchicken", // ⚠️ PLACEHOLDER
-    facebook: "https://facebook.com/jpshotchicken", // ⚠️ PLACEHOLDER
+    //instagram: "https://instagram.com/jpshotchicken", // ⚠️ PLACEHOLDER
+    //facebook: "https://facebook.com/jpshotchicken", // ⚠️ PLACEHOLDER
   },
 } as const;
 
