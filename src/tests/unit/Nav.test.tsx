@@ -20,7 +20,14 @@ describe("Nav", () => {
   it("renders the primary navigation links", () => {
     render(<Nav />);
     expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "About" })).toHaveAttribute("href", "/about");
+    expect(screen.getByRole("link", { name: "Locations" })).toHaveAttribute(
+      "href",
+      "/#locations-title",
+    );
+    expect(screen.getByRole("link", { name: "Careers" })).toHaveAttribute(
+      "href",
+      "/careers",
+    );
     expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute(
       "href",
       "/contact",

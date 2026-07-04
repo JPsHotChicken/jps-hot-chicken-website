@@ -72,3 +72,23 @@ export function getWeekRows(date: Date = new Date()): WeekRow[] {
     isToday: key === todayKey,
   }));
 }
+
+/** Online ordering & delivery stop 30 minutes before the dining room, at 8:30 PM. */
+export const ONLINE_CLOSE = "20:30";
+
+/** A day's online-ordering / delivery hours: the store's open days, closing at 8:30 PM. */
+export function getOnlineDayHours(key: DayKey): DayHours {
+  const day = siteConfig.hours[key];
+  return day ? { open: day.open, close: ONLINE_CLOSE } : null;
+}
+
+/** The full week of online-ordering / delivery hours as display rows, Monday-first. */
+export function getOnlineWeekRows(date: Date = new Date()): WeekRow[] {
+  const todayKey = getTodayKey(date);
+  return DAY_KEYS.map((key) => ({
+    key,
+    label: DAY_LABELS[key],
+    hours: formatDayHours(getOnlineDayHours(key)),
+    isToday: key === todayKey,
+  }));
+}

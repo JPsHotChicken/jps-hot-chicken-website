@@ -149,16 +149,47 @@
   }
 }
 
-/* Infinite horizontal auto-scroll (marquee). The track duplicates its content,
-   so translating by -50% loops seamlessly. */
-@keyframes marquee {
-  to {
-    transform: translateX(-50%);
-  }
+/* ---------------------------------------------------------------------------
+   Press feedback for every interactive control.
+   Written unlayered (so it sits above Tailwind's utility layer and composes with
+   each button's own transitions) to give buttons, CTAs, and link-buttons one
+   consistent, mobile-first tap response: a quick scale-down on press that springs
+   back on release. Transform-based, so it's GPU-cheap and never triggers layout.
+   The default gray tap-highlight is removed in favor of it, and
+   `touch-action: manipulation` drops the ~300ms mobile tap delay. Inline text
+   links are naturally unaffected (transforms don't apply to inline boxes).
+   Fully disabled under prefers-reduced-motion.
+--------------------------------------------------------------------------- */
+button,
+a[href],
+[role="button"],
+summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-@keyframes marquee-reverse {
-  from {
-    transform: translateX(-50%);
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  a[href],
+  [role="button"],
+  summary {
+    transition:
+      transform 0.16s cubic-bezier(0.34, 1.45, 0.64, 1),
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      fill 0.15s ease,
+      box-shadow 0.15s ease,
+      filter 0.15s ease,
+      opacity 0.15s ease;
+  }
+
+  button:not(:disabled):not([aria-disabled="true"]):active,
+  a[href]:active,
+  [role="button"]:not([aria-disabled="true"]):active,
+  summary:active {
+    transform: scale(0.96);
+    transition-duration: 0.05s;
+    transition-timing-function: ease-out;
   }
 }

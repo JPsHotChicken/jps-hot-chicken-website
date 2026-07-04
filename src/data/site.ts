@@ -14,7 +14,16 @@ export type DayHours = { open: string; close: string } | null;
 
 export const siteConfig = {
   name: "JP's Hot Chicken",
-  tagline: "Nashville-style hot chicken, fried to order.",
+  tagline: "Nashville-style Hot Chicken",
+  // 📣 ANNOUNCEMENT BANNER — the alert bar at the top of the home page.
+  //   • enabled : flip to `true` to show it, `false` to hide it.
+  //   • message : the text to display.
+  //   • variant : "brand" (red), "warning" (amber), or "info" (dark neutral).
+  announcement: {
+    enabled: true,
+    message: "4th of July: Store closing at 6pm and online/delivery orders close at 5:30pm",
+    variant: "brand",
+  },
   description:
     "JP's Hot Chicken serves Nashville-style hot chicken in Clarksville, TN — hand-breaded tenders and sandwiches, dialed from mild to cluckin' hot, with classic Southern sides.",
   url: "https://www.jpshotchicken.com", // ⚠️ PLACEHOLDER — set to the real production domain
@@ -40,6 +49,7 @@ export const siteConfig = {
       city: "Oak Grove",
       state: "KY",
       zip: "42262",
+      phone: "+1-270-555-0100", // ⚠️ PLACEHOLDER — Fort Campbell / Oak Grove location phone
       orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken-oak-grove", // ⚠️ PLACEHOLDER
       doordashUrl: "https://www.doordash.com/store/jps-hot-chicken-oak-grove", // ⚠️ PLACEHOLDER
       uberEatsUrl: "https://www.ubereats.com/store/jps-hot-chicken-oak-grove", // ⚠️ PLACEHOLDER
@@ -53,6 +63,7 @@ export const siteConfig = {
       city: "Clarksville",
       state: "TN",
       zip: "37040",
+      phone: "+1-931-555-0142", // ⚠️ PLACEHOLDER — Trenton / Clarksville location phone
       orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
       doordashUrl: "https://www.doordash.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
       uberEatsUrl: "https://www.ubereats.com/store/jps-hot-chicken-clarksville", // ⚠️ PLACEHOLDER
@@ -64,12 +75,12 @@ export const siteConfig = {
   priceRange: "$$",
   // Use 24h "HH:MM" strings; null = closed that day.
   hours: {
-    monday: { open: "11:00", close: "21:00" },
-    tuesday: { open: "11:00", close: "21:00" },
-    wednesday: { open: "11:00", close: "21:00" },
-    thursday: { open: "11:00", close: "21:00" },
-    friday: { open: "11:00", close: "22:00" },
-    saturday: { open: "11:00", close: "22:00" },
+    monday: { open: "10:00", close: "21:00" },
+    tuesday: { open: "10:00", close: "21:00" },
+    wednesday: { open: "10:00", close: "21:00" },
+    thursday: { open: "10:00", close: "21:00" },
+    friday: { open: "10:00", close: "21:00" },
+    saturday: { open: "10:00", close: "21:00" },
     sunday: null,
   },
   socials: {

@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Clock, MapPin, Navigation, Phone, Star, Store, Truck } from "lucide-react";
+import { ArrowRight, Clock, Mail, MapPin, Navigation, Phone, Star, Store, Truck } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { formatPhone, telHref } from "@/lib/format";
-import { formatDayHours, getTodayHours, getTodayKey, DAY_LABELS } from "@/lib/hours";
+import { getWeekRows, getOnlineWeekRows } from "@/lib/hours";
 import { OrderButton } from "@/components/OrderButton";
+import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Marquee } from "@/components/Marquee";
 import { KentuckyIcon, TennesseeIcon } from "@/components/StateIcons";
 import { entrees, sides, dippingSauces, drinks } from "@/data/food";
@@ -28,60 +29,93 @@ const ORDER_OPTIONS = [
 
 const COMBO_INCLUDES = ["Entree", "2 Sides", "2 Dipping Sauces", "Drink"] as const;
 
-// Build-your-combo marquee rows. `anim` must be a literal class string so
-// Tailwind generates it; the `marquee` / `marquee-reverse` keyframes live in
-// globals.css. Rows alternate scroll direction for visual interest.
+// Build-your-combo marquee rows. Each row auto-scrolls (and is drag-scrollable);
+// `direction` alternates for visual interest and `duration` sets the speed — the
+// seconds for the strip to travel one full set of images.
+// `pad` controls the horizontal gap between images; the smaller side/sauce/drink
+// rows get extra breathing room. `scroll: false` renders a static, centered row.
 const COMBO_ROWS = [
   {
     label: "Choose your entree",
     images: entrees,
-    item: "h-56 w-56 sm:h-72 sm:w-72",
-    anim: "animate-[marquee_45s_linear_infinite]",
+    item: "w-56 sm:w-72",
+    direction: "left",
+    duration: 45,
     sizes: "(max-width: 640px) 176px, 240px",
+    pad: "px-3 sm:px-4",
+    scroll: true,
+    aspect: "aspect-[3/2]",
   },
   {
     label: "Choose your first side",
     images: sides,
-    item: "h-16 w-16 sm:h-20 sm:w-20",
-    anim: "animate-[marquee_34s_linear_infinite]",
-    sizes: "(max-width: 640px) 112px, 144px",
+    item: "w-20 sm:w-24",
+    direction: "left",
+    duration: 34,
+    sizes: "(max-width: 640px) 128px, 160px",
+    pad: "px-2 sm:px-2.5",
+    scroll: true,
+    aspect: "aspect-[3/2]",
   },
   {
     label: "Choose your second side",
     images: sides,
-    item: "h-16 w-16 sm:h-20 sm:w-20",
-    anim: "animate-[marquee-reverse_34s_linear_infinite]",
-    sizes: "(max-width: 640px) 112px, 144px",
+    item: "w-20 sm:w-24",
+    direction: "right",
+    duration: 34,
+    sizes: "(max-width: 640px) 128px, 160px",
+    pad: "px-2 sm:px-2.5",
+    scroll: true,
+    aspect: "aspect-[3/2]",
   },
   {
     label: "Choose your first dipping sauce",
     images: dippingSauces,
-    item: "h-14 w-14 sm:h-16 sm:w-16",
-    anim: "animate-[marquee_30s_linear_infinite]",
+    item: "w-14 sm:w-16",
+    direction: "left",
+    duration: 30,
     sizes: "(max-width: 640px) 96px, 128px",
+    pad: "px-5 sm:px-6",
+    scroll: true,
+    aspect: "aspect-[3/2]",
   },
   {
     label: "Choose your second dipping sauce",
     images: dippingSauces,
-    item: "h-14 w-14 sm:h-16 sm:w-16",
-    anim: "animate-[marquee-reverse_30s_linear_infinite]",
+    item: "w-14 sm:w-16",
+    direction: "right",
+    duration: 30,
     sizes: "(max-width: 640px) 96px, 128px",
+    pad: "px-5 sm:px-6",
+    scroll: true,
+    aspect: "aspect-[3/2]",
   },
   {
     label: "Choose your drink",
     images: drinks,
-    item: "h-16 w-16 sm:h-20 sm:w-20",
-    anim: "animate-[marquee_26s_linear_infinite]",
+    item: "w-16 sm:w-20",
+    direction: "left",
+    duration: 32,
     sizes: "(max-width: 640px) 112px, 144px",
+    pad: "px-5 sm:px-6",
+    scroll: true,
+    aspect: "aspect-[3/2]",
   },
-];
+] as const;
 
 export default function HomePage() {
-  const todayHours = getTodayHours();
-  const todayLabel = DAY_LABELS[getTodayKey()];
+  const storeHours = getWeekRows();
+  const onlineHours = getOnlineWeekRows();
+  // Two location phone lines, labeled the way the owner refers to each store.
+  const phoneNumbers = [
+    { label: "Fort Campbell", phone: siteConfig.locations.find((l) => l.slug === "oak-grove")!.phone },
+    { label: "Trenton", phone: siteConfig.locations.find((l) => l.slug === "clarksville")!.phone },
+  ];
 
   return (
     <>
+      {/* Announcement bar — toggled via siteConfig.announcement. */}
+      <AnnouncementBanner />
       {/* Visually-hidden page title (the logo carries the brand visually). */}
       <h1 className="sr-only">
         {siteConfig.name} — {siteConfig.tagline}
@@ -90,7 +124,7 @@ export default function HomePage() {
       <section className="mx-auto w-full max-w-6xl px-4 pt-3 sm:px-6 sm:pt-8">
         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl bg-muted sm:aspect-[16/9]">
           <Image
-            src="/../images/hero.png"
+            src="/images/hero4.jpg"
             alt="A spread of Nashville-style hot chicken from JP's Hot Chicken — sandwich, tenders, and loaded sides"
             fill
             priority
@@ -149,7 +183,7 @@ export default function HomePage() {
           </p>
           <h2
             id="big-combo-title"
-            className="mt-1 font-heading text-7xl font-extrabold uppercase leading-none tracking-tight sm:text-9xl lg:text-[10rem]"
+            className="font-heading text-7xl font-extrabold uppercase leading-none tracking-tight sm:text-9xl lg:text-[10rem]"
           >
             <span className="text-brand">Big</span> Combo
           </h2>
@@ -169,13 +203,13 @@ export default function HomePage() {
             <div
               key={row.label}
               // Tighter gap between the tall entree row and the first side row.
-              className={i === 1 ? "pt-1 sm:pt-2" : "pt-6 first:pt-0"}
+              className={i === 1 ? "pt-10 sm:pt-2" : "pt-10 first:pt-0"}
             >
-              <div className="mx-auto flex max-w-6xl items-center gap-2.5 px-4 sm:gap-3 sm:px-6">
-                <span className="inline-flex shrink-0 items-center rounded-full bg-brand px-2 py-0.5 font-heading text-[10px] font-bold uppercase tracking-wide text-brand-foreground shadow-sm sm:text-xs">
+              <div className="mb-3 mx-auto flex max-w-6xl items-center gap-2.5 px-4 sm:gap-3 sm:px-6">
+                <span className="inline-flex shrink-0 items-center rounded-full bg-brand px-2 py-0.5 font-heading text-[10px] font-bold uppercase tracking-wide text-brand-foreground shadow-md sm:text-xs">
                   Step {i + 1}
                 </span>
-                <span className="font-heading text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground sm:text-sm">
+                <span className="font-heading text-xs font-extrabold uppercase tracking-[0.2em] text-black sm:text-sm">
                   {row.label}
                 </span>
               </div>
@@ -183,8 +217,13 @@ export default function HomePage() {
                 <Marquee
                   images={row.images}
                   itemClassName={row.item}
-                  animationClassName={row.anim}
+                  direction={row.direction}
+                  durationSeconds={row.duration}
+                  paddingClassName={row.pad}
+                  scroll={row.scroll}
                   sizes={row.sizes}
+                  aspectClassName={row.aspect}
+                  labelMarginClassName={i === 0 ? "mt-0" : "mt-1"}
                   imageClassName={
                     i === 0 ? "object-contain" : "object-contain object-top"
                   }
@@ -207,14 +246,14 @@ export default function HomePage() {
 
       {/* Our locations */}
       <section aria-labelledby="locations-title" className="bg-neutral-100 text-foreground">
-        <div className="mx-auto w-full max-w-6xl px-4 py-7 sm:px-6 sm:py-8">
+        <div className="mx-auto mt-5 w-full max-w-6xl px-4 py-7 sm:px-6 sm:py-8">
           <h2
             id="locations-title"
-            className="text-center font-heading text-xl font-extrabold uppercase tracking-tight sm:text-2xl"
+            className="mt-8 mb-5 text-center font-heading text-3xl font-extrabold uppercase tracking-tight sm:text-2xl"
           >
             Our Locations
           </h2>
-          <div className="mx-auto mt-4 grid max-w-4xl gap-3 sm:grid-cols-2 sm:gap-4">
+          <div className="mx-auto mt-4 mb-5 grid max-w-4xl gap-5 sm:grid-cols-2 sm:gap-6">
             {siteConfig.locations.map((loc) => {
               const mapsQuery = encodeURIComponent(
                 `${siteConfig.name}, ${loc.street}, ${loc.city}, ${loc.state}`,
@@ -225,10 +264,10 @@ export default function HomePage() {
               return (
                 <div
                   key={loc.name}
-                  className="flex flex-col gap-3 rounded-xl bg-white p-3 text-left text-foreground shadow-md sm:p-4"
+                  className="flex flex-col gap-3 rounded-xl bg-white px-3 py-5 text-left text-foreground shadow-md sm:px-4 sm:py-7"
                 >
                   <div className="flex items-center gap-3">
-                    <StateShape className="h-12 w-auto shrink-0 text-foreground sm:h-14" aria-hidden="true" />
+                    <StateShape className="h-12 w-auto shrink-0 text-brand sm:h-14" aria-hidden="true" />
                     <div className="min-w-0 flex-1">
                       <h3 className="flex flex-wrap items-center gap-2 font-heading text-base font-bold uppercase tracking-tight sm:text-lg">
                         {loc.street}
@@ -292,43 +331,100 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Quick hits: hours / address / phone */}
-      <section aria-label="Hours, location, and phone" className="border-b border-border bg-muted/40">
-        <div className="mx-auto grid w-full max-w-6xl gap-px px-4 py-8 sm:px-6 md:grid-cols-3">
-          <div className="flex items-start gap-3 px-2 py-3">
-            <Clock className="mt-1 size-6 shrink-0 text-brand" />
-            <div>
-              <p className="font-heading text-sm font-semibold tracking-widest text-muted-foreground">
-                Today · {todayLabel}
-              </p>
-              <p className="mt-1 text-lg font-semibold">
-                {todayHours ? `Open ${formatDayHours(todayHours)}` : "Closed today"}
-              </p>
+      {/* Hours + contact */}
+      <section aria-label="Hours and contact" className="border-b border-border bg-white">
+        <div className="mt-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+          {/* Two hours lists — store hours pinned to the left edge, online/delivery
+              hours pinned to the right edge, at every screen size. */}
+          <div className="flex items-start justify-between gap-3">
+            {/* Store hours */}
+            <div className="mt-3 text-left">
+              <div className="flex items-center gap-2">
+                <Clock className="size-5 shrink-0 text-brand" aria-hidden="true" />
+                <p className="font-heading text-xs font-bold uppercase tracking-widest text-muted-foreground sm:text-sm">
+                  Store Hours
+                </p>
+              </div>
+              <dl className="mt-3 space-y-1">
+                {storeHours.map((row) => (
+                  <div
+                    key={row.key}
+                    className={`flex items-baseline gap-2 text-xs sm:text-sm ${row.isToday ? "font-bold text-brand" : ""
+                      }`}
+                  >
+                    <dt className="w-8 shrink-0">{row.label.slice(0, 3)}</dt>
+                    <dd className={`whitespace-nowrap ${row.isToday ? "" : "text-muted-foreground"}`}>
+                      {row.hours}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            {/* Online ordering / delivery hours */}
+            <div className="w-[150px] text-left sm:w-[280px]">
+              <div className="flex items-start gap-3">
+                <Truck className="mt-1 size-6 shrink-0 text-brand" aria-hidden="true" />
+
+                <p className="max-w-[210px] font-heading text-xs font-bold uppercase tracking-widest text-muted-foreground sm:max-w-[240px] sm:text-sm">
+                  Online Ordering / Delivery Hours
+                </p>
+              </div>
+
+              <dl className="mt-3 ml-7 space-y-1">
+                {onlineHours.map((row) => (
+                  <div
+                    key={row.key}
+                    className={`flex items-baseline text-xs sm:text-sm ${row.isToday ? "font-bold text-brand" : ""
+                      }`}
+                  >
+                    <dt className="w-10 shrink-0">{row.label.slice(0, 3)}</dt>
+
+                    <dd
+                      className={`whitespace-nowrap ${row.isToday ? "" : "text-muted-foreground"
+                        }`}
+                    >
+                      {row.hours}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           </div>
-          <div className="flex items-start gap-3 px-2 py-3">
-            <MapPin className="mt-1 size-6 shrink-0 text-brand" />
-            <div>
-              <p className="font-heading text-sm font-semibold tracking-widest text-muted-foreground">
-                Find Us
-              </p>
-              <p className="mt-1 text-lg font-semibold">
-                {siteConfig.address.street}, {siteConfig.address.city}, {siteConfig.address.state}{" "}
-                {siteConfig.address.zip}
-              </p>
+
+          {/* Call + Email — side by side, matching the two-column hours layout above */}
+          <div className="mt-8 flex items-start justify-between gap-3 border-t border-border pt-8 sm:justify-center sm:gap-20">
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <Phone className="size-5 shrink-0 text-brand" aria-hidden="true" />
+                <p className="font-heading text-xs font-bold uppercase tracking-widest text-muted-foreground sm:text-sm">
+                  Call
+                </p>
+              </div>
+              <div className="mt-2 flex flex-col gap-1">
+                {phoneNumbers.map(({ label, phone }) => (
+                  <p key={label} className="text-xs sm:text-base">
+                    <span className="font-semibold">{label}: </span>
+                    <a href={telHref(phone)} className="font-semibold hover:text-brand">
+                      {formatPhone(phone)}
+                    </a>
+                  </p>
+                ))}
+              </div>
             </div>
-          </div>
-          <div className="flex items-start gap-3 px-2 py-3">
-            <Phone className="mt-1 size-6 shrink-0 text-brand" />
-            <div>
-              <p className="font-heading text-sm font-semibold tracking-widest text-muted-foreground">
-                Call Ahead
-              </p>
+
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <Mail className="size-5 shrink-0 text-brand" aria-hidden="true" />
+                <p className="font-heading text-xs font-bold uppercase tracking-widest text-muted-foreground sm:text-sm">
+                  Email
+                </p>
+              </div>
               <a
-                href={telHref(siteConfig.phone)}
-                className="mt-1 block text-lg font-semibold hover:text-brand"
+                href={`mailto:${siteConfig.email}`}
+                className="mt-2 block break-all text-xs font-semibold hover:text-brand sm:text-base"
               >
-                {formatPhone(siteConfig.phone)}
+                {siteConfig.email}
               </a>
             </div>
           </div>

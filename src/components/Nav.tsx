@@ -11,7 +11,8 @@ import { siteConfig } from "@/data/site";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/about", label: "About" },
+  { href: "/#locations-title", label: "Locations" },
+  { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
@@ -99,13 +100,13 @@ export function Nav() {
                 {link.label}
               </Link>
             ))}
-            <Link
+            {/* <Link
               href="/order"
               onClick={() => setOpen(false)}
               className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-full bg-brand px-6 font-heading text-base font-semibold tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110"
             >
               Order Now
-            </Link>
+            </Link> */}
           </div>
         </div>
       )}

@@ -41,6 +41,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# high-resolution source images (originals kept locally / backed up elsewhere;
+# the site only serves the compressed versions alongside them).
+public/images/**/highQuality/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

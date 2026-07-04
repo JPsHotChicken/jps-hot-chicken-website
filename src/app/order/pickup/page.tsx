@@ -37,6 +37,8 @@ export default function PickupOrderPage() {
             );
             const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}`;
             const StateShape = STATE_ICONS[loc.state];
+            // Trenton (Clarksville) pickup is temporarily turned off.
+            const disabled = loc.slug === "clarksville";
 
             return (
               <div
@@ -62,16 +64,22 @@ export default function PickupOrderPage() {
 
                 <div className="mt-6 flex flex-col gap-3">
                   <a
-                    href={loc.orderingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brand px-6 font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
+                    href={disabled ? undefined : loc.orderingUrl}
+                    target={disabled ? undefined : "_blank"}
+                    rel={disabled ? undefined : "noopener noreferrer"}
+                    aria-disabled={disabled || undefined}
+                    tabIndex={disabled ? -1 : undefined}
+                    title={disabled ? "Temporarily unavailable" : undefined}
+                    className={`inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brand px-6 font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50${
+                      disabled ? " pointer-events-none opacity-50 grayscale" : ""
+                    }`}
                   >
-                    Start Order
-                    <ArrowRight className="size-5" aria-hidden="true" />
+                    {disabled ? "Pickup Temporarily Unavailable" : "Start Pickup Order"}
+                    {!disabled && <ArrowRight className="size-5" aria-hidden="true" />}
                     <span className="sr-only">
-                      {" "}
-                      at {loc.street}, {loc.city} (opens in a new tab)
+                      {disabled
+                        ? " — temporarily unavailable"
+                        : ` at ${loc.street}, ${loc.city} (opens in a new tab)`}
                     </span>
                   </a>
                   <a

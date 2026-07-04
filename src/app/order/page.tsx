@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, MapPin, Navigation } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { KentuckyIcon, TennesseeIcon } from "@/components/StateIcons";
@@ -25,18 +25,13 @@ export default function OrderPage() {
             Select Location
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">
-            Pick the location nearest you and start your order.
+            Select your store to place order, get directions, and see hours
           </p>
         </header>
 
         {/* Locations */}
         <div className="mt-12 grid gap-6 sm:grid-cols-2 sm:gap-8">
           {siteConfig.locations.map((loc) => {
-            const mapsQuery = encodeURIComponent(
-              `${siteConfig.name}, ${loc.street}, ${loc.city}, ${loc.state}`,
-            );
-            const googleMapsHref = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
-            const appleMapsHref = `https://maps.apple.com/?q=${mapsQuery}`;
             const StateShape = STATE_ICONS[loc.state];
 
             return (
@@ -73,35 +68,6 @@ export default function OrderPage() {
                       — {loc.street}, {loc.city}
                     </span>
                   </Link>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <a
-                      href={googleMapsHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-full border-2 border-black bg-card px-4 text-sm font-bold tracking-wide text-foreground transition-all hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/40"
-                    >
-                      <MapPin className="size-4" aria-hidden="true" />
-                      Google Maps
-                      <span className="sr-only">
-                        {" "}
-                        — open {loc.street}, {loc.city} in Google Maps (opens in a new tab)
-                      </span>
-                    </a>
-                    <a
-                      href={appleMapsHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-full border-2 border-black bg-card px-4 text-sm font-bold tracking-wide text-foreground transition-all hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/40"
-                    >
-                      <Navigation className="size-4" aria-hidden="true" />
-                      Apple Maps
-                      <span className="sr-only">
-                        {" "}
-                        — open {loc.street}, {loc.city} in Apple Maps (opens in a new tab)
-                      </span>
-                    </a>
-                  </div>
                 </div>
               </div>
             );

@@ -27,9 +27,9 @@ test("primary navigation moves between pages", async ({ page }) => {
   if (await hamburger.isVisible()) {
     await hamburger.click();
   }
-  await page.getByRole("link", { name: "About", exact: true }).first().click();
-  await expect(page).toHaveURL(/\/about$/);
-  await expect(page.locator("h1")).toContainText(/clarksville home/i);
+  await page.getByRole("link", { name: "Careers", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/careers$/);
+  await expect(page.locator("h1")).toContainText(/build your career/i);
 });
 
 test("ordering CTA is visible and links to the third-party URL in a new tab", async ({

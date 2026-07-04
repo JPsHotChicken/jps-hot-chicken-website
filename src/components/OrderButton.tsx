@@ -30,7 +30,7 @@ export function OrderButton({
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-full font-heading font-semibold tracking-wide transition-all focus-visible:outline-none focus-visible:ring-3 active:translate-y-px",
+        "inline-flex items-center justify-center gap-2 rounded-full font-heading font-semibold tracking-wide transition-all focus-visible:outline-none focus-visible:ring-3",
         size === "lg" ? "h-14 px-8 text-lg" : "h-11 px-6 text-base",
         variant === "solid"
           ? "bg-brand text-brand-foreground shadow-sm hover:brightness-110 hover:shadow-md focus-visible:ring-brand/50"

@@ -1,25 +1,25 @@
 import Link from "next/link";
-import { Clock, Mail, MapPin, Phone } from "lucide-react";
+import { Clock, Mail, Navigation, Phone } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { formatPhone, telHref } from "@/lib/format";
 import { getWeekRows } from "@/lib/hours";
-import { FacebookIcon, InstagramIcon } from "@/components/icons";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/about", label: "About" },
+  { href: "/#locations-title", label: "Locations" },
   { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },
 ];
 
 export function Footer() {
-  const { address } = siteConfig;
   const [brandFirst, ...brandRest] = siteConfig.name.split(" ");
-  const mapsQuery = encodeURIComponent(
-    `${siteConfig.name}, ${address.street}, ${address.city}, ${address.state} ${address.zip}`,
-  );
   const week = getWeekRows();
+  // One phone number per location, labeled the way the owner refers to each store.
+  const phoneNumbers = [
+    { label: "Fort Campbell", phone: siteConfig.locations.find((l) => l.slug === "oak-grove")!.phone },
+    { label: "Trenton", phone: siteConfig.locations.find((l) => l.slug === "clarksville")!.phone },
+  ];
 
   return (
     <footer className="mt-auto border-t border-border bg-foreground text-background">
@@ -30,52 +30,23 @@ export function Footer() {
             <span className="text-brand-light">{brandFirst}</span> {brandRest.join(" ")}
           </p>
           <p className="mt-2 text-sm text-background/70">{siteConfig.tagline}</p>
-          <div className="mt-4 flex gap-3">
-            <a
-              href={siteConfig.socials.instagram}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="JP's Hot Chicken on Instagram (opens in a new tab)"
-              className="inline-flex size-11 items-center justify-center rounded-full bg-background/10 transition-colors hover:bg-background/20"
-            >
-              <InstagramIcon className="size-5" />
-            </a>
-            <a
-              href={siteConfig.socials.facebook}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="JP's Hot Chicken on Facebook (opens in a new tab)"
-              className="inline-flex size-11 items-center justify-center rounded-full bg-background/10 transition-colors hover:bg-background/20"
-            >
-              <FacebookIcon className="size-5" />
-            </a>
-          </div>
         </div>
 
         {/* Contact */}
         <div>
-          <h2 className="font-heading text-sm font-semibold tracking-widest text-background/60">
-            Visit & Contact
-          </h2>
-          <ul className="mt-4 space-y-3 text-sm">
+          <ul className="space-y-3 text-sm">
             <li className="flex items-start gap-3">
-              <MapPin className="mt-0.5 size-5 shrink-0 text-brand-light" />
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:underline"
-              >
-                {address.street}
-                <br />
-                {address.city}, {address.state} {address.zip}
-              </a>
-            </li>
-            <li className="flex items-center gap-3">
-              <Phone className="size-5 shrink-0 text-brand-light" />
-              <a href={telHref(siteConfig.phone)} className="hover:underline">
-                {formatPhone(siteConfig.phone)}
-              </a>
+              <Phone className="mt-0.5 size-5 shrink-0 text-brand-light" />
+              <div className="space-y-1.5">
+                {phoneNumbers.map(({ label, phone }) => (
+                  <div key={label}>
+                    <span className="text-background/60">{label}</span>{" "}
+                    <a href={telHref(phone)} className="hover:underline">
+                      {formatPhone(phone)}
+                    </a>
+                  </div>
+                ))}
+              </div>
             </li>
             <li className="flex items-center gap-3">
               <Mail className="size-5 shrink-0 text-brand-light" />
@@ -95,9 +66,8 @@ export function Footer() {
             {week.map((row) => (
               <li
                 key={row.key}
-                className={`flex justify-between gap-4 ${
-                  row.isToday ? "font-semibold text-background" : "text-background/70"
-                }`}
+                className={`flex justify-between gap-4 ${row.isToday ? "font-semibold text-background" : "text-background/70"
+                  }`}
               >
                 <span>{row.label}</span>
                 <span>{row.hours}</span>
@@ -108,8 +78,8 @@ export function Footer() {
 
         {/* Explore */}
         <div>
-          <h2 className="font-heading text-sm font-semibold tracking-widest text-background/60">
-            Explore
+          <h2 className="flex items-center gap-2 font-heading text-sm font-semibold tracking-widest text-background/60">
+            <Navigation className="size-4 text-brand-light" /> Explore
           </h2>
           <ul className="mt-4 space-y-1 text-sm">
             {NAV_LINKS.map((link) => (

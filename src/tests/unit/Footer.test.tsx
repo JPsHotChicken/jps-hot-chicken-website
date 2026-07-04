@@ -20,28 +20,23 @@ describe("Footer", () => {
     render(<Footer />);
     for (const [label, href] of [
       ["Home", "/"],
-      ["About", "/about"],
+      ["Locations", "/#locations-title"],
+      ["Careers", "/careers"],
       ["Contact", "/contact"],
     ] as const) {
       expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", href);
     }
   });
 
-  it("renders phone and email from siteConfig", () => {
+  it("renders a phone number for each location plus the email from siteConfig", () => {
     render(<Footer />);
-    expect(screen.getByText(formatPhone(siteConfig.phone))).toBeInTheDocument();
+    for (const loc of siteConfig.locations) {
+      expect(screen.getByText(formatPhone(loc.phone))).toBeInTheDocument();
+    }
     expect(screen.getByRole("link", { name: siteConfig.email })).toHaveAttribute(
       "href",
       `mailto:${siteConfig.email}`,
     );
-  });
-
-  it("links out to the social profiles from siteConfig", () => {
-    render(<Footer />);
-    const instagram = screen.getByRole("link", { name: /instagram/i });
-    const facebook = screen.getByRole("link", { name: /facebook/i });
-    expect(instagram).toHaveAttribute("href", siteConfig.socials.instagram);
-    expect(facebook).toHaveAttribute("href", siteConfig.socials.facebook);
   });
 
   it("shows the weekly hours including a closed day", () => {
