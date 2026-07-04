@@ -27,18 +27,18 @@ export const siteConfig = {
   description:
     "JP's Hot Chicken serves Nashville-style hot chicken in Clarksville, TN and Oak Grove, KY.",
   url: "https://www.jpshotchicken.com", // ⚠️ PLACEHOLDER — set to the real production domain
-  //orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken", // ⚠️ PLACEHOLDER — general "order" link (nav / CTAs)
-  //orderingUrlPickup: "https://order.toasttab.com/online/jps-hot-chicken?mode=pickup", // ⚠️ PLACEHOLDER — real pickup ordering link
-  //orderingUrlDelivery: "https://order.toasttab.com/online/jps-hot-chicken?mode=delivery", // ⚠️ PLACEHOLDER — real delivery ordering link
-  //phone: "+1-931-555-0142", // ⚠️ PLACEHOLDER — set to the real phone number
-  //email: "jpshotchicken@gmail.com",
-  // address: {
-  //   street: "123 Main St", // ⚠️ PLACEHOLDER
-  //   city: "Clarksville",
-  //   state: "TN",
-  //   zip: "37040",
-  // },
-  // Physical locations, used by the pickup-order page.
+  orderingUrl: "https://order.toasttab.com/online/jps-hot-chicken", // ⚠️ PLACEHOLDER — general "order" link (nav / CTAs)
+  orderingUrlPickup: "https://order.toasttab.com/online/jps-hot-chicken?mode=pickup", // ⚠️ PLACEHOLDER — real pickup ordering link
+  orderingUrlDelivery: "https://order.toasttab.com/online/jps-hot-chicken?mode=delivery", // ⚠️ PLACEHOLDER — real delivery ordering link
+  phone: "+1-931-555-0142", // ⚠️ PLACEHOLDER — set to the real phone number
+  email: "jpshotchicken@gmail.com",
+  address: {
+    street: "123 Main St", // ⚠️ PLACEHOLDER
+    city: "Clarksville",
+    state: "TN",
+    zip: "37040",
+  },
+  //Physical locations, used by the pickup-order page.
   // ⚠️ Set each location's real ordering link.
   locations: [
     {
