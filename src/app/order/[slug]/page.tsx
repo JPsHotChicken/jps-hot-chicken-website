@@ -40,8 +40,6 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
 
   const StateShape = STATE_ICONS[loc.state];
   const week = getWeekRows();
-  // Trenton (Clarksville) ordering is temporarily turned off — pickup + delivery apps.
-  const disabled = loc.slug === "clarksville";
   // The state silhouettes sit in the upper part of their viewBox with empty
   // space below (TN is wide and short, so it has the most). Pull the address +
   // maps buttons up into that dead space so they sit just under the shape.
@@ -153,66 +151,37 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
         {/* Order: pickup on top, delivery apps smaller below */}
         <div className="mt-8 flex flex-col gap-3">
           <a
-            href={disabled ? undefined : loc.orderingUrl}
-            target={disabled ? undefined : "_blank"}
-            rel={disabled ? undefined : "noopener noreferrer"}
-            aria-disabled={disabled || undefined}
-            tabIndex={disabled ? -1 : undefined}
-            title={disabled ? "Temporarily unavailable" : undefined}
-            className={`mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 font-heading text-lg font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50${
-              disabled ? " pointer-events-none opacity-50 grayscale" : ""
-            }`}
+            href={loc.orderingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 font-heading text-lg font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
           >
             <Store className="size-6" aria-hidden="true" />
-            {disabled ? "Pickup Temporarily Unavailable" : "Place Pickup order"}
-            <span className="sr-only">
-              {disabled ? " — temporarily unavailable" : ` from ${loc.street} (opens in a new tab)`}
-            </span>
+            Place Pickup order
+            <span className="sr-only"> from {loc.street} (opens in a new tab)</span>
           </a>
           <div className="grid grid-cols-2 gap-3">
             <a
-              href={disabled ? undefined : loc.doordashUrl}
-              target={disabled ? undefined : "_blank"}
-              rel={disabled ? undefined : "noopener noreferrer"}
-              aria-disabled={disabled || undefined}
-              tabIndex={disabled ? -1 : undefined}
-              title={disabled ? "Temporarily unavailable" : undefined}
-              className={`inline-flex h-11 items-center justify-center rounded-full bg-[#EB1700] px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#EB1700]/40${
-                disabled ? " pointer-events-none opacity-50 grayscale" : ""
-              }`}
+              href={loc.doordashUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-[#EB1700] px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#EB1700]/40"
             >
               DoorDash
-              <span className="sr-only">
-                {disabled ? " — temporarily unavailable" : ` — order from ${loc.street} (opens in a new tab)`}
-              </span>
+              <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
             </a>
             <a
-              href={disabled ? undefined : loc.uberEatsUrl}
-              target={disabled ? undefined : "_blank"}
-              rel={disabled ? undefined : "noopener noreferrer"}
-              aria-disabled={disabled || undefined}
-              tabIndex={disabled ? -1 : undefined}
-              title={disabled ? "Temporarily unavailable" : undefined}
-              className={`inline-flex h-11 items-center justify-center rounded-full bg-black px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-125 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-foreground/30${
-                disabled ? " pointer-events-none opacity-50 grayscale" : ""
-              }`}
+              href={loc.uberEatsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-black px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-125 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-foreground/30"
             >
               Uber&nbsp;<span className="text-[#06C167]">Eats</span>
-              <span className="sr-only">
-                {disabled ? " — temporarily unavailable" : ` — order from ${loc.street} (opens in a new tab)`}
-              </span>
+              <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
             </a>
           </div>
         </div>
 
-        {/* <div className="mt-12 text-center">
-          <Link
-            href="/"
-            className="text-base font-semibold text-brand hover:underline"
-          >
-            ← Back to home
-          </Link>
-        </div> */}
       </div>
     </div>
   );
