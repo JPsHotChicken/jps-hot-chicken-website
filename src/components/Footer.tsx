@@ -8,7 +8,7 @@ import { getWeekRows } from "@/lib/hours";
 const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/#locations-title", label: "Locations" },
-  { href: "/careers", label: "Careers" },
+  //{ href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },
 ];
 
