@@ -1,24 +1,22 @@
 import type { Metadata } from "next";
-import { Mail, MapPin, Phone } from "lucide-react";
+import { Clock, MapPin, Phone, Truck } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { formatPhone, telHref } from "@/lib/format";
-import { getWeekRows } from "@/lib/hours";
-import { OrderButton } from "@/components/OrderButton";
+import { getWeekRows, getOnlineWeekRows } from "@/lib/hours";
+
 
 export const metadata: Metadata = {
   title: "Contact & Hours",
-  description: `Hours, location, and contact info for ${siteConfig.name} in ${siteConfig.address.city}, ${siteConfig.address.state}. Find directions, call ahead, or order online.`,
+  description: `Hours, locations, and contact info for ${siteConfig.name} in Clarksville, TN and Oak Grove, KY. Find directions, call ahead, or order online.`,
   alternates: { canonical: "/contact" },
 };
 
 export default function ContactPage() {
-  const { address } = siteConfig;
-  const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zip}`;
-  const mapQuery = encodeURIComponent(`${siteConfig.name}, ${fullAddress}`);
-  const mapEmbedSrc = `https://www.google.com/maps?q=${mapQuery}&output=embed`;
-  const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`;
+  const storeHours = getWeekRows();
+  const { locations } = siteConfig;
   const week = getWeekRows();
+  const onlineHours = getOnlineWeekRows();
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
@@ -27,102 +25,147 @@ export default function ContactPage() {
           Visit Us
         </p>
         <h1 className="mt-2 text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Contact &amp; Hours
+          Contact and Hours
         </h1>
         <p className="mt-3 text-lg text-muted-foreground">
-          Come by, call ahead, or order online for pickup.
+          Two locations serving Nashville-style hot chicken. Come by, call ahead,
+          or order online for pickup.
         </p>
       </header>
 
-      <div className="mt-10 grid gap-10 lg:grid-cols-2">
-        {/* Left: details */}
-        <div className="space-y-8">
-          <section>
-            <h2 className="text-2xl font-bold tracking-tight">Get in Touch</h2>
-            <ul className="mt-4 space-y-4 text-lg">
-              <li className="flex items-start gap-3">
-                <MapPin className="mt-1 size-6 shrink-0 text-brand" />
-                <div>
-                  <a
-                    href={directionsHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-semibold hover:text-brand"
-                  >
-                    {address.street}
-                    <br />
-                    {address.city}, {address.state} {address.zip}
-                  </a>
-                  <a
-                    href={directionsHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 block text-base font-semibold text-brand hover:underline"
-                  >
-                    Get directions →
-                  </a>
+      {/* Locations */}
+      <section className="mt-10">
+        <h2 className="text-2xl font-bold tracking-tight">Our Locations</h2>
+        <div className="mt-6 grid gap-6 sm:grid-cols-2">
+          {locations.map((loc) => {
+            const fullAddress = `${loc.streetNumber} ${loc.street}, ${loc.city}, ${loc.state} ${loc.zip}`;
+            const mapQuery = encodeURIComponent(`${siteConfig.name}, ${fullAddress}`);
+            const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`;
+            const hasPhone = /\d/.test(loc.phone);
+
+            return (
+              <div
+                key={loc.slug}
+                className="rounded-2xl border border-border bg-card p-6"
+              >
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-bold tracking-tight">{loc.name}</h3>
+                  {loc.isNew && (
+                    <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
+                      New
+                    </span>
+                  )}
                 </div>
-              </li>
-              <li className="flex items-center gap-3">
-                <Phone className="size-6 shrink-0 text-brand" />
-                <a href={telHref(siteConfig.phone)} className="font-semibold hover:text-brand">
-                  {formatPhone(siteConfig.phone)}
-                </a>
-              </li>
-              <li className="flex items-center gap-3">
-                <Mail className="size-6 shrink-0 text-brand" />
-                <a href={`mailto:${siteConfig.email}`} className="font-semibold hover:text-brand">
-                  {siteConfig.email}
-                </a>
-              </li>
-            </ul>
-            <div className="mt-6">
-              <OrderButton size="lg" />
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-bold tracking-tight">Hours</h2>
-            <table className="mt-4 w-full max-w-md text-lg">
-              <tbody>
-                {week.map((row) => (
-                  <tr
-                    key={row.key}
-                    className={
-                      row.isToday
-                        ? "font-semibold text-foreground"
-                        : "text-muted-foreground"
-                    }
-                  >
-                    <th scope="row" className="py-1.5 text-left font-semibold">
-                      {row.label}
-                      {row.isToday && (
-                        <span className="ml-2 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
-                          Today
-                        </span>
-                      )}
-                    </th>
-                    <td className="py-1.5 text-right tabular-nums">{row.hours}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
+                <ul className="mt-4 space-y-3 text-lg">
+                  <li className="flex items-start gap-3">
+                    <MapPin className="mt-1 size-6 shrink-0 text-brand" />
+                    <div>
+                      <a
+                        href={directionsHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold hover:text-brand"
+                      >
+                        {loc.streetNumber} {loc.street}
+                        <br />
+                        {loc.city}, {loc.state} {loc.zip}
+                      </a>
+                      <a
+                        href={directionsHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 block text-base font-semibold text-brand hover:underline"
+                      >
+                        Get directions →
+                      </a>
+                    </div>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <Phone className="size-6 shrink-0 text-brand" />
+                    {hasPhone ? (
+                      <a
+                        href={telHref(loc.phone)}
+                        className="font-semibold hover:text-brand"
+                      >
+                        {formatPhone(loc.phone)}
+                      </a>
+                    ) : (
+                      <span className="font-semibold text-muted-foreground">
+                        {loc.phone}
+                      </span>
+                    )}
+                  </li>
+                </ul>
+              </div>
+            );
+          })}
         </div>
+      </section>
 
-        {/* Right: map */}
-        <section aria-label="Map">
-          <div className="overflow-hidden rounded-2xl border border-border bg-muted">
-            <iframe
-              title={`Map showing the location of ${siteConfig.name}`}
-              src={mapEmbedSrc}
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              className="h-[360px] w-full lg:h-[520px]"
-            />
+      {/* Hours + contact */}
+      <section aria-label="Hours and contact" className="border-b border-border bg-white">
+        <div className="mt-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+          {/* Two hours lists — store hours pinned to the left edge, online/delivery
+              hours pinned to the right edge, at every screen size. */}
+          <div className="flex items-start justify-between gap-3">
+            {/* Store hours */}
+            <div className="mt-3 text-left">
+              <div className="flex items-center gap-2">
+                <Clock className="size-5 shrink-0 text-brand" aria-hidden="true" />
+                <p className="font-heading text-xs font-bold uppercase tracking-widest text-muted-foreground sm:text-sm">
+                  Store Hours
+                </p>
+              </div>
+              <dl className="mt-3 space-y-1">
+                {storeHours.map((row) => (
+                  <div
+                    key={row.key}
+                    className={`flex items-baseline gap-2 text-xs sm:text-sm ${row.isToday ? "font-bold text-brand" : ""
+                      }`}
+                  >
+                    <dt className="w-8 shrink-0">{row.label.slice(0, 3)}</dt>
+                    <dd className={`whitespace-nowrap ${row.isToday ? "" : "text-muted-foreground"}`}>
+                      {row.hours}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            {/* Online ordering / delivery hours */}
+            <div className="w-[150px] text-left sm:w-[280px]">
+              <div className="flex items-start gap-3">
+                <Truck className="mt-1 size-6 shrink-0 text-brand" aria-hidden="true" />
+
+                <p className="max-w-[210px] font-heading text-xs font-bold uppercase tracking-widest text-muted-foreground sm:max-w-[240px] sm:text-sm">
+                  Online Ordering / Delivery Hours
+                </p>
+              </div>
+
+              <dl className="mt-3 ml-7 space-y-1">
+                {onlineHours.map((row) => (
+                  <div
+                    key={row.key}
+                    className={`flex items-baseline text-xs sm:text-sm ${row.isToday ? "font-bold text-brand" : ""
+                      }`}
+                  >
+                    <dt className="w-10 shrink-0">{row.label.slice(0, 3)}</dt>
+
+                    <dd
+                      className={`whitespace-nowrap ${row.isToday ? "" : "text-muted-foreground"
+                        }`}
+                    >
+                      {row.hours}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
+
+
     </div>
   );
 }
