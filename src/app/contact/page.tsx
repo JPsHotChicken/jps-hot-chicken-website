@@ -15,7 +15,6 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   const storeHours = getWeekRows();
   const { locations } = siteConfig;
-  const week = getWeekRows();
   const onlineHours = getOnlineWeekRows();
 
   return (
@@ -41,7 +40,6 @@ export default function ContactPage() {
             const fullAddress = `${loc.streetNumber} ${loc.street}, ${loc.city}, ${loc.state} ${loc.zip}`;
             const mapQuery = encodeURIComponent(`${siteConfig.name}, ${fullAddress}`);
             const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`;
-            const hasPhone = /\d/.test(loc.phone);
 
             return (
               <div
@@ -82,7 +80,7 @@ export default function ContactPage() {
                   </li>
                   <li className="flex items-center gap-3">
                     <Phone className="size-6 shrink-0 text-brand" />
-                    {hasPhone ? (
+                    {loc.phone ? (
                       <a
                         href={telHref(loc.phone)}
                         className="font-semibold hover:text-brand"
@@ -91,7 +89,7 @@ export default function ContactPage() {
                       </a>
                     ) : (
                       <span className="font-semibold text-muted-foreground">
-                        {loc.phone}
+                        Phone coming soon
                       </span>
                     )}
                   </li>

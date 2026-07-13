@@ -3,9 +3,12 @@ import { test, expect } from "@playwright/test";
 const PAGES = [
   { path: "/", heading: /JP'?s\s+Hot Chicken/i },
   { path: "/about", heading: /clarksville home/i },
-  { path: "/careers", heading: /build your career/i },
+  { path: "/careers", heading: /grow your career/i },
   { path: "/careers/apply", heading: /apply/i },
   { path: "/contact", heading: /contact/i },
+  { path: "/locations", heading: /our locations/i },
+  { path: "/locations/oak-grove", heading: /hot chicken in oak grove, ky/i },
+  { path: "/locations/clarksville", heading: /hot chicken in clarksville, tn/i },
 ];
 
 test.describe("page loads", () => {
@@ -29,19 +32,16 @@ test("primary navigation moves between pages", async ({ page }) => {
   }
   await page.getByRole("link", { name: "Careers", exact: true }).first().click();
   await expect(page).toHaveURL(/\/careers$/);
-  await expect(page.locator("h1")).toContainText(/build your career/i);
+  await expect(page.locator("h1")).toContainText(/grow your career/i);
 });
 
-test("ordering CTA is visible and links to the third-party URL in a new tab", async ({
+test("ordering CTA is visible and links to the order location picker", async ({
   page,
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   const orderLink = page.getByRole("link", { name: /order big combo now/i }).first();
   await expect(orderLink).toBeVisible();
-  await expect(orderLink).toHaveAttribute("target", "_blank");
-  await expect(orderLink).toHaveAttribute("rel", /noopener/);
-  const href = await orderLink.getAttribute("href");
-  expect(href).toMatch(/^https?:\/\//);
+  await expect(orderLink).toHaveAttribute("href", "/order");
 });
 
 test.describe("no horizontal overflow on any page", () => {

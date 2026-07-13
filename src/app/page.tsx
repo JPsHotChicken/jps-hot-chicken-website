@@ -6,6 +6,7 @@ import { ArrowRight, Clock, Mail, MapPin, Navigation, Phone, Star, Store, Truck 
 import { siteConfig } from "@/data/site";
 import { formatPhone, telHref } from "@/lib/format";
 import { getWeekRows, getOnlineWeekRows } from "@/lib/hours";
+import { buildHomeJsonLd, serializeJsonLd } from "@/lib/jsonld";
 import { OrderButton } from "@/components/OrderButton";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Marquee } from "@/components/Marquee";
@@ -16,7 +17,9 @@ const STATE_ICONS = { KY: KentuckyIcon, TN: TennesseeIcon } as const;
 
 export const metadata: Metadata = {
   title: {
-    absolute: `${siteConfig.name} — ${siteConfig.tagline} in ${siteConfig.address.city}, ${siteConfig.address.state}`,
+    absolute: `${siteConfig.name} — ${siteConfig.tagline} in ${siteConfig.locations
+      .map((loc) => `${loc.city}, ${loc.state}`)
+      .join(" & ")}`,
   },
   description: siteConfig.description,
   alternates: { canonical: "/" },
@@ -106,14 +109,20 @@ const COMBO_ROWS = [
 export default function HomePage() {
   const storeHours = getWeekRows();
   const onlineHours = getOnlineWeekRows();
-  // Two location phone lines, labeled the way the owner refers to each store.
-  const phoneNumbers = [
-    { label: "Fort Campbell", phone: siteConfig.locations.find((l) => l.slug === "oak-grove")!.phone },
-    { label: "Trenton", phone: siteConfig.locations.find((l) => l.slug === "clarksville")!.phone },
-  ];
+  // One phone line per location that has a confirmed number, labeled the way
+  // the owner refers to each store.
+  const phoneNumbers = siteConfig.locations
+    .filter((loc) => loc.phone)
+    .map((loc) => ({ label: loc.shortLabel, phone: loc.phone! }));
 
   return (
     <>
+      {/* Restaurant structured data for both stores (the layout carries the
+          brand-level Organization node). */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(buildHomeJsonLd()) }}
+      />
       {/* Announcement bar — toggled via siteConfig.announcement. */}
       <AnnouncementBanner />
       {/* Visually-hidden page title (the logo carries the brand visually). */}
@@ -127,7 +136,7 @@ export default function HomePage() {
             src="/images/hero4.jpg"
             alt="A spread of Nashville-style hot chicken from JP's Hot Chicken — sandwich, tenders, and loaded sides"
             fill
-            priority
+            preload
             sizes="(max-width: 1152px) 100vw, 1152px"
             className="object-cover"
           />
@@ -323,6 +332,13 @@ export default function HomePage() {
                         </span>
                       </a>
                     </div>
+                    <Link
+                      href={`/locations/${loc.slug}`}
+                      className="mt-1 inline-flex items-center justify-center gap-1 text-sm font-semibold text-brand hover:underline"
+                    >
+                      Hours, info &amp; directions
+                      <span className="sr-only"> — {loc.name} location</span>
+                    </Link>
                   </div>
                 </div>
               );

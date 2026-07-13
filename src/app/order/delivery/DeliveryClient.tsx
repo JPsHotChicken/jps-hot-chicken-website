@@ -22,8 +22,9 @@ export function DeliveryClient() {
         <div className="mt-8 grid gap-10 sm:grid-cols-2 sm:gap-10">
           {siteConfig.locations.map((loc) => {
             const StateShape = STATE_ICONS[loc.state];
-            // Trenton (Clarksville) delivery is temporarily turned off.
-            const disabled = loc.slug === "clarksville";
+            // Each delivery app needs an open store with a real store link.
+            const doordashDisabled = !loc.isOpen || !loc.doordashUrl;
+            const uberEatsDisabled = !loc.isOpen || !loc.uberEatsUrl;
             return (
               <div
                 key={loc.name}
@@ -59,38 +60,38 @@ export function DeliveryClient() {
 
                 <div className="mt-6 grid grid-cols-2 gap-3">
                   <a
-                    href={disabled ? undefined : loc.doordashUrl}
-                    target={disabled ? undefined : "_blank"}
-                    rel={disabled ? undefined : "noopener noreferrer"}
-                    aria-disabled={disabled || undefined}
-                    tabIndex={disabled ? -1 : undefined}
-                    title={disabled ? "Temporarily unavailable" : undefined}
+                    href={doordashDisabled ? undefined : loc.doordashUrl}
+                    target={doordashDisabled ? undefined : "_blank"}
+                    rel={doordashDisabled ? undefined : "noopener noreferrer"}
+                    aria-disabled={doordashDisabled || undefined}
+                    tabIndex={doordashDisabled ? -1 : undefined}
+                    title={doordashDisabled ? "Coming soon" : undefined}
                     className={`inline-flex h-12 items-center justify-center rounded-full bg-[#EB1700] px-4 text-base font-bold tracking-wide text-white shadow-sm sm:text-lg transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#EB1700]/40${
-                      disabled ? " pointer-events-none opacity-50 grayscale" : ""
+                      doordashDisabled ? " pointer-events-none opacity-50 grayscale" : ""
                     }`}
                   >
                     DoorDash
                     <span className="sr-only">
-                      {disabled
-                        ? " — temporarily unavailable"
+                      {doordashDisabled
+                        ? " — coming soon"
                         : ` — order from ${loc.street} (opens in a new tab)`}
                     </span>
                   </a>
                   <a
-                    href={disabled ? undefined : loc.uberEatsUrl}
-                    target={disabled ? undefined : "_blank"}
-                    rel={disabled ? undefined : "noopener noreferrer"}
-                    aria-disabled={disabled || undefined}
-                    tabIndex={disabled ? -1 : undefined}
-                    title={disabled ? "Temporarily unavailable" : undefined}
+                    href={uberEatsDisabled ? undefined : loc.uberEatsUrl}
+                    target={uberEatsDisabled ? undefined : "_blank"}
+                    rel={uberEatsDisabled ? undefined : "noopener noreferrer"}
+                    aria-disabled={uberEatsDisabled || undefined}
+                    tabIndex={uberEatsDisabled ? -1 : undefined}
+                    title={uberEatsDisabled ? "Coming soon" : undefined}
                     className={`inline-flex h-12 items-center justify-center rounded-full bg-black px-4 text-base font-bold tracking-wide text-white shadow-sm sm:text-lg transition-all hover:brightness-125 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-foreground/30${
-                      disabled ? " pointer-events-none opacity-50 grayscale" : ""
+                      uberEatsDisabled ? " pointer-events-none opacity-50 grayscale" : ""
                     }`}
                   >
                     Uber&nbsp;<span className="text-[#06C167]">Eats</span>
                     <span className="sr-only">
-                      {disabled
-                        ? " — temporarily unavailable"
+                      {uberEatsDisabled
+                        ? " — coming soon"
                         : ` — order from ${loc.street} (opens in a new tab)`}
                     </span>
                   </a>

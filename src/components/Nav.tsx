@@ -11,8 +11,8 @@ import { siteConfig } from "@/data/site";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/#locations-title", label: "Locations" },
-  //{ href: "/careers", label: "Careers" },
+  { href: "/locations", label: "Locations" },
+  { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
@@ -66,7 +66,7 @@ export function Nav() {
             alt={siteConfig.name}
             width={1022}
             height={574}
-            priority
+            preload
             className="h-12 w-auto sm:h-14"
           />
         </Link>

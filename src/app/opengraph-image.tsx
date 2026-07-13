@@ -54,7 +54,7 @@ export default function OpengraphImage() {
             display: "flex",
           }}
         >
-          {siteConfig.address.city}, {siteConfig.address.state}
+          {siteConfig.locations.map((loc) => `${loc.city}, ${loc.state}`).join("  •  ")}
         </div>
       </div>
     ),

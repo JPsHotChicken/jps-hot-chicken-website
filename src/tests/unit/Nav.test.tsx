@@ -22,7 +22,7 @@ describe("Nav", () => {
     expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Locations" })).toHaveAttribute(
       "href",
-      "/#locations-title",
+      "/locations",
     );
     expect(screen.getByRole("link", { name: "Careers" })).toHaveAttribute(
       "href",

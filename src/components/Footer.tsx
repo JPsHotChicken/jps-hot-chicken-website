@@ -7,19 +7,19 @@ import { getWeekRows } from "@/lib/hours";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/#locations-title", label: "Locations" },
-  //{ href: "/careers", label: "Careers" },
+  { href: "/locations", label: "Locations" },
+  { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },
 ];
 
 export function Footer() {
   const [brandFirst, ...brandRest] = siteConfig.name.split(" ");
   const week = getWeekRows();
-  // One phone number per location, labeled the way the owner refers to each store.
-  const phoneNumbers = [
-    { label: "Fort Campbell", phone: siteConfig.locations.find((l) => l.slug === "oak-grove")!.phone },
-    { label: "Trenton", phone: siteConfig.locations.find((l) => l.slug === "clarksville")!.phone },
-  ];
+  // One phone number per location that has one, labeled the way the owner
+  // refers to each store. Locations without a confirmed number are skipped.
+  const phoneNumbers = siteConfig.locations
+    .filter((loc) => loc.phone)
+    .map((loc) => ({ label: loc.shortLabel, phone: loc.phone! }));
 
   return (
     <footer className="mt-auto border-t border-border bg-foreground text-background">

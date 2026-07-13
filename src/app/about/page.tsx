@@ -89,7 +89,7 @@ export default function AboutPage() {
         <div className="order-1 md:order-2">
           <h2 className="text-3xl font-bold tracking-tight">Come Hang Out</h2>
           <p className="mt-3 text-lg leading-relaxed text-foreground/90">
-            Pull up to the counter in {siteConfig.address.city}. Whether it&apos;s a quick
+            Pull up to the counter in {siteConfig.locations.map((loc) => loc.city).join(" or ")}. Whether it&apos;s a quick
             lunch or a full spread for the table, we&apos;ll get you sorted. Prefer to grab
             and go? Order online and we&apos;ll have it ready.
           </p>

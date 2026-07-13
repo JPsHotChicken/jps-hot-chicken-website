@@ -20,7 +20,7 @@ describe("Footer", () => {
     render(<Footer />);
     for (const [label, href] of [
       ["Home", "/"],
-      ["Locations", "/#locations-title"],
+      ["Locations", "/locations"],
       ["Careers", "/careers"],
       ["Contact", "/contact"],
     ] as const) {
@@ -28,10 +28,12 @@ describe("Footer", () => {
     }
   });
 
-  it("renders a phone number for each location plus the email from siteConfig", () => {
+  it("renders a phone number for each location that has one plus the email from siteConfig", () => {
     render(<Footer />);
-    for (const loc of siteConfig.locations) {
-      expect(screen.getByText(formatPhone(loc.phone))).toBeInTheDocument();
+    const locationsWithPhone = siteConfig.locations.filter((loc) => loc.phone);
+    expect(locationsWithPhone.length).toBeGreaterThan(0);
+    for (const loc of locationsWithPhone) {
+      expect(screen.getByText(formatPhone(loc.phone!))).toBeInTheDocument();
     }
     expect(screen.getByRole("link", { name: siteConfig.email })).toHaveAttribute(
       "href",

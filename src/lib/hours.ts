@@ -1,4 +1,4 @@
-import { siteConfig, type DayHours } from "@/data/site";
+import { siteConfig, type DayHours, type WeekHours } from "@/data/site";
 
 export const DAY_KEYS = [
   "monday",
@@ -56,19 +56,25 @@ export function getTodayKey(date: Date = new Date()): DayKey {
 }
 
 /** Today's hours, as a { open, close } object or null when closed. */
-export function getTodayHours(date: Date = new Date()): DayHours {
-  return siteConfig.hours[getTodayKey(date)];
+export function getTodayHours(
+  hours: WeekHours = siteConfig.hours,
+  date: Date = new Date(),
+): DayHours {
+  return hours[getTodayKey(date)];
 }
 
 export type WeekRow = { key: DayKey; label: string; hours: string; isToday: boolean };
 
 /** The full week as display rows, Monday-first, with today flagged. */
-export function getWeekRows(date: Date = new Date()): WeekRow[] {
+export function getWeekRows(
+  hours: WeekHours = siteConfig.hours,
+  date: Date = new Date(),
+): WeekRow[] {
   const todayKey = getTodayKey(date);
   return DAY_KEYS.map((key) => ({
     key,
     label: DAY_LABELS[key],
-    hours: formatDayHours(siteConfig.hours[key]),
+    hours: formatDayHours(hours[key]),
     isToday: key === todayKey,
   }));
 }
@@ -77,18 +83,21 @@ export function getWeekRows(date: Date = new Date()): WeekRow[] {
 export const ONLINE_CLOSE = "20:30";
 
 /** A day's online-ordering / delivery hours: the store's open days, closing at 8:30 PM. */
-export function getOnlineDayHours(key: DayKey): DayHours {
-  const day = siteConfig.hours[key];
+export function getOnlineDayHours(key: DayKey, hours: WeekHours = siteConfig.hours): DayHours {
+  const day = hours[key];
   return day ? { open: day.open, close: ONLINE_CLOSE } : null;
 }
 
 /** The full week of online-ordering / delivery hours as display rows, Monday-first. */
-export function getOnlineWeekRows(date: Date = new Date()): WeekRow[] {
+export function getOnlineWeekRows(
+  hours: WeekHours = siteConfig.hours,
+  date: Date = new Date(),
+): WeekRow[] {
   const todayKey = getTodayKey(date);
   return DAY_KEYS.map((key) => ({
     key,
     label: DAY_LABELS[key],
-    hours: formatDayHours(getOnlineDayHours(key)),
+    hours: formatDayHours(getOnlineDayHours(key, hours)),
     isToday: key === todayKey,
   }));
 }

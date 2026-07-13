@@ -105,8 +105,7 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
 
           {/* Right: name + hours */}
           <div className="min-w-0 flex-1 mt-5">
-            {/* Clarksville is established — no "Now Open" badge on its page. */}
-            {loc.isNew && loc.slug !== "clarksville" && (
+            {loc.isNew && loc.isOpen && (
               <span className="inline-block rounded-full bg-brand px-3 py-1 font-heading text-[11px] font-bold uppercase tracking-wide text-brand-foreground shadow-sm">
                 Now Open
               </span>
@@ -148,39 +147,62 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
           </div>
         </header>
 
-        {/* Order: pickup on top, delivery apps smaller below */}
+        {/* Order: pickup on top, delivery apps smaller below. Each button only
+            renders once its real link exists — never a placeholder URL. */}
         <div className="mt-8 flex flex-col gap-3">
-          <a
-            href={loc.orderingUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 font-heading text-lg font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
-          >
-            <Store className="size-6" aria-hidden="true" />
-            Place Pickup order
-            <span className="sr-only"> from {loc.street} (opens in a new tab)</span>
-          </a>
-          <div className="grid grid-cols-2 gap-3">
+          {loc.orderingUrl ? (
             <a
-              href={loc.doordashUrl}
+              href={loc.orderingUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-11 items-center justify-center rounded-full bg-[#EB1700] px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#EB1700]/40"
+              className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 font-heading text-lg font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
             >
-              DoorDash
-              <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
+              <Store className="size-6" aria-hidden="true" />
+              Place Pickup order
+              <span className="sr-only"> from {loc.street} (opens in a new tab)</span>
             </a>
-            <a
-              href={loc.uberEatsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-11 items-center justify-center rounded-full bg-black px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-125 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-foreground/30"
-            >
-              Uber&nbsp;<span className="text-[#06C167]">Eats</span>
-              <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
-            </a>
-          </div>
+          ) : (
+            <p className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted px-6 py-3 text-center font-heading text-sm font-bold uppercase tracking-wide text-muted-foreground">
+              <Store className="size-5 shrink-0" aria-hidden="true" />
+              Online ordering coming soon — come by the store to order
+            </p>
+          )}
+          {(loc.doordashUrl || loc.uberEatsUrl) && (
+            <div className="grid grid-cols-2 gap-3">
+              {loc.doordashUrl && (
+                <a
+                  href={loc.doordashUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-[#EB1700] px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#EB1700]/40"
+                >
+                  DoorDash
+                  <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
+                </a>
+              )}
+              {loc.uberEatsUrl && (
+                <a
+                  href={loc.uberEatsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-black px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-125 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-foreground/30"
+                >
+                  Uber&nbsp;<span className="text-[#06C167]">Eats</span>
+                  <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
+                </a>
+              )}
+            </div>
+          )}
         </div>
+
+        <p className="mt-8 text-center text-sm text-muted-foreground">
+          <Link
+            href={`/locations/${loc.slug}`}
+            className="font-semibold text-brand hover:underline"
+          >
+            About our {loc.city} location — hours, directions &amp; more →
+          </Link>
+        </p>
 
       </div>
     </div>

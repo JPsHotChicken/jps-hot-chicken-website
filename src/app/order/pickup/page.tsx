@@ -37,8 +37,8 @@ export default function PickupOrderPage() {
             );
             const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}`;
             const StateShape = STATE_ICONS[loc.state];
-            // Trenton (Clarksville) pickup is temporarily turned off.
-            const disabled = loc.slug === "clarksville";
+            // Pickup needs an open store with a real online-ordering link.
+            const disabled = !loc.isOpen || !loc.orderingUrl;
 
             return (
               <div
@@ -74,11 +74,11 @@ export default function PickupOrderPage() {
                       disabled ? " pointer-events-none opacity-50 grayscale" : ""
                     }`}
                   >
-                    {disabled ? "Pickup Temporarily Unavailable" : "Start Pickup Order"}
+                    {disabled ? "Online Ordering Coming Soon" : "Start Pickup Order"}
                     {!disabled && <ArrowRight className="size-5" aria-hidden="true" />}
                     <span className="sr-only">
                       {disabled
-                        ? " — temporarily unavailable"
+                        ? " — not available yet"
                         : ` at ${loc.street}, ${loc.city} (opens in a new tab)`}
                     </span>
                   </a>

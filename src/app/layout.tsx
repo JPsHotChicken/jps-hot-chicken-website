@@ -1,9 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Blinker } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 
 import "./globals.css";
 import { siteConfig } from "@/data/site";
-import { buildRestaurantJsonLd } from "@/lib/jsonld";
+import { buildOrganizationJsonLd, serializeJsonLd } from "@/lib/jsonld";
 import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
 
@@ -17,6 +19,11 @@ const blinker = Blinker({
   variable: "--font-sans",
 });
 
+export const viewport: Viewport = {
+  // Brand chili red (sRGB approximation of the oklch --brand token).
+  themeColor: "#ff6200",
+};
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
@@ -29,8 +36,7 @@ export const metadata: Metadata = {
     "hot chicken",
     "Nashville hot chicken",
     "fried chicken",
-    siteConfig.address.city,
-    `${siteConfig.address.city} ${siteConfig.address.state}`,
+    ...siteConfig.locations.flatMap((loc) => [loc.city, `${loc.city} ${loc.state}`]),
     "chicken tenders",
     "chicken sandwich",
   ],
@@ -61,7 +67,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const jsonLd = buildRestaurantJsonLd();
+  const jsonLd = buildOrganizationJsonLd();
+  // GA4 activates once NEXT_PUBLIC_GA_ID (a "G-…" measurement ID) is set in Vercel.
+  const gaId = process.env.NEXT_PUBLIC_GA_ID;
 
   return (
     <html lang="en" className={`${blinker.variable} h-full`}>
@@ -69,7 +77,7 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           // JSON-LD is trusted, build-time data derived from siteConfig.
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
         />
         <a
           href="#main"
@@ -82,6 +90,8 @@ export default function RootLayout({
           {children}
         </main>
         <Footer />
+        <Analytics />
+        {gaId && <GoogleAnalytics gaId={gaId} />}
       </body>
     </html>
   );
