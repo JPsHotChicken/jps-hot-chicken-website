@@ -192,8 +192,9 @@ export function Marquee({
               className={imageClassName}
             />
           </div>
-          {/* Item name — sits inside the tile, so it scrolls with the
-              image. Aria-hidden since the image alt already names it. */}
+          {/* Display name — sits inside the tile, so it scrolls with the
+              image. Aria-hidden since the image alt already names it for
+              screen readers; this short label is what the customer reads. */}
           <p
             aria-hidden="true"
             className={cn(
@@ -201,7 +202,7 @@ export function Marquee({
               "w-full text-center font-heading text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground sm:text-xs",
             )}
           >
-            {img.alt}
+            {img.name}
           </p>
         </div>
       </div>
