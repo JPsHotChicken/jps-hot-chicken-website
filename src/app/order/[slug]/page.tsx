@@ -18,6 +18,11 @@ const LOCATION_IMAGES: Record<string, { src: string; alt: string }> = {
   },
 };
 
+const ORDER_BUTTON_CLASS =
+  "inline-flex h-11 w-full min-w-0 items-center justify-center rounded-md px-1.5 text-center font-heading text-[11px] font-bold uppercase leading-tight tracking-[0.035em] transition-all sm:text-xs";
+
+const UNAVAILABLE_ORDER_BUTTON_CLASS = `${ORDER_BUTTON_CLASS} cursor-not-allowed border border-border bg-muted text-muted-foreground`;
+
 type Params = Promise<{ slug: string }>;
 
 // Only the known location slugs are valid — anything else 404s.
@@ -77,17 +82,96 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
 
         {/* Hero image */}
         {image && (
-          <div className="relative mt-6 aspect-[3/2] w-full overflow-hidden rounded-3xl">
+          <div className="relative mt-6 aspect-[3/2] w-full overflow-hidden rounded-3xl shadow-[0_0_32px_rgba(0,0,0,0.14)] sm:shadow-[0_0_44px_rgba(0,0,0,0.12)]">
             <Image
               src={image.src}
               alt={image.alt}
               fill
-              priority
-              sizes="(max-width: 640px) 100vw, 576px"
+              preload
+              sizes="(max-width: 639px) calc(100vw - 2rem), 528px"
               className="object-cover"
             />
           </div>
         )}
+
+        {/* Ordering options stay equal-sized and inline directly beneath the image. */}
+        <section className="mt-4" aria-label={`Order from ${loc.street}`}>
+          <div className="grid grid-cols-3 gap-2">
+            {loc.orderingUrl ? (
+              <a
+                href={loc.orderingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${ORDER_BUTTON_CLASS} text-white bg-brand text-foreground shadow-sm hover:brightness-105 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/45 focus-visible:ring-offset-2`}
+              >
+                <span>
+                  Place Pickup <span className="block sm:inline">Order</span>
+                </span>
+                <span className="sr-only"> from {loc.street} (opens in a new tab)</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className={UNAVAILABLE_ORDER_BUTTON_CLASS}
+                aria-label={`Place Pickup Order unavailable at ${loc.street}`}
+              >
+                <span>
+                  Place Pickup <span className="block sm:inline">Order</span>
+                </span>
+              </button>
+            )}
+
+            {loc.doordashUrl ? (
+              <a
+                href={loc.doordashUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${ORDER_BUTTON_CLASS} bg-[#EB1700] text-white shadow-sm hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#EB1700]/40 focus-visible:ring-offset-2`}
+              >
+                DoorDash
+                <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className={UNAVAILABLE_ORDER_BUTTON_CLASS}
+                aria-label={`DoorDash unavailable at ${loc.street}`}
+              >
+                DoorDash
+              </button>
+            )}
+
+            {loc.uberEatsUrl ? (
+              <a
+                href={loc.uberEatsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${ORDER_BUTTON_CLASS} bg-black text-white shadow-sm hover:brightness-125 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-foreground/30 focus-visible:ring-offset-2`}
+              >
+                Uber&nbsp;<span className="text-[#06C167]">Eats</span>
+                <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className={UNAVAILABLE_ORDER_BUTTON_CLASS}
+                aria-label={`Uber Eats unavailable at ${loc.street}`}
+              >
+                Uber Eats
+              </button>
+            )}
+          </div>
+
+          {!loc.orderingUrl && !loc.doordashUrl && !loc.uberEatsUrl && (
+            <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-xs font-semibold text-muted-foreground">
+              <Store className="size-4 shrink-0" aria-hidden="true" />
+              Online ordering coming soon — come by the store to order
+            </p>
+          )}
+        </section>
 
         {/* Details: address + maps on the left, hours inline on the right */}
         <div className="mt-8 flex items-start justify-between gap-4 sm:gap-8">
@@ -155,53 +239,6 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
           </div>
         </div>
 
-        {/* Order: pickup on top, delivery apps smaller below. Each button only
-            renders once its real link exists — never a placeholder URL. */}
-        <div className="mt-8 flex flex-col gap-3">
-          {loc.orderingUrl ? (
-            <a
-              href={loc.orderingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 font-heading text-lg font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
-            >
-              <Store className="size-6" aria-hidden="true" />
-              Place Pickup order
-              <span className="sr-only"> from {loc.street} (opens in a new tab)</span>
-            </a>
-          ) : (
-            <p className="mt-3 flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted px-6 py-3 text-center font-heading text-sm font-bold uppercase tracking-wide text-muted-foreground">
-              <Store className="size-5 shrink-0" aria-hidden="true" />
-              Online ordering coming soon — come by the store to order
-            </p>
-          )}
-          {(loc.doordashUrl || loc.uberEatsUrl) && (
-            <div className="grid grid-cols-2 gap-3">
-              {loc.doordashUrl && (
-                <a
-                  href={loc.doordashUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-11 items-center justify-center rounded-full bg-[#EB1700] px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[#EB1700]/40"
-                >
-                  DoorDash
-                  <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
-                </a>
-              )}
-              {loc.uberEatsUrl && (
-                <a
-                  href={loc.uberEatsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-11 items-center justify-center rounded-full bg-black px-4 text-sm font-bold tracking-wide text-white shadow-sm transition-all hover:brightness-125 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-foreground/30"
-                >
-                  Uber&nbsp;<span className="text-[#06C167]">Eats</span>
-                  <span className="sr-only"> — order from {loc.street} (opens in a new tab)</span>
-                </a>
-              )}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
