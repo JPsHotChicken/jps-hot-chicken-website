@@ -8,7 +8,8 @@ import { getWeekRows } from "@/lib/hours";
 const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/locations", label: "Locations" },
-  { href: "/careers", label: "Careers" },
+  // Careers temporarily hidden — restore when hiring resumes.
+  // { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },
 ];
 

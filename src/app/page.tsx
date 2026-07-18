@@ -10,10 +10,18 @@ import { buildHomeJsonLd, serializeJsonLd } from "@/lib/jsonld";
 import { OrderButton } from "@/components/OrderButton";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Marquee } from "@/components/Marquee";
-import { KentuckyIcon, TennesseeIcon } from "@/components/StateIcons";
 import { entrees, sides, dippingSauces, drinks } from "@/data/food";
 
-const STATE_ICONS = { KY: KentuckyIcon, TN: TennesseeIcon } as const;
+const LOCATION_IMAGES: Record<string, { src: string; alt: string }> = {
+  "oak-grove": {
+    src: "/images/oakGroveHorseAndFortCampbellBase-1.jpg",
+    alt: "Illustration of a horse and Fort Campbell near Oak Grove, KY",
+  },
+  clarksville: {
+    src: "/images/clarksvilleBridge-1.jpg",
+    alt: "Illustration of the bridge in Clarksville, TN",
+  },
+};
 
 export const metadata: Metadata = {
   title: {
@@ -269,15 +277,29 @@ export default function HomePage() {
               );
               const googleMapsHref = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
               const appleMapsHref = `https://maps.apple.com/?q=${mapsQuery}`;
-              const StateShape = STATE_ICONS[loc.state];
+              const image = LOCATION_IMAGES[loc.slug];
               return (
                 <div
                   key={loc.name}
-                  className="flex flex-col gap-3 rounded-xl bg-white px-3 py-5 text-left text-foreground shadow-md sm:px-4 sm:py-7"
+                  className="relative flex overflow-hidden rounded-xl bg-white text-left text-foreground shadow-md"
                 >
-                  <div className="flex items-center gap-3">
-                    <StateShape className="h-12 w-auto shrink-0 text-brand sm:h-14" aria-hidden="true" />
-                    <div className="min-w-0 flex-1">
+                  {image && (
+                    <div className="relative w-2/5 shrink-0 bg-white sm:w-1/2">
+                      <Image
+                        src={image.src}
+                        alt={image.alt}
+                        fill
+                        sizes="(max-width: 640px) 40vw, 260px"
+                        className="object-cover"
+                      />
+                      <div
+                        className="absolute inset-y-0 right-0 w-12 bg-linear-to-r from-white/0 to-white"
+                        aria-hidden="true"
+                      />
+                    </div>
+                  )}
+                  <div className="flex flex-1 flex-col gap-3 py-5 pl-6 pr-3 sm:py-7 sm:pl-9 sm:pr-4">
+                    <div className="min-w-0">
                       <h3 className="flex flex-wrap items-center gap-2 font-heading text-base font-bold uppercase tracking-tight sm:text-lg">
                         {loc.street}
                         {loc.isNew && (
@@ -291,54 +313,19 @@ export default function HomePage() {
                         {loc.city}, {loc.state}
                       </p>
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Link
-                      href={`/order/${loc.slug}`}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-brand px-4 font-heading text-sm font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
-                    >
-                      Order Now
-                      <ArrowRight className="size-4" aria-hidden="true" />
-                      <span className="sr-only">
-                        {" "}
-                        — {loc.street}, {loc.city}
-                      </span>
-                    </Link>
-                    <div className="grid grid-cols-2 gap-2">
-                      <a
-                        href={googleMapsHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border-2 border-neutral-700 bg-card px-2 font-heading text-xs font-bold uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500/50"
+                    <div className="flex flex-col gap-2">
+                      <Link
+                        href={`/order/${loc.slug}`}
+                        className="inline-flex h-7 items-center justify-center gap-1.5 self-start rounded-lg bg-brand px-3 font-heading text-xs font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
                       >
-                        <MapPin className="size-4" aria-hidden="true" />
-                        Google Maps
+                        Select Location
+                        <ArrowRight className="size-3.5" aria-hidden="true" />
                         <span className="sr-only">
                           {" "}
-                          — open {loc.street} in Google Maps (opens in a new tab)
+                          — {loc.street}, {loc.city}
                         </span>
-                      </a>
-                      <a
-                        href={appleMapsHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border-2 border-neutral-700 bg-card px-2 font-heading text-xs font-bold uppercase tracking-wide text-neutral-700 transition-colors hover:bg-neutral-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-500/50"
-                      >
-                        <Navigation className="size-4" aria-hidden="true" />
-                        Apple Maps
-                        <span className="sr-only">
-                          {" "}
-                          — open {loc.street} in Apple Maps (opens in a new tab)
-                        </span>
-                      </a>
+                      </Link>
                     </div>
-                    <Link
-                      href={`/locations/${loc.slug}`}
-                      className="mt-1 inline-flex items-center justify-center gap-1 text-sm font-semibold text-brand hover:underline"
-                    >
-                      Hours, info &amp; directions
-                      <span className="sr-only"> — {loc.name} location</span>
-                    </Link>
                   </div>
                 </div>
               );
@@ -349,7 +336,7 @@ export default function HomePage() {
 
       {/* Hours + contact */}
       <section aria-label="Hours and contact" className="border-b border-border bg-white">
-        <div className="mt-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mt-10 mb-12 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
           {/* Two hours lists — store hours pinned to the left edge, online/delivery
               hours pinned to the right edge, at every screen size. */}
           <div className="flex items-start justify-between gap-3">
@@ -405,43 +392,6 @@ export default function HomePage() {
                   </div>
                 ))}
               </dl>
-            </div>
-          </div>
-
-          {/* Call + Email — side by side, matching the two-column hours layout above */}
-          <div className="mt-8 flex items-start justify-between gap-3 border-t border-border pt-8 sm:justify-center sm:gap-20">
-            <div className="text-left">
-              <div className="flex items-center gap-2">
-                <Phone className="size-5 shrink-0 text-brand" aria-hidden="true" />
-                <p className="font-heading text-xs font-bold uppercase tracking-widest text-muted-foreground sm:text-sm">
-                  Call
-                </p>
-              </div>
-              <div className="mt-2 flex flex-col gap-1">
-                {phoneNumbers.map(({ label, phone }) => (
-                  <p key={label} className="text-xs sm:text-base">
-                    <span className="font-semibold">{label}: </span>
-                    <a href={telHref(phone)} className="font-semibold hover:text-brand">
-                      {formatPhone(phone)}
-                    </a>
-                  </p>
-                ))}
-              </div>
-            </div>
-
-            <div className="text-left">
-              <div className="flex items-center gap-2">
-                <Mail className="size-5 shrink-0 text-brand" aria-hidden="true" />
-                <p className="font-heading text-xs font-bold uppercase tracking-widest text-muted-foreground sm:text-sm">
-                  Email
-                </p>
-              </div>
-              <a
-                href={`mailto:${siteConfig.email}`}
-                className="mt-2 block break-all text-xs font-semibold hover:text-brand sm:text-base"
-              >
-                {siteConfig.email}
-              </a>
             </div>
           </div>
         </div>

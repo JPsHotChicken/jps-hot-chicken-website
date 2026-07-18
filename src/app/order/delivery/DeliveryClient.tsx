@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Truck } from "lucide-react";
+import { ArrowLeft, Truck } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { KentuckyIcon, TennesseeIcon } from "@/components/StateIcons";
@@ -12,7 +12,15 @@ export function DeliveryClient() {
   return (
     <div className="bg-white">
       <div className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
-        <header className="text-center">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to home
+        </Link>
+
+        <header className="mt-6 text-center">
           <h1 className="mb-20 font-heading text-4xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-6xl">
             Start a Delivery Order
           </h1>
@@ -43,7 +51,7 @@ export function DeliveryClient() {
                   className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl"
                 >
                   <StateShape
-                    className={`absolute -right-6 h-44 w-auto text-brand/10 sm:h-52 ${loc.state === "KY" ? "-bottom-2" : "-bottom-8"
+                    className={`absolute -right-6 h-44 w-auto text-brand/10 sm:h-52 ${loc.state === "KY" ? "bottom-8" : "bottom-2"
                       }`}
                   />
                 </div>
@@ -101,11 +109,6 @@ export function DeliveryClient() {
           })}
         </div>
 
-        <div className="mt-12 text-center">
-          <Link href="/" className="text-base font-semibold text-brand hover:underline">
-            ← Back to home
-          </Link>
-        </div>
       </div>
     </div>
   );

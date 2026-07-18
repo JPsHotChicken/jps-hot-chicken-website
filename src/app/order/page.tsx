@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 
@@ -28,8 +28,16 @@ export default function OrderPage() {
   return (
     <div className="bg-white">
       <div className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to home
+        </Link>
+
         {/* Header */}
-        <header className="text-center">
+        <header className="mt-6 text-center">
           <h1 className="font-heading text-4xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-6xl">
             Select Location
           </h1>
@@ -68,7 +76,7 @@ export default function OrderPage() {
                     />
                   </div>
                 )}
-                <div className="flex flex-1 flex-col px-6 py-5 sm:px-8 sm:py-6">
+                <div className="flex flex-1 flex-col items-center justify-center px-6 py-5 text-center sm:px-8 sm:py-6">
                   <h2 className="font-heading text-xl font-bold uppercase tracking-tight sm:text-3xl">
                     {loc.street}
                   </h2>
@@ -76,32 +84,21 @@ export default function OrderPage() {
                     {loc.city}, {loc.state}
                   </p>
 
-                  <div className="mt-4 flex flex-col gap-3">
-                    <Link
-                      href={`/order/${loc.slug}`}
-                      className="inline-flex min-h-5 items-center justify-center gap-2 rounded-full bg-brand px-6 py-2 text-center font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
-                    >
-                      Select
-                      <ArrowRight className="size-5 shrink-0" aria-hidden="true" />
-                      <span className="sr-only">
-                        {" "}
-                        — {loc.street}, {loc.city}
-                      </span>
-                    </Link>
-                  </div>
+                  <Link
+                    href={`/order/${loc.slug}`}
+                    className="mt-5 mb-2 inline-flex min-h-2 items-center justify-center gap-2 rounded-full bg-brand px-6 py-1 text-center font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
+                  >
+                    Select
+                    <ArrowRight className="size-5 shrink-0" aria-hidden="true" />
+                    <span className="sr-only">
+                      {" "}
+                      — {loc.street}, {loc.city}
+                    </span>
+                  </Link>
                 </div>
               </div>
             );
           })}
-        </div>
-
-        <div className="mt-12 text-center">
-          <Link
-            href="/"
-            className="text-base font-semibold text-brand hover:underline"
-          >
-            ← Back to home
-          </Link>
         </div>
       </div>
     </div>

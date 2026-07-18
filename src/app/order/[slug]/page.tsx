@@ -80,9 +80,9 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
           </p>
         </header>
 
-        {/* Hero image */}
+        {/* Hero image — edges feathered on all sides so it melts into the page. */}
         {image && (
-          <div className="relative mt-6 aspect-[3/2] w-full overflow-hidden rounded-3xl shadow-[0_0_32px_rgba(0,0,0,0.14)] sm:shadow-[0_0_44px_rgba(0,0,0,0.12)]">
+          <div className="relative mt-6 aspect-[3/2] w-full">
             <Image
               src={image.src}
               alt={image.alt}
@@ -90,6 +90,12 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
               preload
               sizes="(max-width: 639px) calc(100vw - 2rem), 528px"
               className="object-cover"
+              style={{
+                maskImage:
+                  "radial-gradient(ellipse 92% 92% at 50% 50%, #000 55%, transparent 100%)",
+                WebkitMaskImage:
+                  "radial-gradient(ellipse 92% 92% at 50% 50%, #000 55%, transparent 100%)",
+              }}
             />
           </div>
         )}
@@ -186,9 +192,9 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
                 href={googleMapsHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-8 items-center justify-center gap-1 rounded-md border-2 border-black bg-card px-2.5 text-[11px] font-bold tracking-wide text-foreground transition-all hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                className="inline-flex h-6 items-center justify-center gap-1 rounded border border-black bg-card px-2 text-[10px] font-bold tracking-wide text-foreground transition-all hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
               >
-                <MapPin className="size-3" aria-hidden="true" />
+                <MapPin className="size-2.5" aria-hidden="true" />
                 Google Maps
                 <span className="sr-only">
                   {" "}
@@ -199,9 +205,9 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
                 href={appleMapsHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-8 items-center justify-center gap-1 rounded-md border-2 border-black bg-card px-2.5 text-[11px] font-bold tracking-wide text-foreground transition-all hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                className="inline-flex h-6 items-center justify-center gap-1 rounded border border-black bg-card px-2 text-[10px] font-bold tracking-wide text-foreground transition-all hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
               >
-                <Navigation className="size-3" aria-hidden="true" />
+                <Navigation className="size-2.5" aria-hidden="true" />
                 Apple Maps
                 <span className="sr-only">
                   {" "}

@@ -122,7 +122,7 @@ export function Marquee({
       if (e.pointerType === "mouse") {
         try {
           track.setPointerCapture(e.pointerId);
-        } catch {}
+        } catch { }
       }
     };
     const onPointerMove = (e: PointerEvent) => {
@@ -137,7 +137,7 @@ export function Marquee({
       s.dragging = false;
       try {
         track.releasePointerCapture(e.pointerId);
-      } catch {}
+      } catch { }
       scheduleResume(500);
     };
     // Horizontal trackpad/wheel gestures nudge the strip and briefly pause auto-
