@@ -193,3 +193,49 @@ summary {
     transition-timing-function: ease-out;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   To-go bag header animation (/order/pickup): a paper bag that bobs gently
+   while steam wisps rise off the hot food inside. Pure CSS so it runs on
+   mobile without JS; fully static under prefers-reduced-motion (the steam
+   stays hidden so the static art is just a clean bag).
+--------------------------------------------------------------------------- */
+.togo-steam {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .togo-bag {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: togo-bob 2.6s ease-in-out infinite;
+  }
+
+  .togo-steam {
+    animation: togo-steam-rise 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes togo-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes togo-steam-rise {
+  0% {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+}

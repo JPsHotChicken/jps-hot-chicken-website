@@ -21,6 +21,55 @@ export default function PickupOrderPage() {
       <div className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
         {/* Header */}
         <header className="text-center">
+          {/* To-go bag animation: bag bobs while steam rises off the hot food */}
+          <div aria-hidden="true" className="mx-auto w-24 text-brand sm:w-28">
+            <svg viewBox="0 0 120 120" fill="none" className="h-auto w-full">
+              <path
+                d="M 51 30 C 48 25 53 21 50 15"
+                stroke="currentColor"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                className="togo-steam"
+              />
+              <path
+                d="M 61 28 C 58 22 64 17 61 9"
+                stroke="currentColor"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                className="togo-steam"
+                style={{ animationDelay: "0.8s" }}
+              />
+              <path
+                d="M 71 30 C 68 25 73 21 70 15"
+                stroke="currentColor"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                className="togo-steam"
+                style={{ animationDelay: "1.6s" }}
+              />
+              <g className="togo-bag">
+                <path
+                  d="M 45 48 C 45 32 75 32 75 48"
+                  stroke="black"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M 33 48 L 87 48 L 91 100 Q 91.5 106 85.5 106 L 34.5 106 Q 28.5 106 29 100 Z"
+                  fill="white"
+                  stroke="black"
+                  strokeWidth="4"
+                  strokeLinejoin="round"
+                />
+                <g transform="translate(44.5 60) scale(1.3)">
+                  <path
+                    d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"
+                    fill="currentColor"
+                  />
+                </g>
+              </g>
+            </svg>
+          </div>
           <h1 className="mt-3 font-heading text-4xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-6xl">
             Start a Pickup Order
           </h1>
