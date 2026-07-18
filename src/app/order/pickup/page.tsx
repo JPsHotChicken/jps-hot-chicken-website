@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { KentuckyIcon, TennesseeIcon } from "@/components/StateIcons";
@@ -19,8 +19,16 @@ export default function PickupOrderPage() {
   return (
     <div className="bg-white">
       <div className="mx-auto w-full max-w-5xl px-4 py-14 sm:px-6 sm:py-20">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:underline"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to home
+        </Link>
+
         {/* Header */}
-        <header className="text-center">
+        <header className="mt-6 text-center">
           {/* To-go bag animation: bag bobs while steam rises off the hot food */}
           <div aria-hidden="true" className="mx-auto w-24 text-brand sm:w-28">
             <svg viewBox="0 0 120 120" fill="none" className="h-auto w-full">
@@ -119,9 +127,8 @@ export default function PickupOrderPage() {
                     aria-disabled={disabled || undefined}
                     tabIndex={disabled ? -1 : undefined}
                     title={disabled ? "Temporarily unavailable" : undefined}
-                    className={`inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brand px-6 font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50${
-                      disabled ? " pointer-events-none opacity-50 grayscale" : ""
-                    }`}
+                    className={`inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brand px-6 font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50${disabled ? " pointer-events-none opacity-50 grayscale" : ""
+                      }`}
                   >
                     {disabled ? "Online Ordering Coming Soon" : "Start Pickup Order"}
                     {!disabled && <ArrowRight className="size-5" aria-hidden="true" />}
@@ -131,28 +138,12 @@ export default function PickupOrderPage() {
                         : ` at ${loc.street}, ${loc.city} (opens in a new tab)`}
                     </span>
                   </a>
-                  <a
-                    href={directionsHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-10 items-center justify-center rounded-full text-sm font-semibold text-foreground/70 transition-colors hover:text-brand"
-                  >
-                    Get directions
-                  </a>
                 </div>
               </div>
             );
           })}
         </div>
 
-        <div className="mt-12 text-center">
-          <Link
-            href="/"
-            className="text-base font-semibold text-brand hover:underline"
-          >
-            ← Back to home
-          </Link>
-        </div>
       </div>
     </div>
   );

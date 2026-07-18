@@ -4,6 +4,9 @@ import { Clock, MapPin, Phone, Truck } from "lucide-react";
 import { siteConfig } from "@/data/site";
 import { formatPhone, telHref } from "@/lib/format";
 import { getWeekRows, getOnlineWeekRows } from "@/lib/hours";
+import { KentuckyIcon, TennesseeIcon } from "@/components/StateIcons";
+
+const STATE_ICONS = { KY: KentuckyIcon, TN: TennesseeIcon } as const;
 
 
 export const metadata: Metadata = {
@@ -34,29 +37,35 @@ export default function ContactPage() {
 
       {/* Locations */}
       <section className="mt-10">
-        <h2 className="text-2xl font-bold tracking-tight">Our Locations</h2>
-        <div className="mt-6 grid gap-6 sm:grid-cols-2">
+        <div className="grid gap-6 sm:grid-cols-2">
           {locations.map((loc) => {
             const fullAddress = `${loc.streetNumber} ${loc.street}, ${loc.city}, ${loc.state} ${loc.zip}`;
             const mapQuery = encodeURIComponent(`${siteConfig.name}, ${fullAddress}`);
             const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${mapQuery}`;
+            const StateShape = STATE_ICONS[loc.state];
 
             return (
               <div
                 key={loc.slug}
                 className="rounded-2xl border border-border bg-card p-6"
               >
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xl font-bold tracking-tight">{loc.name}</h3>
-                  {loc.isNew && (
-                    <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
-                      New
-                    </span>
-                  )}
+                <div className="flex items-center gap-3">
+                  <StateShape
+                    className="h-14 w-auto shrink-0 fill-white stroke-brand [stroke-linejoin:round] [stroke-width:2] sm:h-16"
+                    aria-hidden="true"
+                  />
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold tracking-tight">{loc.name}</h3>
+                    {loc.isNew && (
+                      <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
+                        New
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <ul className="mt-4 space-y-3 text-lg">
                   <li className="flex items-start gap-3">
-                    <MapPin className="mt-1 size-6 shrink-0 text-brand" />
+                    <MapPin className="mt-1 size-6 shrink-0 text-muted-foreground" />
                     <div>
                       <a
                         href={directionsHref}
@@ -68,18 +77,11 @@ export default function ContactPage() {
                         <br />
                         {loc.city}, {loc.state} {loc.zip}
                       </a>
-                      <a
-                        href={directionsHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 block text-base font-semibold text-brand hover:underline"
-                      >
-                        Get directions →
-                      </a>
+
                     </div>
                   </li>
                   <li className="flex items-center gap-3">
-                    <Phone className="size-6 shrink-0 text-brand" />
+                    <Phone className="size-6 shrink-0 text-muted-foreground" />
                     {loc.phone ? (
                       <a
                         href={telHref(loc.phone)}
