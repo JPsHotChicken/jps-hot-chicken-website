@@ -1,13 +1,22 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, MapPin, Navigation, Store } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { getWeekRows } from "@/lib/hours";
-import { KentuckyIcon, TennesseeIcon } from "@/components/StateIcons";
 
-const STATE_ICONS = { KY: KentuckyIcon, TN: TennesseeIcon } as const;
+const LOCATION_IMAGES: Record<string, { src: string; alt: string }> = {
+  "oak-grove": {
+    src: "/images/oakGroveHorseAndFortCampbellBase-1.jpg",
+    alt: "Illustration of a horse and Fort Campbell near Oak Grove, KY",
+  },
+  clarksville: {
+    src: "/images/clarksvilleBridge-1.jpg",
+    alt: "Illustration of the bridge in Clarksville, TN",
+  },
+};
 
 type Params = Promise<{ slug: string }>;
 
@@ -38,12 +47,8 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
   const loc = siteConfig.locations.find((l) => l.slug === slug);
   if (!loc) notFound();
 
-  const StateShape = STATE_ICONS[loc.state];
+  const image = LOCATION_IMAGES[loc.slug];
   const week = getWeekRows();
-  // The state silhouettes sit in the upper part of their viewBox with empty
-  // space below (TN is wide and short, so it has the most). Pull the address +
-  // maps buttons up into that dead space so they sit just under the shape.
-  const iconPull = loc.state === "TN" ? "-mb-14 sm:-mb-20" : "-mb-10 sm:-mb-16";
   const fullAddress = `${loc.streetNumber} ${loc.street}, ${loc.city} ${loc.state} ${loc.zip}`;
   const mapsQuery = encodeURIComponent(`${siteConfig.name}, ${fullAddress}`);
   const googleMapsHref = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
@@ -60,15 +65,34 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
           All locations
         </Link>
 
-        {/* Identity: left column = state icon, address, maps; right = name + hours */}
-        <header className="mt-6 flex items-start gap-4 sm:gap-7">
-          {/* Left: large state icon with address + maps beneath it */}
-          <div className="flex shrink-0 flex-col items-start">
-            <StateShape
-              className={`h-28 w-auto text-brand sm:h-44 ${iconPull}`}
-              aria-hidden="true"
+        {/* Identity: left-aligned name, hero image, then details beneath */}
+        <header className="mt-6">
+          <h1 className="mt-1 font-heading text-3xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-5xl">
+            {loc.street}
+          </h1>
+          <p className="mt-1.5 font-heading text-base font-bold uppercase tracking-wide text-foreground sm:text-xl">
+            {loc.name}
+          </p>
+        </header>
+
+        {/* Hero image */}
+        {image && (
+          <div className="relative mt-6 aspect-[3/2] w-full overflow-hidden rounded-3xl">
+            <Image
+              src={image.src}
+              alt={image.alt}
+              fill
+              priority
+              sizes="(max-width: 640px) 100vw, 576px"
+              className="object-cover"
             />
-            <p className="mt-10 text-sm leading-snug text-muted-foreground">
+          </div>
+        )}
+
+        {/* Details: address + maps on the left, hours inline on the right */}
+        <div className="mt-8 flex items-start justify-between gap-4 sm:gap-8">
+          <div className="flex flex-col items-start">
+            <p className="text-sm leading-snug text-muted-foreground">
               {loc.streetNumber} {loc.street}
               <br />
               {loc.city}, {loc.state} {loc.zip}
@@ -103,49 +127,33 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
             </div>
           </div>
 
-          {/* Right: name + hours */}
-          <div className="min-w-0 flex-1 mt-5">
-            {loc.isNew && loc.isOpen && (
-              <span className="inline-block rounded-full bg-brand px-3 py-1 font-heading text-[11px] font-bold uppercase tracking-wide text-brand-foreground shadow-sm">
-                Now Open
-              </span>
-            )}
-            <h1 className="mt-1 font-heading text-2xl font-extrabold uppercase leading-[0.95] tracking-tight sm:text-5xl">
-              {loc.street}
-            </h1>
-            <p className="mt-1.5 font-heading text-base font-bold uppercase tracking-wide text-foreground sm:text-xl">
-              {loc.name}
+          <div className="flex flex-col items-start">
+            <p className="font-heading text-xs font-bold uppercase tracking-wide text-foreground sm:text-sm">
+              Online Ordering and
+              <br />
+              Delivery Hours
             </p>
-            {/* Heading, hours, and the heads-up pill share one container so their
-                left edges align. The block itself sits on the right (ml-auto). */}
-            <div className="mt-10 ml-auto flex w-fit flex-col items-start">
-              <p className="font-heading text-xs font-bold uppercase tracking-wide text-foreground sm:text-sm">
-                Online Ordering and
-                <br />
-                Delivery Hours
-              </p>
-              <ul className="mt-2 space-y-px text-[11px] sm:text-xs">
-                {week.map((row) => (
-                  <li
-                    key={row.key}
-                    className={`flex gap-2 ${row.isToday ? "font-bold text-foreground" : "text-muted-foreground"
-                      }`}
-                  >
-                    <span className="w-16 shrink-0">{row.label}</span>
-                    <span>{row.hours}</span>
-                  </li>
-                ))}
-              </ul>
-              {/* Heads-up: online ordering + delivery stop before the store closes. */}
-              <p className="mt-3 flex w-[132px] items-start gap-1.5 rounded-2xl bg-yellow-100 px-3 py-1.5 text-[5px] font-semibold leading-snug text-yellow-900 ring-1 ring-yellow-400 sm:w-[142px] sm:text-[11px]">
-                <AlertTriangle className="mt-px size-2.5 shrink-0 text-yellow-600" aria-hidden="true" />
-                <span>
-                  Online ordering/delivery close 30 mins early. Real store hours are 10&nbsp;AM–9&nbsp;PM.
-                </span>
-              </p>
-            </div>
+            <ul className="mt-2 space-y-px text-[11px] sm:text-xs">
+              {week.map((row) => (
+                <li
+                  key={row.key}
+                  className={`flex gap-2 ${row.isToday ? "font-bold text-foreground" : "text-muted-foreground"
+                    }`}
+                >
+                  <span className="w-16 shrink-0">{row.label}</span>
+                  <span>{row.hours}</span>
+                </li>
+              ))}
+            </ul>
+            {/* Heads-up: online ordering + delivery stop before the store closes. */}
+            <p className="mt-3 flex w-[132px] items-start gap-1.5 rounded-2xl bg-yellow-100 px-3 py-1.5 text-[10px] font-semibold leading-snug text-yellow-900 ring-1 ring-yellow-400 sm:w-[142px] sm:text-[11px]">
+              <AlertTriangle className="mt-px size-2.5 shrink-0 text-yellow-600" aria-hidden="true" />
+              <span>
+                Online ordering/delivery close 30 mins early. Real store hours are 10&nbsp;AM–9&nbsp;PM.
+              </span>
+            </p>
           </div>
-        </header>
+        </div>
 
         {/* Order: pickup on top, delivery apps smaller below. Each button only
             renders once its real link exists — never a placeholder URL. */}
@@ -194,16 +202,6 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
             </div>
           )}
         </div>
-
-        <p className="mt-8 text-center text-sm text-muted-foreground">
-          <Link
-            href={`/locations/${loc.slug}`}
-            className="font-semibold text-brand hover:underline"
-          >
-            About our {loc.city} location — hours, directions &amp; more →
-          </Link>
-        </p>
-
       </div>
     </div>
   );

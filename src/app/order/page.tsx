@@ -7,11 +7,11 @@ import { siteConfig } from "@/data/site";
 
 const LOCATION_IMAGES: Record<string, { src: string; alt: string }> = {
   "oak-grove": {
-    src: "/images/oakGroveHorseAndFortCampbellBase.png",
+    src: "/images/oakGroveHorseAndFortCampbellBase-1.jpg",
     alt: "Illustration of a horse and Fort Campbell near Oak Grove, KY",
   },
   clarksville: {
-    src: "/images/clarksvilleBridge.png",
+    src: "/images/clarksvilleBridge-1.jpg",
     alt: "Illustration of the bridge in Clarksville, TN",
   },
 };
