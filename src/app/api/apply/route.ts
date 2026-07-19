@@ -10,8 +10,8 @@ export const runtime = "nodejs";
 // <careers@jpshotchicken.com>"). For quick testing you can use Resend's
 // "onboarding@resend.dev" sender.
 const FROM = process.env.CAREERS_FROM_EMAIL || "JP's Hot Chicken Careers <onboarding@resend.dev>";
-// Where new applications are sent. Defaults to the owner's address.
-const NOTIFY_TO = process.env.CAREERS_NOTIFY_EMAIL || siteConfig.email;
+// Where new applications are sent. Overridable via CAREERS_NOTIFY_EMAIL.
+const NOTIFY_TO = process.env.CAREERS_NOTIFY_EMAIL || "jpstrenton@gmail.com";
 
 function esc(value: string): string {
   return value
