@@ -119,15 +119,15 @@ export default function CareersPage() {
                           <Clock className="size-4 text-slate-400" aria-hidden="true" />
                           {job.employmentType}
                         </span>
-                        <span className="inline-flex items-center gap-1.5 font-medium text-slate-900">
+                        {/* <span className="inline-flex items-center gap-1.5 font-medium text-slate-900">
                           <DollarSign className="size-4 text-slate-400" aria-hidden="true" />
                           {payRange(job.payMin, job.payMax)}
-                        </span>
+                        </span> */}
                       </div>
-                      <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600">
+                      {/* <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600">
                         {job.summary}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-500">{job.hours}</p>
+                      </p> */}
+                      {/* <p className="mt-2 text-sm text-slate-500">{job.hours}</p> */}
                     </div>
                     <div className="shrink-0">
                       <Link
