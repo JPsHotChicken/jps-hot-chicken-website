@@ -2,25 +2,36 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { Check, Loader2, Paperclip, X } from "lucide-react";
+import { Check, Loader2, Plus, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { Job } from "@/data/jobs";
+import { siteConfig } from "@/data/site";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 const SHIFTS = ["Morning", "Afternoon", "Evening"] as const;
-const MAX_RESUME_BYTES = 5 * 1024 * 1024; // 5 MB
 
 type YesNo = "" | "yes" | "no";
+type EmploymentPref = "" | "full-time" | "part-time" | "either";
 type Errors = Record<string, string>;
+type Experience = { where: string; position: string; dates: string };
 
-const STEP_TITLES = [
-  "Which role?",
-  "About you",
-  "Eligibility",
-  "Your availability",
-  "Almost done",
-] as const;
+const STEP_TITLES = ["Basic information", "Job details", "Review & submit"] as const;
+
+// Location options for "Which location are you applying at?"
+const LOCATION_OPTIONS = [
+  ...siteConfig.locations.map((loc) => ({
+    value: loc.slug,
+    label: `${loc.name} — ${loc.city}, ${loc.state}`,
+  })),
+  { value: "either", label: "Either location" },
+];
+
+const EMPLOYMENT_OPTIONS: { value: Exclude<EmploymentPref, "">; label: string }[] = [
+  { value: "full-time", label: "Full-time" },
+  { value: "part-time", label: "Part-time" },
+  { value: "either", label: "Either" },
+];
 
 export function ApplicationForm({
   jobs,
@@ -32,15 +43,29 @@ export function ApplicationForm({
   const validInitial = jobs.some((j) => j.id === initialRole) ? initialRole : "";
 
   const [step, setStep] = useState(0);
-  const [role, setRole] = useState(validInitial);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+
+  // Page 1 — Basic information
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
-  const [age16, setAge16] = useState<YesNo>("");
+  const [email, setEmail] = useState("");
+  const [age, setAge] = useState("");
   const [workAuth, setWorkAuth] = useState<YesNo>("");
+
+  // Page 2 — Job details
+  const [position, setPosition] = useState(validInitial);
+  const [location, setLocation] = useState("");
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
-  const [about, setAbout] = useState("");
-  const [resume, setResume] = useState<File | null>(null);
+  const [employment, setEmployment] = useState<EmploymentPref>("");
+  const [foodService, setFoodService] = useState<YesNo>("");
+  const [experiences, setExperiences] = useState<Experience[]>([
+    { where: "", position: "", dates: "" },
+  ]);
+  const [transportation, setTransportation] = useState<YesNo>("");
+
+  // Page 3 — Certification
+  const [certify, setCertify] = useState(false);
+
   const [errors, setErrors] = useState<Errors>({});
   const [submitState, setSubmitState] = useState<
     "idle" | "submitting" | "success" | "error"
@@ -60,32 +85,59 @@ export function ApplicationForm({
     setAvailability((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
+  function updateExperience(index: number, field: keyof Experience, value: string) {
+    setExperiences((prev) =>
+      prev.map((ex, i) => (i === index ? { ...ex, [field]: value } : ex)),
+    );
+  }
+
+  function addExperience() {
+    setExperiences((prev) => [...prev, { where: "", position: "", dates: "" }]);
+  }
+
+  function removeExperience(index: number) {
+    setExperiences((prev) => prev.filter((_, i) => i !== index));
+  }
+
   function validate(current: number): Errors {
     const e: Errors = {};
-    if (current === 0 && !role) e.role = "Please choose the role you're applying for.";
-    if (current === 1) {
-      if (!name.trim()) e.name = "Please enter your name.";
-      if (!email.trim()) e.email = "Please enter your email.";
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-        e.email = "Please enter a valid email address.";
+
+    if (current === 0) {
+      if (!firstName.trim()) e.firstName = "Please enter your first name.";
+      if (!lastName.trim()) e.lastName = "Please enter your last name.";
       if (!phone.trim()) e.phone = "Please enter a phone number.";
       else if (phone.replace(/\D/g, "").length < 10)
         e.phone = "Please enter a valid phone number.";
-    }
-    if (current === 2) {
-      if (!age16) e.age16 = "Please answer this question.";
-      else if (age16 === "no") e.age16 = "You must be 16 or older to apply for this role.";
+      // Email is optional — only validate the format if something was entered.
+      if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        e.email = "Please enter a valid email address.";
+      const ageNum = Number(age);
+      if (!age.trim()) e.age = "Please enter your age.";
+      else if (!Number.isFinite(ageNum) || ageNum < 14 || ageNum > 99)
+        e.age = "Please enter a valid age.";
       if (!workAuth) e.workAuth = "Please answer this question.";
-      else if (workAuth === "no")
-        e.workAuth = "This role requires authorization to work in the U.S.";
     }
-    if (current === 3) {
+
+    if (current === 1) {
+      if (!position) e.position = "Please choose the position you're applying for.";
+      if (!location) e.location = "Please choose a location.";
       if (!Object.values(availability).some(Boolean))
         e.availability = "Select at least one time you can work.";
+      if (!employment) e.employment = "Please choose an option.";
+      if (!foodService) e.foodService = "Please answer this question.";
+      else if (foodService === "yes") {
+        const first = experiences[0];
+        if (!first.where.trim()) e.expWhere = "Please enter where you worked.";
+        if (!first.position.trim()) e.expPosition = "Please enter your position.";
+        if (!first.dates.trim()) e.expDates = "Please enter the dates you worked.";
+      }
+      if (!transportation) e.transportation = "Please answer this question.";
     }
-    if (current === 4 && resume) {
-      if (resume.size > MAX_RESUME_BYTES) e.resume = "File is too large (5 MB max).";
+
+    if (current === 2) {
+      if (!certify) e.certify = "Please certify the information is accurate.";
     }
+
     return e;
   }
 
@@ -102,28 +154,61 @@ export function ApplicationForm({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const e = validate(4);
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
+
+    // Validate every page; jump to the first one with a problem.
+    for (let s = 0; s < total; s++) {
+      const e = validate(s);
+      if (Object.keys(e).length > 0) {
+        setStep(s);
+        setErrors(e);
+        return;
+      }
+    }
+    setErrors({});
 
     setSubmitState("submitting");
     setSubmitError("");
     try {
-      const selectedJob = jobs.find((j) => j.id === role);
+      const selectedJob = jobs.find((j) => j.id === position);
+      const positionLabel = selectedJob ? selectedJob.title : "Any position";
+      const locationLabel =
+        LOCATION_OPTIONS.find((o) => o.value === location)?.label ?? location;
+      const employmentLabel =
+        EMPLOYMENT_OPTIONS.find((o) => o.value === employment)?.label ?? employment;
+
       const slots = Object.entries(availability)
         .filter(([, v]) => v)
         .map(([k]) => k.replace("-", " "));
 
+      const experienceStr =
+        foodService === "yes"
+          ? experiences
+              .filter((ex) => ex.where.trim() || ex.position.trim() || ex.dates.trim())
+              .map(
+                (ex, i) =>
+                  `#${i + 1} — Where: ${ex.where.trim()}; Position: ${ex.position.trim()}; Dates: ${ex.dates.trim()}`,
+              )
+              .join(" | ")
+          : "No prior food service experience";
+
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+
       const fd = new FormData();
-      fd.set("role", selectedJob ? selectedJob.title : "General application");
-      fd.set("name", name.trim());
+      fd.set("name", fullName);
+      fd.set("firstName", firstName.trim());
+      fd.set("lastName", lastName.trim());
       fd.set("email", email.trim());
       fd.set("phone", phone.trim());
-      fd.set("age16", age16);
+      fd.set("age", age.trim());
       fd.set("workAuthorized", workAuth);
+      fd.set("position", positionLabel);
+      fd.set("location", locationLabel);
       fd.set("availability", slots.join(", "));
-      fd.set("about", about.trim());
-      if (resume) fd.set("resume", resume);
+      fd.set("employmentType", employmentLabel);
+      fd.set("foodService", foodService);
+      fd.set("experience", experienceStr);
+      fd.set("transportation", transportation);
+      fd.set("certify", "yes");
 
       const res = await fetch("/api/apply", { method: "POST", body: fd });
       if (!res.ok) {
@@ -147,9 +232,10 @@ export function ApplicationForm({
           Application received!
         </h2>
         <p className="mt-3 text-base text-muted-foreground">
-          Thanks, {name.split(" ")[0] || "there"}. We&apos;ve emailed a confirmation to{" "}
-          <span className="font-semibold text-foreground">{email}</span> and the team will
-          be in touch soon.
+          Thanks, {firstName || "there"}.{" "}
+          {email
+            ? "We've emailed a confirmation and the team will be in touch soon."
+            : "The team will review your application and reach out soon."}
         </p>
         <Link
           href="/careers"
@@ -197,79 +283,37 @@ export function ApplicationForm({
           {STEP_TITLES[step]}
         </h2>
 
-        {/* Step 0: role */}
+        {/* Page 1: Basic information */}
         {step === 0 && (
-          <fieldset className="mt-5">
-            <legend className="sr-only">Choose a role</legend>
-            <div className="space-y-3">
-              {jobs.map((job) => (
-                <label
-                  key={job.id}
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-colors",
-                    role === job.id
-                      ? "border-brand bg-brand/5"
-                      : "border-border hover:bg-muted",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="role"
-                    value={job.id}
-                    checked={role === job.id}
-                    onChange={() => setRole(job.id)}
-                    className="mt-1 size-5 accent-brand"
-                  />
-                  <span>
-                    <span className="block font-heading text-base font-bold uppercase tracking-tight">
-                      {job.title}
-                    </span>
-                    <span className="mt-0.5 block text-sm text-muted-foreground">
-                      {job.location} · {job.employmentType}
-                    </span>
-                  </span>
-                </label>
-              ))}
-              <label
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-colors",
-                  role === "general"
-                    ? "border-brand bg-brand/5"
-                    : "border-border hover:bg-muted",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="role"
-                  value="general"
-                  checked={role === "general"}
-                  onChange={() => setRole("general")}
-                  className="mt-1 size-5 accent-brand"
-                />
-                <span>
-                  <span className="block font-heading text-base font-bold uppercase tracking-tight">
-                    General application
-                  </span>
-                  <span className="mt-0.5 block text-sm text-muted-foreground">
-                    Not sure which role — we&apos;ll find the best fit.
-                  </span>
-                </span>
-              </label>
-            </div>
-            <FieldError id={`${formId}-role`} message={errors.role} />
-          </fieldset>
-        )}
-
-        {/* Step 1: about you */}
-        {step === 1 && (
           <div className="mt-5 space-y-5">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field
+                id={`${formId}-first`}
+                label="First name"
+                value={firstName}
+                onChange={setFirstName}
+                error={errors.firstName}
+                autoComplete="given-name"
+                required
+              />
+              <Field
+                id={`${formId}-last`}
+                label="Last name"
+                value={lastName}
+                onChange={setLastName}
+                error={errors.lastName}
+                autoComplete="family-name"
+                required
+              />
+            </div>
             <Field
-              id={`${formId}-name`}
-              label="Full name"
-              value={name}
-              onChange={setName}
-              error={errors.name}
-              autoComplete="name"
+              id={`${formId}-phone`}
+              label="Phone number"
+              type="tel"
+              value={phone}
+              onChange={setPhone}
+              error={errors.phone}
+              autoComplete="tel"
               required
             />
             <Field
@@ -280,30 +324,18 @@ export function ApplicationForm({
               onChange={setEmail}
               error={errors.email}
               autoComplete="email"
-              required
+              optional
             />
             <Field
-              id={`${formId}-phone`}
-              label="Phone"
-              type="tel"
-              value={phone}
-              onChange={setPhone}
-              error={errors.phone}
-              autoComplete="tel"
+              id={`${formId}-age`}
+              label="Age"
+              type="number"
+              inputMode="numeric"
+              value={age}
+              onChange={setAge}
+              error={errors.age}
+              className="max-w-[8rem]"
               required
-            />
-          </div>
-        )}
-
-        {/* Step 2: eligibility */}
-        {step === 2 && (
-          <div className="mt-5 space-y-6">
-            <YesNoQuestion
-              id={`${formId}-age16`}
-              legend="Are you 16 years or older?"
-              value={age16}
-              onChange={setAge16}
-              error={errors.age16}
             />
             <YesNoQuestion
               id={`${formId}-workauth`}
@@ -311,22 +343,80 @@ export function ApplicationForm({
               value={workAuth}
               onChange={setWorkAuth}
               error={errors.workAuth}
+              required
             />
-            <p className="text-sm text-muted-foreground">
-              We only ask what&apos;s needed to consider you for the role. We never ask for
-              your date of birth, race, or other protected information.
-            </p>
           </div>
         )}
 
-        {/* Step 3: availability */}
-        {step === 3 && (
-          <div className="mt-5">
-            <div role="group" aria-labelledby={`${formId}-avail-label`}>
-              <p id={`${formId}-avail-label`} className="font-semibold">
+        {/* Page 2: Job details */}
+        {step === 1 && (
+          <div className="mt-5 space-y-6">
+            {/* Position */}
+            <div>
+              <label htmlFor={`${formId}-position`} className="block font-semibold">
+                Which position are you applying for?
+                <RequiredMark />
+              </label>
+              <select
+                id={`${formId}-position`}
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                aria-invalid={errors.position ? true : undefined}
+                aria-describedby={errors.position ? `${formId}-position-error` : undefined}
+                className={selectClass(!!errors.position)}
+              >
+                <option value="">Select a position…</option>
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.title}
+                  </option>
+                ))}
+                <option value="any">Any position</option>
+              </select>
+              <FieldError id={`${formId}-position`} message={errors.position} />
+            </div>
+
+            {/* Location */}
+            <div>
+              <label htmlFor={`${formId}-location`} className="block font-semibold">
+                Which location are you applying at?
+                <RequiredMark />
+              </label>
+              <select
+                id={`${formId}-location`}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                aria-invalid={errors.location ? true : undefined}
+                aria-describedby={errors.location ? `${formId}-location-error` : undefined}
+                className={selectClass(!!errors.location)}
+              >
+                <option value="">Select a location…</option>
+                {LOCATION_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <FieldError id={`${formId}-location`} message={errors.location} />
+            </div>
+
+            {/* Availability */}
+            <div>
+              <p className="font-semibold" id={`${formId}-avail-label`}>
+                Availability
+                <RequiredMark />
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
                 Tap every time you can usually work.
               </p>
-              <div className="mt-4 space-y-2">
+              <div
+                role="group"
+                aria-labelledby={`${formId}-avail-label`}
+                className={cn(
+                  "mt-3 space-y-2 rounded-xl transition-colors",
+                  errors.availability && "bg-red-50 p-3 ring-1 ring-red-300",
+                )}
+              >
                 {/* header */}
                 <div className="grid grid-cols-[2.75rem_repeat(3,1fr)] gap-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <span />
@@ -366,74 +456,163 @@ export function ApplicationForm({
                   </div>
                 ))}
               </div>
+              <FieldError id={`${formId}-availability`} message={errors.availability} />
             </div>
-            <FieldError id={`${formId}-availability`} message={errors.availability} />
+
+            {/* Employment preference */}
+            <fieldset>
+              <legend className="font-semibold">
+                Are you looking for full-time, part-time, or either?
+                <RequiredMark />
+              </legend>
+              <div
+                className={cn(
+                  "mt-3 grid grid-cols-3 gap-3 rounded-xl transition-colors",
+                  errors.employment && "bg-red-50 p-3 ring-1 ring-red-300",
+                )}
+              >
+                {EMPLOYMENT_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={cn(
+                      "flex h-12 cursor-pointer items-center justify-center rounded-xl border-2 px-2 text-center font-heading text-sm font-bold uppercase tracking-wide transition-colors",
+                      employment === opt.value
+                        ? "border-brand bg-brand text-brand-foreground"
+                        : "border-border bg-card hover:bg-muted",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name={`${formId}-employment`}
+                      value={opt.value}
+                      checked={employment === opt.value}
+                      onChange={() => setEmployment(opt.value)}
+                      className="sr-only"
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+              <FieldError id={`${formId}-employment`} message={errors.employment} />
+            </fieldset>
+
+            {/* Food service experience */}
+            <div>
+              <YesNoQuestion
+                id={`${formId}-foodservice`}
+                legend="Have you worked in food service before?"
+                value={foodService}
+                onChange={setFoodService}
+                error={errors.foodService}
+                required
+              />
+              {foodService === "yes" && (
+                <div className="mt-4 space-y-4">
+                  {experiences.map((ex, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl border border-border bg-muted/30 p-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="font-heading text-sm font-bold uppercase tracking-wide text-muted-foreground">
+                          Experience {i + 1}
+                        </p>
+                        {i > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => removeExperience(i)}
+                            className="inline-flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                            aria-label={`Remove experience ${i + 1}`}
+                          >
+                            <X className="size-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="mt-3 space-y-3">
+                        <Field
+                          id={`${formId}-exp-${i}-where`}
+                          label="Where"
+                          value={ex.where}
+                          onChange={(v) => updateExperience(i, "where", v)}
+                          error={i === 0 ? errors.expWhere : undefined}
+                          placeholder="Restaurant or employer"
+                          required={i === 0}
+                        />
+                        <Field
+                          id={`${formId}-exp-${i}-position`}
+                          label="What position"
+                          value={ex.position}
+                          onChange={(v) => updateExperience(i, "position", v)}
+                          error={i === 0 ? errors.expPosition : undefined}
+                          placeholder="e.g. Cashier, Cook"
+                          required={i === 0}
+                        />
+                        <Field
+                          id={`${formId}-exp-${i}-dates`}
+                          label="Dates worked"
+                          value={ex.dates}
+                          onChange={(v) => updateExperience(i, "dates", v)}
+                          error={i === 0 ? errors.expDates : undefined}
+                          placeholder="e.g. Jun 2023 – Aug 2024"
+                          required={i === 0}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addExperience}
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-brand hover:text-brand"
+                  >
+                    <Plus className="size-4" aria-hidden="true" />
+                    Add more experience
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Transportation */}
+            <YesNoQuestion
+              id={`${formId}-transport`}
+              legend="Do you have reliable transportation?"
+              value={transportation}
+              onChange={setTransportation}
+              error={errors.transportation}
+              required
+            />
           </div>
         )}
 
-        {/* Step 4: finish */}
-        {step === 4 && (
+        {/* Page 3: Review & submit */}
+        {step === 2 && (
           <div className="mt-5 space-y-5">
-            <div>
-              <label
-                htmlFor={`${formId}-about`}
-                className="block font-semibold"
-              >
-                Anything you&apos;d like us to know?{" "}
-                <span className="font-normal text-muted-foreground">(optional)</span>
-              </label>
-              <textarea
-                id={`${formId}-about`}
-                value={about}
-                onChange={(e) => setAbout(e.target.value)}
-                rows={4}
-                className="mt-2 w-full rounded-xl border-2 border-border bg-card p-3 text-base focus-visible:border-brand focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/30"
-                placeholder="Experience, why you'd be a great fit, when you can start…"
-              />
-            </div>
-
-            <div>
-              <span className="block font-semibold">
-                Resume{" "}
-                <span className="font-normal text-muted-foreground">
-                  (optional · PDF or Word, 5 MB max)
-                </span>
-              </span>
-              {resume ? (
-                <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border-2 border-border bg-muted/40 p-3">
-                  <span className="flex min-w-0 items-center gap-2 text-sm">
-                    <Paperclip className="size-4 shrink-0 text-brand" aria-hidden="true" />
-                    <span className="truncate">{resume.name}</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setResume(null)}
-                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label="Remove resume"
-                  >
-                    <X className="size-4" aria-hidden="true" />
-                  </button>
-                </div>
-              ) : (
-                <label className="mt-2 flex h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border text-sm font-semibold text-muted-foreground transition-colors hover:border-brand hover:text-brand">
-                  <Paperclip className="size-4" aria-hidden="true" />
-                  Attach a resume
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,application/pdf"
-                    className="sr-only"
-                    onChange={(e) => setResume(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-              )}
-              <FieldError id={`${formId}-resume`} message={errors.resume} />
-            </div>
-
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              {/* EEO reminder near submit */}
-              We&apos;re an equal opportunity employer. By submitting, you confirm the
-              information is accurate.
+            <p className="text-base text-muted-foreground">
+              Please review your answers, then confirm below to submit your application.
             </p>
+            <label
+              className={cn(
+                "flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-colors",
+                errors.certify
+                  ? "border-red-400 bg-red-50"
+                  : certify
+                    ? "border-brand bg-brand/5"
+                    : "border-border hover:bg-muted",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={certify}
+                onChange={(e) => setCertify(e.target.checked)}
+                aria-invalid={errors.certify ? true : undefined}
+                aria-describedby={errors.certify ? `${formId}-certify-error` : undefined}
+                className="mt-0.5 size-5 accent-brand"
+              />
+              <span className="font-semibold">
+                I certify that the information above is accurate.
+                <RequiredMark />
+              </span>
+            </label>
+            <FieldError id={`${formId}-certify`} message={errors.certify} />
 
             {submitState === "error" && (
               <p role="alert" className="text-sm font-semibold text-destructive">
@@ -471,8 +650,8 @@ export function ApplicationForm({
             <button
               key="submit"
               type="submit"
-              disabled={submitState === "submitting"}
-              className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-brand px-6 font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50 disabled:opacity-70"
+              disabled={!certify || submitState === "submitting"}
+              className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-brand px-6 font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitState === "submitting" ? (
                 <>
@@ -490,6 +669,27 @@ export function ApplicationForm({
   );
 }
 
+function RequiredMark() {
+  return (
+    <>
+      <span aria-hidden="true" className="text-sm text-red-600">
+        {" "}
+        *
+      </span>
+      <span className="sr-only"> (required)</span>
+    </>
+  );
+}
+
+function selectClass(error: boolean) {
+  return cn(
+    "mt-2 h-12 w-full rounded-xl border-2 px-4 text-base focus-visible:outline-none focus-visible:ring-3",
+    error
+      ? "border-red-400 bg-red-50 focus-visible:ring-red-200"
+      : "border-border bg-card focus-visible:border-brand focus-visible:ring-brand/30",
+  );
+}
+
 function Field({
   id,
   label,
@@ -497,8 +697,12 @@ function Field({
   onChange,
   error,
   type = "text",
+  inputMode,
   autoComplete,
+  placeholder,
+  className,
   required,
+  optional,
 }: {
   id: string;
   label: string;
@@ -506,28 +710,38 @@ function Field({
   onChange: (v: string) => void;
   error?: string;
   type?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
   autoComplete?: string;
+  placeholder?: string;
+  className?: string;
   required?: boolean;
+  optional?: boolean;
 }) {
   return (
     <div>
       <label htmlFor={id} className="block font-semibold">
         {label}
-        {required && <span className="text-brand"> *</span>}
+        {required && <RequiredMark />}
+        {optional && (
+          <span className="font-normal text-muted-foreground"> (optional)</span>
+        )}
       </label>
       <input
         id={id}
         type={type}
+        inputMode={inputMode}
         value={value}
         autoComplete={autoComplete}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
         className={cn(
-          "mt-2 h-12 w-full rounded-xl border-2 bg-card px-4 text-base focus-visible:outline-none focus-visible:ring-3",
+          "mt-2 h-12 w-full rounded-xl border-2 px-4 text-base focus-visible:outline-none focus-visible:ring-3",
           error
-            ? "border-destructive focus-visible:ring-destructive/20"
-            : "border-border focus-visible:border-brand focus-visible:ring-brand/30",
+            ? "border-red-400 bg-red-50 focus-visible:ring-red-200"
+            : "border-border bg-card focus-visible:border-brand focus-visible:ring-brand/30",
+          className,
         )}
       />
       <FieldError id={id} message={error} />
@@ -541,17 +755,27 @@ function YesNoQuestion({
   value,
   onChange,
   error,
+  required,
 }: {
   id: string;
   legend: string;
   value: YesNo;
   onChange: (v: YesNo) => void;
   error?: string;
+  required?: boolean;
 }) {
   return (
     <fieldset>
-      <legend className="font-semibold">{legend}</legend>
-      <div className="mt-3 flex gap-3">
+      <legend className="font-semibold">
+        {legend}
+        {required && <RequiredMark />}
+      </legend>
+      <div
+        className={cn(
+          "mt-3 flex gap-3 rounded-xl transition-colors",
+          error && "bg-red-50 p-3 ring-1 ring-red-300",
+        )}
+      >
         {(["yes", "no"] as const).map((opt) => (
           <label
             key={opt}

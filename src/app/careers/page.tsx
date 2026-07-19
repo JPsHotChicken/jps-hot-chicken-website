@@ -2,13 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
-  CalendarDays,
   Check,
+  ChevronDown,
   Clock,
   DollarSign,
   MapPin,
-  TrendingUp,
-  UtensilsCrossed,
 } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
@@ -20,29 +18,6 @@ export const metadata: Metadata = {
   description: `Join the ${siteConfig.name} team in Clarksville, TN and Oak Grove, KY. Competitive pay posted up front, flexible scheduling, free meals, and a clear path to advance. See open roles and apply.`,
   alternates: { canonical: "/careers" },
 };
-
-const BENEFITS = [
-  {
-    Icon: DollarSign,
-    title: "Competitive pay",
-    body: "Hourly pay posted up front for every role, plus a share of tips.",
-  },
-  {
-    Icon: CalendarDays,
-    title: "Flexible scheduling",
-    body: "Share your availability and we build shifts around school and life.",
-  },
-  {
-    Icon: UtensilsCrossed,
-    title: "Free meals on shift",
-    body: "A free meal every shift, plus a team discount any day of the week.",
-  },
-  {
-    Icon: TrendingUp,
-    title: "Room to grow",
-    body: "Most of our leads started on the line. A clear path to management.",
-  },
-];
 
 const PROCESS = [
   {
@@ -59,12 +34,9 @@ const PROCESS = [
   },
 ];
 
-const payFloor = Math.min(...jobs.map((job) => job.payMin));
-
 const STATS = [
   { value: String(jobs.length), label: jobs.length === 1 ? "Open role" : "Open roles" },
   { value: "2", label: "Locations" },
-  { value: `${formatPrice(payFloor)}+/hr`, label: "Starting pay" },
 ];
 
 function payRange(min: number, max: number) {
@@ -103,7 +75,7 @@ export default function CareersPage() {
             </Link>
           </div>
 
-          <dl className="mt-12 grid max-w-2xl grid-cols-3 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200">
+          <dl className="mt-12 grid max-w-md grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200">
             {STATS.map((stat) => (
               <div key={stat.label} className="bg-white px-5 py-4">
                 <dt className="text-sm text-slate-500">{stat.label}</dt>
@@ -113,32 +85,6 @@ export default function CareersPage() {
               </div>
             ))}
           </dl>
-        </div>
-      </section>
-
-      {/* Benefits */}
-      <section
-        aria-labelledby="benefits-title"
-        className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-20"
-      >
-        <div className="max-w-2xl">
-          <h2 id="benefits-title" className="text-2xl font-bold text-slate-900 sm:text-3xl">
-            Why work with us
-          </h2>
-          <p className="mt-3 text-base leading-relaxed text-slate-600">
-            The fundamentals done right, plus the support to build something more.
-          </p>
-        </div>
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {BENEFITS.map(({ Icon, title, body }) => (
-            <div key={title} className="rounded-xl border border-slate-200 bg-white p-6">
-              <span className="inline-flex size-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
-                <Icon className="size-5" aria-hidden="true" />
-              </span>
-              <h3 className="mt-4 text-base font-semibold text-slate-900">{title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{body}</p>
-            </div>
-          ))}
         </div>
       </section>
 
@@ -196,40 +142,52 @@ export default function CareersPage() {
                     </div>
                   </div>
 
-                  <div className="mt-6 grid gap-8 border-t border-slate-100 pt-6 sm:grid-cols-2">
-                    <div>
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Responsibilities
-                      </h4>
-                      <ul className="mt-3 space-y-2">
-                        {job.responsibilities.map((item) => (
-                          <li key={item} className="flex gap-2.5 text-sm text-slate-600">
-                            <Check
-                              className="mt-0.5 size-4 shrink-0 text-slate-400"
-                              aria-hidden="true"
-                            />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
+                  <details className="group mt-6 border-t border-slate-100 pt-6">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md text-sm font-semibold text-slate-900 transition-colors hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
+                      <span className="group-open:hidden">See Responsibilities and Requirements</span>
+                      <span className="hidden group-open:inline">
+                        Hide Responsibilities and Requirements
+                      </span>
+                      <ChevronDown
+                        className="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180"
+                        aria-hidden="true"
+                      />
+                    </summary>
+                    <div className="mt-6 grid gap-8 sm:grid-cols-2">
+                      <div>
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          Responsibilities
+                        </h4>
+                        <ul className="mt-3 space-y-2">
+                          {job.responsibilities.map((item) => (
+                            <li key={item} className="flex gap-2.5 text-sm text-slate-600">
+                              <Check
+                                className="mt-0.5 size-4 shrink-0 text-slate-400"
+                                aria-hidden="true"
+                              />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          Requirements
+                        </h4>
+                        <ul className="mt-3 space-y-2">
+                          {job.requirements.map((item) => (
+                            <li key={item} className="flex gap-2.5 text-sm text-slate-600">
+                              <Check
+                                className="mt-0.5 size-4 shrink-0 text-slate-400"
+                                aria-hidden="true"
+                              />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Requirements
-                      </h4>
-                      <ul className="mt-3 space-y-2">
-                        {job.requirements.map((item) => (
-                          <li key={item} className="flex gap-2.5 text-sm text-slate-600">
-                            <Check
-                              className="mt-0.5 size-4 shrink-0 text-slate-400"
-                              aria-hidden="true"
-                            />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
+                  </details>
                 </article>
               </li>
             ))}

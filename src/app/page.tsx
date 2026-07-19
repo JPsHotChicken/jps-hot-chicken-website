@@ -223,7 +223,7 @@ export default function HomePage() {
               className={i === 1 ? "pt-10 sm:pt-2" : "pt-10 first:pt-0"}
             >
               <div className="mb-3 mx-auto flex max-w-6xl items-center gap-2.5 px-4 sm:gap-3 sm:px-6">
-                <span className="inline-flex shrink-0 items-center rounded-full bg-brand px-2 py-0.5 font-heading text-[10px] font-bold uppercase tracking-wide text-brand-foreground shadow-md sm:text-xs">
+                <span className="inline-flex shrink-0 items-center rounded-full border-1 border-brand bg-white px-2 py-0.5 font-heading text-[10px] font-bold uppercase tracking-wide text-black shadow-md sm:text-xs">
                   Step {i + 1}
                 </span>
                 <span className="font-heading text-xs font-extrabold uppercase tracking-[0.2em] text-black sm:text-sm">
@@ -316,10 +316,10 @@ export default function HomePage() {
                     <div className="flex flex-col gap-2">
                       <Link
                         href={`/order/${loc.slug}`}
-                        className="inline-flex h-7 items-center justify-center gap-1.5 self-start rounded-lg bg-brand px-3 font-heading text-xs font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
+                        className="inline-flex h-7 items-center justify-center gap-1.5 self-start rounded-lg border border-black bg-white px-3 font-heading text-xs font-bold uppercase tracking-wide text-black shadow-sm transition-all hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
                       >
                         Select Location
-                        <ArrowRight className="size-3.5" aria-hidden="true" />
+                        <ArrowRight className="size-3.5 text-brand" aria-hidden="true" />
                         <span className="sr-only">
                           {" "}
                           — {loc.street}, {loc.city}

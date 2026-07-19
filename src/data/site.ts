@@ -104,11 +104,11 @@ export const siteConfig = {
   // 📣 ANNOUNCEMENT BANNER — the alert bar at the top of the home page.
   //   • enabled : flip to `true` to show it, `false` to hide it.
   //   • message : the text to display.
-  //   • variant : "brand" (red), "warning" (amber), or "info" (dark neutral).
+  //   • variant : "brand" (red), "warning" (amber), "info" (dark neutral), or "gray" (gray w/ black text).
   announcement: {
     enabled: true,
     message: "Opening soon on Trenton Rd in Clarksville, TN",
-    variant: "brand",
+    variant: "gray",
   },
   description:
     "JP's Hot Chicken serves Nashville-style hot chicken in Clarksville, TN and Oak Grove, KY.",

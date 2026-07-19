@@ -13,7 +13,7 @@ import { siteConfig } from "@/data/site";
  * independent of the site config, e.g.:
  *   <AnnouncementBanner message="We're closed today" variant="warning" />
  */
-export type AnnouncementVariant = "brand" | "warning" | "info";
+export type AnnouncementVariant = "brand" | "warning" | "info" | "gray";
 
 const VARIANTS: Record<
   AnnouncementVariant,
@@ -22,6 +22,7 @@ const VARIANTS: Record<
   brand: { className: "bg-brand text-brand-foreground", Icon: Megaphone },
   warning: { className: "bg-amber-400 text-amber-950", Icon: AlertTriangle },
   info: { className: "bg-foreground text-background", Icon: Info },
+  gray: { className: "bg-gray-300 text-black", Icon: Megaphone },
 };
 
 type AnnouncementBannerProps = {
