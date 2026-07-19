@@ -73,9 +73,16 @@ export function ApplicationForm({
   const formId = useId();
   const total = STEP_TITLES.length;
 
-  // Move focus to the step heading when the step changes (a11y).
+  // On step change, jump to the top of the page and move focus to the step
+  // heading (a11y). Use behavior "instant" — the global `scroll-behavior:
+  // smooth` (globals.css) would otherwise animate the jump, and that animation
+  // loses to the step-height change and settles in the footer. preventScroll
+  // stops the focus call from re-scrolling away from the top.
   useEffect(() => {
-    if (submitState !== "success") headingRef.current?.focus();
+    if (submitState !== "success") {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      headingRef.current?.focus({ preventScroll: true });
+    }
   }, [step, submitState]);
 
   function toggleSlot(key: string) {
