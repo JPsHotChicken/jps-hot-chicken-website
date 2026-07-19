@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import type { Job } from "@/data/jobs";
 import { siteConfig } from "@/data/site";
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const SHIFTS = ["Morning", "Afternoon", "Evening"] as const;
 
 type YesNo = "" | "yes" | "no";
@@ -19,13 +19,10 @@ type Experience = { where: string; position: string; dates: string };
 const STEP_TITLES = ["Basic information", "Job details", "Review & submit"] as const;
 
 // Location options for "Which location are you applying at?"
-const LOCATION_OPTIONS = [
-  ...siteConfig.locations.map((loc) => ({
-    value: loc.slug,
-    label: `${loc.name} — ${loc.city}, ${loc.state}`,
-  })),
-  { value: "either", label: "Either location" },
-];
+const LOCATION_OPTIONS = siteConfig.locations.map((loc) => ({
+  value: loc.slug,
+  label: `${loc.name} — ${loc.city}, ${loc.state}`,
+}));
 
 const EMPLOYMENT_OPTIONS: { value: Exclude<EmploymentPref, "">; label: string }[] = [
   { value: "full-time", label: "Full-time" },
@@ -565,7 +562,7 @@ export function ApplicationForm({
                     className="inline-flex items-center gap-1.5 rounded-full border-2 border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-brand hover:text-brand"
                   >
                     <Plus className="size-4" aria-hidden="true" />
-                    Add more experience
+                    Add more restaurant experience
                   </button>
                 </div>
               )}

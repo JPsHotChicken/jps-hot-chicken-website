@@ -50,15 +50,14 @@ export default function CareersPage() {
       <section className="border-b border-slate-200 bg-slate-50">
         <div className="mx-auto w-full max-w-5xl px-6 py-20 sm:py-28">
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Careers at {siteConfig.name}
+            {siteConfig.name}
           </p>
           <h1 className="mt-4 max-w-3xl text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">
-            Grow your career with a team that has your back.
+            Job positions
           </h1>
           <p className="mt-5 max-w-2xl text-lg leading-relaxed text-slate-600">
             We&apos;re hiring across our Clarksville, TN and Oak Grove, KY locations.
-            Competitive pay, flexible scheduling, and a clear path to advance —
-            whether this is your first job or your next step.
+            Below is all open positions available right now.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
@@ -71,7 +70,7 @@ export default function CareersPage() {
               href="/careers/apply"
               className="inline-flex h-11 items-center justify-center rounded-md border border-slate-300 bg-white px-6 text-sm font-semibold text-slate-900 transition-colors hover:bg-slate-50"
             >
-              Submit a general application
+              Submit an application
             </Link>
           </div>
 
@@ -101,7 +100,6 @@ export default function CareersPage() {
             </h2>
             <p className="mt-3 text-base leading-relaxed text-slate-600">
               {jobs.length} {jobs.length === 1 ? "role is" : "roles are"} currently open.
-              Pay is listed for every position.
             </p>
           </div>
 
