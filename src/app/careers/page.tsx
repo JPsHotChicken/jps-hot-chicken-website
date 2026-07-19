@@ -26,11 +26,11 @@ const PROCESS = [
   },
   {
     title: "We review",
-    body: "Our team reviews every application and reaches out to set up a conversation.",
+    body: "We review every application and reach out to set up a conversation.",
   },
   {
     title: "Meet & start",
-    body: "Have a quick interview, get an offer, and join the team.",
+    body: "After the quick interview, get an offer, and join the team.",
   },
 ];
 
@@ -191,7 +191,7 @@ export default function CareersPage() {
             ))}
           </ul>
 
-          <div className="mt-8 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-center sm:flex sm:items-center sm:justify-between sm:text-left">
+          {/* <div className="mt-8 rounded-xl border border-dashed border-slate-300 bg-white px-6 py-5 text-center sm:flex sm:items-center sm:justify-between sm:text-left">
             <p className="text-sm text-slate-600">
               Don&apos;t see the right fit? We&apos;d still like to hear from you.
             </p>
@@ -202,7 +202,7 @@ export default function CareersPage() {
               Submit a general application
               <ArrowRight className="size-4" aria-hidden="true" />
             </Link>
-          </div>
+          </div> */}
         </div>
       </section>
 

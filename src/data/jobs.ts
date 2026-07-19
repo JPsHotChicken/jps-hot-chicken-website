@@ -22,7 +22,7 @@ export type Job = {
 
 export const jobs: Job[] = [
   {
-    id: "team-member",
+    id: "Kitchen Staff",
     title: "Hot Chicken Team Member",
     location: "Clarksville, TN & Oak Grove, KY",
     employmentType: "Full-time / Part-time",
@@ -45,7 +45,7 @@ export const jobs: Job[] = [
     ],
   },
   {
-    id: "cashier",
+    id: "Front Staff",
     title: "Front Counter / Cashier",
     location: "Clarksville, TN & Oak Grove, KY",
     employmentType: "Part-time",
@@ -68,7 +68,7 @@ export const jobs: Job[] = [
     ],
   },
   {
-    id: "shift-lead",
+    id: "Cleaning Staff",
     title: "Shift Lead",
     location: "Clarksville, TN",
     employmentType: "Full-time",
