@@ -23,16 +23,16 @@ export type Job = {
 export const jobs: Job[] = [
   {
     id: "Kitchen Staff",
-    title: "Hot Chicken Team Member",
+    title: "Kitchen Staff",
     location: "Clarksville, TN & Oak Grove, KY",
     employmentType: "Full-time / Part-time",
     payMin: 13,
     payMax: 16,
-    hours: "15–40 hrs/week · flexible day, evening & weekend shifts",
+    hours: "15–40 hrs/week · flexible shifts",
     summary:
-      "The heart of the line — breading, frying, building plates, and keeping guests happy. No experience needed; we'll train you on everything.",
+      "Job consists mainly of working the line — seasoning, sides, and building plates.",
     responsibilities: [
-      "Prep, bread, and fry chicken to order",
+      "Prepare orders",
       "Build sandwiches, tenders, and combos accurately",
       "Keep your station clean and stocked",
       "Greet guests and help with orders at the counter",
@@ -41,23 +41,23 @@ export const jobs: Job[] = [
       "16 or older",
       "Reliable and on time",
       "Able to stand and move for a full shift",
-      "Friendly, team-first attitude",
+      "Friendly, team first attitude",
     ],
   },
   {
     id: "Front Staff",
-    title: "Front Counter / Cashier",
+    title: "Front Counter Staff",
     location: "Clarksville, TN & Oak Grove, KY",
-    employmentType: "Part-time",
+    employmentType: "Full-time / Part-time",
     payMin: 13,
     payMax: 15,
     hours: "12–30 hrs/week · flexible shifts",
     summary:
-      "Be the first smile guests see — take orders, handle payments, and make sure every order goes out right.",
+      "Represent JPs to the customers. Take orders, handle payments, and make sure every guest is taken care of.",
     responsibilities: [
       "Take orders and process payments accurately",
-      "Answer questions about the menu and heat levels",
       "Keep the front counter and dining area clean",
+      "Answer questions about the menu and heat levels",
       "Help package pickup and delivery orders",
     ],
     requirements: [
@@ -67,27 +67,27 @@ export const jobs: Job[] = [
       "Dependable schedule",
     ],
   },
-  {
-    id: "Cleaning Staff",
-    title: "Shift Lead",
-    location: "Clarksville, TN",
-    employmentType: "Full-time",
-    payMin: 16,
-    payMax: 19,
-    hours: "30–40 hrs/week · opening or closing shifts",
-    summary:
-      "Run the floor — coach the team, hit quality and speed targets, and keep shifts running smoothly. A clear path toward management.",
-    responsibilities: [
-      "Lead and motivate the team during your shift",
-      "Open or close the restaurant and handle cash",
-      "Uphold food-safety and quality standards",
-      "Step in on any station when it gets busy",
-    ],
-    requirements: [
-      "18 or older",
-      "1+ year in food service or retail",
-      "Some leadership or keyholder experience",
-      "Calm under pressure",
-    ],
-  },
+  // {
+  //   id: "Cleaning Staff",
+  //   title: "Cleaning Staff",
+  //   location: "Clarksville, TN & Oak Grove, KY",
+  //   employmentType: "Full-time / Part-time",
+  //   payMin: 16,
+  //   payMax: 19,
+  //   hours: "30–40 hrs/week · flexible shifts",
+  //   summary:
+  //     "Run the floor — coach the team, hit quality and speed targets, and keep shifts running smoothly. A clear path toward management.",
+  //   responsibilities: [
+  //     "Lead and motivate the team during your shift",
+  //     "Open or close the restaurant and handle cash",
+  //     "Uphold food-safety and quality standards",
+  //     "Step in on any station when it gets busy",
+  //   ],
+  //   requirements: [
+  //     "18 or older",
+  //     "1+ year in food service or retail",
+  //     "Some leadership or keyholder experience",
+  //     "Calm under pressure",
+  //   ],
+  // },
 ];
