@@ -54,7 +54,7 @@ export default function OrderPage() {
             return (
               <div
                 key={loc.name}
-                className="group relative flex overflow-hidden rounded-3xl border-2 border-black bg-white shadow-xl transition-all hover:-translate-y-0.5 hover:shadow-2xl"
+                className="group relative flex overflow-hidden rounded-3xl border-2 border-gray-400 bg-white shadow-xl transition-all hover:-translate-y-0.5 hover:shadow-2xl"
               >
                 {loc.isNew && (
                   <span className="absolute right-4 top-4 rounded-full bg-brand px-2.5 py-1 font-heading text-[11px] font-bold uppercase tracking-wide text-brand-foreground shadow-sm">
@@ -86,7 +86,7 @@ export default function OrderPage() {
 
                   <Link
                     href={`/order/${loc.slug}`}
-                    className="mt-5 mb-2 inline-flex min-h-2 items-center justify-center gap-2 rounded-full bg-brand px-6 py-1 text-center font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
+                    className="mt-5 mb-2 inline-flex min-h-2 items-center justify-center gap-2 rounded-full bg-brand px-6 py-1 text-center font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all after:absolute after:inset-0 hover:brightness-110 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
                   >
                     Select
                     <ArrowRight className="size-5 shrink-0" aria-hidden="true" />

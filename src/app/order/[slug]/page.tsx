@@ -19,7 +19,7 @@ const LOCATION_IMAGES: Record<string, { src: string; alt: string }> = {
 };
 
 const ORDER_BUTTON_CLASS =
-  "inline-flex h-11 w-full min-w-0 items-center justify-center rounded-md px-1.5 text-center font-heading text-[11px] font-bold uppercase leading-tight tracking-[0.035em] transition-all sm:text-xs";
+  "inline-flex h-10 w-full min-w-0 items-center justify-center rounded-lg px-1.5 text-center font-heading text-[11px] font-bold uppercase leading-tight tracking-[0.035em] transition-all sm:text-xs";
 
 const UNAVAILABLE_ORDER_BUTTON_CLASS = `${ORDER_BUTTON_CLASS} cursor-not-allowed border border-border bg-muted text-muted-foreground`;
 
