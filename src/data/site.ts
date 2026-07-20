@@ -101,14 +101,16 @@ const locations: readonly RestaurantLocation[] = [
 export const siteConfig = {
   name: "JP's Hot Chicken",
   tagline: "Nashville-style Hot Chicken",
-  // 📣 ANNOUNCEMENT BANNER — the alert bar at the top of the home page.
+  // 📣 ANNOUNCEMENT BANNER — the sticky alert bar pinned above the header on every page.
   //   • enabled : flip to `true` to show it, `false` to hide it.
   //   • message : the text to display.
   //   • variant : "brand" (red), "warning" (amber), "info" (dark neutral), or "gray" (gray w/ black text).
+  //   • href    : where the whole bar links to (omit/empty to make it non-clickable).
   announcement: {
     enabled: true,
-    message: "Opening soon on Trenton Rd in Clarksville, TN",
+    message: "Now hiring at JP's Trenton Rd Clarksville TN. Click here to apply",
     variant: "gray",
+    href: "/careers",
   },
   description:
     "JP's Hot Chicken serves Nashville-style hot chicken in Clarksville, TN and Oak Grove, KY.",

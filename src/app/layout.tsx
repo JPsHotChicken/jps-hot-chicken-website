@@ -7,6 +7,7 @@ import "./globals.css";
 import { siteConfig } from "@/data/site";
 import { buildOrganizationJsonLd, serializeJsonLd } from "@/lib/jsonld";
 import { Nav } from "@/components/Nav";
+import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Footer } from "@/components/Footer";
 
 // Blinker is a static (non-variable) font. It ships 100/200/300/400/600/700/800/900
@@ -85,7 +86,12 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <Nav />
+        {/* Sticky header stack: the announcement bar stays pinned above the nav
+            as the page scrolls. */}
+        <div className="sticky top-0 z-50">
+          <AnnouncementBanner />
+          <Nav />
+        </div>
         <main id="main" className="flex-1">
           {children}
         </main>

@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Clock, Mail, MapPin, Navigation, Phone, Star, Store, Truck } from "lucide-react";
+import { ArrowRight, Clock, Mail, MapPin, Megaphone, Navigation, Phone, Star, Store, Truck } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { formatPhone, telHref } from "@/lib/format";
 import { getWeekRows, getOnlineWeekRows } from "@/lib/hours";
 import { buildHomeJsonLd, serializeJsonLd } from "@/lib/jsonld";
 import { OrderButton } from "@/components/OrderButton";
-import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Marquee } from "@/components/Marquee";
 import { entrees, sides, dippingSauces, drinks } from "@/data/food";
 
@@ -131,8 +130,6 @@ export default function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(buildHomeJsonLd()) }}
       />
-      {/* Announcement bar — toggled via siteConfig.announcement. */}
-      <AnnouncementBanner />
       {/* Visually-hidden page title (the logo carries the brand visually). */}
       <h1 className="sr-only">
         {siteConfig.name} — {siteConfig.tagline}
@@ -195,6 +192,14 @@ export default function HomePage() {
       <section aria-labelledby="big-combo-title" className="bg-white">
         {/* Header: BIG COMBO on one line, what's included underneath */}
         <div className="mx-auto w-full max-w-6xl px-4 py-12 text-center sm:px-6 sm:py-16">
+          {/* Small hiring badge — links to the careers page. */}
+          <Link
+            href="/careers"
+            className="mb-8 inline-flex items-center gap-2 rounded-full border-2 border-brand bg-brand/5 px-4 py-1.5 font-heading text-xs font-semibold uppercase tracking-wide text-brand transition-colors hover:bg-brand/10 sm:text-sm"
+          >
+            <Megaphone className="size-4 shrink-0" aria-hidden="true" />
+            Now hiring at JP&apos;s Trenton Rd Clarksville TN. Click here to apply
+          </Link>
           <p className="font-heading text-sm font-bold uppercase tracking-[0.25em] text-muted-foreground sm:text-base">
             The
           </p>
