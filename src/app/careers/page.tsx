@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -34,8 +35,14 @@ const PROCESS = [
   },
 ];
 
+// Only roles flagged `available` count as open; the rest show grayed out.
+const openJobs = jobs.filter((job) => job.available);
+
 const STATS = [
-  { value: String(jobs.length), label: jobs.length === 1 ? "Open role" : "Open roles" },
+  {
+    value: String(openJobs.length),
+    label: openJobs.length === 1 ? "Open role" : "Open roles",
+  },
   { value: "2", label: "Locations" },
 ];
 
@@ -99,46 +106,74 @@ export default function CareersPage() {
               Open positions
             </h2>
             <p className="mt-3 text-base leading-relaxed text-slate-600">
-              {jobs.length} {jobs.length === 1 ? "role is" : "roles are"} currently open.
+              {openJobs.length} {openJobs.length === 1 ? "role is" : "roles are"} currently open.{" "}
+              Grayed-out roles aren&apos;t hiring yet — check back soon.
             </p>
           </div>
 
           <ul className="mt-10 space-y-5">
             {jobs.map((job) => (
               <li key={job.id}>
-                <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md sm:p-8">
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <h3 className="text-xl font-semibold text-slate-900">{job.title}</h3>
-                      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
-                        <span className="inline-flex items-center gap-1.5">
-                          <MapPin className="size-4 text-slate-400" aria-hidden="true" />
-                          {job.location}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <Clock className="size-4 text-slate-400" aria-hidden="true" />
-                          {job.employmentType}
-                        </span>
-                        {/* <span className="inline-flex items-center gap-1.5 font-medium text-slate-900">
-                          <DollarSign className="size-4 text-slate-400" aria-hidden="true" />
-                          {payRange(job.payMin, job.payMax)}
-                        </span> */}
+                <article
+                  className={`overflow-hidden rounded-xl border border-slate-200 shadow-sm transition-shadow hover:shadow-md ${job.available ? "bg-white" : "bg-slate-50"}`}
+                  aria-label={job.available ? undefined : `${job.title} — not currently hiring`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-stretch">
+                    {/* Large image panel down the left side of the card */}
+                    {job.image && (
+                      <div className="relative aspect-[16/9] w-full shrink-0 self-stretch bg-slate-100 sm:aspect-[4/5] sm:w-56 lg:w-72">
+                        <Image
+                          src={job.image.src}
+                          alt={job.image.alt}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 224px, 288px"
+                          className={`object-cover ${job.available ? "" : "grayscale"}`}
+                        />
+                        {!job.available && (
+                          <span className="absolute left-3 top-3 inline-flex items-center rounded-full bg-slate-900/80 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white backdrop-blur">
+                            Not hiring yet
+                          </span>
+                        )}
                       </div>
-                      {/* <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600">
-                        {job.summary}
-                      </p> */}
-                      {/* <p className="mt-2 text-sm text-slate-500">{job.hours}</p> */}
-                    </div>
-                    <div className="shrink-0">
-                      <Link
-                        href={`/careers/apply?role=${job.id}`}
-                        className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-900 px-6 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
-                      >
-                        Apply
-                        <ArrowRight className="size-4" aria-hidden="true" />
-                      </Link>
-                    </div>
-                  </div>
+                    )}
+
+                    {/* Content */}
+                    <div className="flex-1 p-6 sm:p-8">
+                      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <h3 className="text-xl font-semibold text-slate-900">{job.title}</h3>
+                          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
+                            <span className="inline-flex items-center gap-1.5">
+                              <MapPin className="size-4 text-slate-400" aria-hidden="true" />
+                              {job.location}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <Clock className="size-4 text-slate-400" aria-hidden="true" />
+                              {job.employmentType}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          {job.available ? (
+                            <Link
+                              href={`/careers/apply?role=${job.id}`}
+                              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-slate-900 px-6 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+                            >
+                              Apply
+                              <ArrowRight className="size-4" aria-hidden="true" />
+                            </Link>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              aria-disabled="true"
+                              className="inline-flex h-11 cursor-not-allowed items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-100 px-6 text-sm font-semibold text-slate-400"
+                            >
+                              Not hiring yet
+                            </button>
+                          )}
+                        </div>
+                      </div>
 
                   <details className="group mt-6 border-t border-slate-100 pt-6">
                     <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md text-sm font-semibold text-slate-900 transition-colors hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
@@ -186,6 +221,8 @@ export default function CareersPage() {
                       </div>
                     </div>
                   </details>
+                    </div>
+                  </div>
                 </article>
               </li>
             ))}

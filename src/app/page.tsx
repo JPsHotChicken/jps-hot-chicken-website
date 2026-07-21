@@ -286,7 +286,7 @@ export default function HomePage() {
               return (
                 <div
                   key={loc.name}
-                  className="relative flex overflow-hidden rounded-xl bg-white text-left text-foreground shadow-md"
+                  className="group relative flex overflow-hidden rounded-xl bg-white text-left text-foreground shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
                 >
                   {image && (
                     <div className="relative w-2/5 shrink-0 bg-white sm:w-1/2">
@@ -321,7 +321,7 @@ export default function HomePage() {
                     <div className="flex flex-col gap-2">
                       <Link
                         href={`/order/${loc.slug}`}
-                        className="inline-flex h-7 items-center justify-center gap-1.5 self-start rounded-lg border border-black bg-white px-3 font-heading text-xs font-bold uppercase tracking-wide text-black shadow-sm transition-all hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
+                        className="inline-flex h-7 items-center justify-center gap-1.5 self-start rounded-lg border border-black bg-white px-3 font-heading text-xs font-bold uppercase tracking-wide text-black shadow-sm transition-all after:absolute after:inset-0 after:content-[''] group-hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
                       >
                         Select Location
                         <ArrowRight className="size-3.5 text-brand" aria-hidden="true" />
