@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, ArrowLeft, MapPin, Navigation, Store } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
-import { getWeekRows } from "@/lib/hours";
+import { getOnlineWeekRows } from "@/lib/hours";
 
 const LOCATION_IMAGES: Record<string, { src: string; alt: string }> = {
   "oak-grove": {
@@ -53,7 +53,7 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
   if (!loc) notFound();
 
   const image = LOCATION_IMAGES[loc.slug];
-  const week = getWeekRows();
+  const week = getOnlineWeekRows();
   const fullAddress = `${loc.streetNumber} ${loc.street}, ${loc.city} ${loc.state} ${loc.zip}`;
   const mapsQuery = encodeURIComponent(`${siteConfig.name}, ${fullAddress}`);
   const googleMapsHref = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`;
