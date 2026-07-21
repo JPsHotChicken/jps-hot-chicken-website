@@ -12,8 +12,7 @@ import { siteConfig } from "@/data/site";
 const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/locations", label: "Locations" },
-  // Careers temporarily hidden — restore when hiring resumes.
-  // { href: "/careers", label: "Careers" },
+  { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },
 ] as const;
 
@@ -136,6 +135,17 @@ export function Nav() {
               {link.label}
             </Link>
           ))}
+
+          {/* Order Now CTA — routes to the Select Location page. */}
+          <Link
+            href="/order"
+            onClick={() => setOpen(false)}
+            tabIndex={open ? undefined : -1}
+            aria-current={isActive("/order") ? "page" : undefined}
+            className="mt-2 flex h-12 items-center justify-center gap-2 rounded-md bg-brand px-3 font-heading text-lg font-bold uppercase tracking-wide text-brand-foreground transition-all hover:brightness-110"
+          >
+            Order Now
+          </Link>
         </div>
       </div>
     </header>
