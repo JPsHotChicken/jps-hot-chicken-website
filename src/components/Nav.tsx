@@ -136,13 +136,16 @@ export function Nav() {
             </Link>
           ))}
 
-          {/* Order Now CTA — routes to the Select Location page. */}
+          {/* Order Now — routes to the Select Location page. Styled to match the links above. */}
           <Link
             href="/order"
             onClick={() => setOpen(false)}
             tabIndex={open ? undefined : -1}
             aria-current={isActive("/order") ? "page" : undefined}
-            className="mt-2 flex h-12 items-center justify-center gap-2 rounded-md bg-brand px-3 font-heading text-lg font-bold uppercase tracking-wide text-brand-foreground transition-all hover:brightness-110"
+            className={cn(
+              "flex h-12 items-center rounded-md px-3 text-lg font-semibold transition-colors hover:bg-muted",
+              isActive("/order") ? "text-brand" : "text-foreground",
+            )}
           >
             Order Now
           </Link>
