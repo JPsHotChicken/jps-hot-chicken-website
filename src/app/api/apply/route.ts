@@ -20,6 +20,31 @@ function esc(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
+// Append one application as a row to the Google Sheet, via a Google Apps Script
+// web app (set SHEETS_WEBHOOK_URL to its deployment URL; SHEETS_WEBHOOK_TOKEN is
+// an optional shared secret the script can verify). Best-effort: a failure here
+// must never block the applicant or the email notification, so we swallow errors
+// and just log them.
+async function appendToSheet(row: Record<string, string>): Promise<boolean> {
+  const url = process.env.SHEETS_WEBHOOK_URL;
+  if (!url) return false;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...row, token: process.env.SHEETS_WEBHOOK_TOKEN ?? "" }),
+    });
+    if (!res.ok) {
+      console.error(`[careers] Sheet webhook returned HTTP ${res.status}.`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[careers] Sheet webhook error:", err);
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   let form: FormData;
   try {
@@ -30,6 +55,8 @@ export async function POST(request: Request) {
 
   const get = (k: string) => String(form.get(k) ?? "").trim();
   const name = get("name");
+  const firstName = get("firstName") || name.split(" ")[0] || "";
+  const lastName = get("lastName") || name.split(" ").slice(1).join(" ");
   const email = get("email");
   const phone = get("phone");
   const age = get("age");
@@ -68,6 +95,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
   }
 
+  // Save the application to the Google Sheet (best-effort — see appendToSheet).
+  const saved = await appendToSheet({
+    firstName,
+    lastName,
+    phone,
+    email,
+    age,
+    workAuthorized,
+    position,
+    location,
+    availability,
+    employmentType,
+    foodService,
+    experience,
+    transportation,
+  });
+
   const summaryHtml = `
     <h2>New application — ${esc(position)}</h2>
     <table cellpadding="6" style="border-collapse:collapse;font-family:sans-serif">
@@ -103,7 +147,7 @@ export async function POST(request: Request) {
     console.warn(
       `[careers] RESEND_API_KEY not set — application from ${email || phone} (${position}) not emailed.`,
     );
-    return NextResponse.json({ ok: true, emailed: false });
+    return NextResponse.json({ ok: true, emailed: false, saved });
   }
 
   try {
@@ -128,9 +172,14 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ ok: true, emailed: true });
+    return NextResponse.json({ ok: true, emailed: true, saved });
   } catch (err) {
     console.error("[careers] Resend error:", err);
+    // If the application already made it into the sheet, don't ask the applicant
+    // to retry — that would create a duplicate row. Just report the email failed.
+    if (saved) {
+      return NextResponse.json({ ok: true, emailed: false, saved: true });
+    }
     return NextResponse.json(
       { error: "We couldn't send your application. Please try again or email us." },
       { status: 502 },
