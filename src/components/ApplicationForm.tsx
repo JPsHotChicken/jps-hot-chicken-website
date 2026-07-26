@@ -19,10 +19,13 @@ type Experience = { where: string; position: string; dates: string };
 const STEP_TITLES = ["Basic information", "Job details", "Review & submit"] as const;
 
 // Location options for "Which location are you applying at?"
-const LOCATION_OPTIONS = siteConfig.locations.map((loc) => ({
-  value: loc.slug,
-  label: `${loc.name} — ${loc.city}, ${loc.state}`,
-}));
+// Oak Grove is intentionally excluded — we're only hiring at Clarksville.
+const LOCATION_OPTIONS = siteConfig.locations
+  .filter((loc) => loc.slug !== "oak-grove")
+  .map((loc) => ({
+    value: loc.slug,
+    label: `${loc.name} — ${loc.city}, ${loc.state}`,
+  }));
 
 const EMPLOYMENT_OPTIONS: { value: Exclude<EmploymentPref, "">; label: string }[] = [
   { value: "full-time", label: "Full-time" },
@@ -46,6 +49,7 @@ export function ApplicationForm({
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [isSixteen, setIsSixteen] = useState<YesNo>("");
   const [age, setAge] = useState("");
   const [workAuth, setWorkAuth] = useState<YesNo>("");
 
@@ -115,10 +119,16 @@ export function ApplicationForm({
       // Email is optional — only validate the format if something was entered.
       if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
         e.email = "Please enter a valid email address.";
-      const ageNum = Number(age);
-      if (!age.trim()) e.age = "Please enter your age.";
-      else if (!Number.isFinite(ageNum) || ageNum < 14 || ageNum > 99)
-        e.age = "Please enter a valid age.";
+      // Age gate: must confirm 16+. Applicants who answer "no" can't proceed
+      // (the Continue button is disabled), so we only validate the age they
+      // enter after answering "yes".
+      if (!isSixteen) e.isSixteen = "Please answer this question.";
+      else if (isSixteen === "yes") {
+        const ageNum = Number(age);
+        if (!age.trim()) e.age = "Please enter your age.";
+        else if (!Number.isFinite(ageNum) || ageNum < 16 || ageNum > 99)
+          e.age = "Please enter a valid age.";
+      }
       if (!workAuth) e.workAuth = "Please answer this question.";
     }
 
@@ -253,6 +263,14 @@ export function ApplicationForm({
 
   const pct = Math.round(((step + 1) / total) * 100);
 
+  // When an applicant says they're under 16, the rest of the form is greyed
+  // out and they can't continue.
+  const underage = isSixteen === "no";
+  const greyedWhenUnderage = cn(
+    "space-y-5 transition-opacity",
+    underage && "pointer-events-none select-none opacity-40",
+  );
+
   return (
     <form onSubmit={handleSubmit} noValidate className="mx-auto max-w-xl">
       {/* Progress */}
@@ -290,65 +308,94 @@ export function ApplicationForm({
         {/* Page 1: Basic information */}
         {step === 0 && (
           <div className="mt-5 space-y-5">
-            <div className="grid gap-5 sm:grid-cols-2">
+            <div className={greyedWhenUnderage} aria-hidden={underage || undefined}>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field
+                  id={`${formId}-first`}
+                  label="First name"
+                  value={firstName}
+                  onChange={setFirstName}
+                  error={errors.firstName}
+                  autoComplete="given-name"
+                  required
+                />
+                <Field
+                  id={`${formId}-last`}
+                  label="Last name"
+                  value={lastName}
+                  onChange={setLastName}
+                  error={errors.lastName}
+                  autoComplete="family-name"
+                  required
+                />
+              </div>
               <Field
-                id={`${formId}-first`}
-                label="First name"
-                value={firstName}
-                onChange={setFirstName}
-                error={errors.firstName}
-                autoComplete="given-name"
+                id={`${formId}-phone`}
+                label="Phone number"
+                type="tel"
+                value={phone}
+                onChange={setPhone}
+                error={errors.phone}
+                autoComplete="tel"
                 required
               />
               <Field
-                id={`${formId}-last`}
-                label="Last name"
-                value={lastName}
-                onChange={setLastName}
-                error={errors.lastName}
-                autoComplete="family-name"
+                id={`${formId}-email`}
+                label="Email"
+                type="email"
+                value={email}
+                onChange={setEmail}
+                error={errors.email}
+                autoComplete="email"
+                optional
+              />
+            </div>
+
+            {/* Age gate — must confirm 16+ */}
+            <div>
+              <YesNoQuestion
+                id={`${formId}-sixteen`}
+                legend="Are you 16 years of age or older?"
+                value={isSixteen}
+                onChange={setIsSixteen}
+                error={errors.isSixteen}
+                required
+              />
+              {isSixteen === "no" && (
+                <p
+                  role="alert"
+                  className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 p-4 text-base font-semibold text-destructive"
+                >
+                  We are only hiring applicants who are 16 or older.
+                </p>
+              )}
+              {isSixteen === "yes" && (
+                <div className="mt-4">
+                  <Field
+                    id={`${formId}-age`}
+                    label="How old are you?"
+                    type="number"
+                    inputMode="numeric"
+                    value={age}
+                    onChange={setAge}
+                    error={errors.age}
+                    className="max-w-[8rem]"
+                    required
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className={greyedWhenUnderage} aria-hidden={underage || undefined}>
+              <YesNoQuestion
+                id={`${formId}-workauth`}
+                legend="Are you legally authorized to work in the U.S.?"
+                value={workAuth}
+                onChange={setWorkAuth}
+                error={errors.workAuth}
                 required
               />
             </div>
-            <Field
-              id={`${formId}-phone`}
-              label="Phone number"
-              type="tel"
-              value={phone}
-              onChange={setPhone}
-              error={errors.phone}
-              autoComplete="tel"
-              required
-            />
-            <Field
-              id={`${formId}-email`}
-              label="Email"
-              type="email"
-              value={email}
-              onChange={setEmail}
-              error={errors.email}
-              autoComplete="email"
-              optional
-            />
-            <Field
-              id={`${formId}-age`}
-              label="Age"
-              type="number"
-              inputMode="numeric"
-              value={age}
-              onChange={setAge}
-              error={errors.age}
-              className="max-w-[8rem]"
-              required
-            />
-            <YesNoQuestion
-              id={`${formId}-workauth`}
-              legend="Are you legally authorized to work in the U.S.?"
-              value={workAuth}
-              onChange={setWorkAuth}
-              error={errors.workAuth}
-              required
-            />
           </div>
         )}
 
@@ -646,7 +693,8 @@ export function ApplicationForm({
               key="continue"
               type="button"
               onClick={next}
-              className="inline-flex h-12 flex-1 items-center justify-center rounded-full bg-brand px-6 font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
+              disabled={underage}
+              className="inline-flex h-12 flex-1 items-center justify-center rounded-full bg-brand px-6 font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all hover:brightness-110 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Continue
             </button>
