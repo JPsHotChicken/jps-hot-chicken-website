@@ -131,6 +131,12 @@ function doPost(e) {
   }
 }
 
+// Lets you confirm the deployment is public by opening the /exec URL in a
+// browser — you should see {"ok":true,...} instead of a Google error page.
+function doGet() {
+  return json({ ok: true, message: "JP's application collector is live." });
+}
+
 function json(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
