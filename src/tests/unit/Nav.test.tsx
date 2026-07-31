@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 
 // Next's router hooks/components need app context that doesn't exist in jsdom,
 // so we stub them to plain values/anchors and test the link data wiring.
@@ -17,18 +17,21 @@ vi.mock("next/link", () => ({
 import { Nav } from "@/components/Nav";
 
 describe("Nav", () => {
+  // The mobile menu re-renders the same links as a sibling of <nav>, so scope
+  // assertions to the primary <nav> to avoid duplicate-match errors.
   it("renders the primary navigation links", () => {
     render(<Nav />);
-    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "Locations" })).toHaveAttribute(
+    const nav = within(screen.getByRole("navigation", { name: "Primary" }));
+    expect(nav.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
+    expect(nav.getByRole("link", { name: "Locations" })).toHaveAttribute(
       "href",
-      "/locations",
+      "/order",
     );
-    expect(screen.getByRole("link", { name: "Careers" })).toHaveAttribute(
+    expect(nav.getByRole("link", { name: "Careers" })).toHaveAttribute(
       "href",
       "/careers",
     );
-    expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute(
+    expect(nav.getByRole("link", { name: "Contact" })).toHaveAttribute(
       "href",
       "/contact",
     );
@@ -36,7 +39,8 @@ describe("Nav", () => {
 
   it("includes the ordering CTA pointing at the order page", () => {
     render(<Nav />);
-    expect(screen.getByRole("link", { name: /order now/i })).toHaveAttribute(
+    const nav = within(screen.getByRole("navigation", { name: "Primary" }));
+    expect(nav.getByRole("link", { name: /order now/i })).toHaveAttribute(
       "href",
       "/order",
     );

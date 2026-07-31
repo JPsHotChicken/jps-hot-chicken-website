@@ -57,8 +57,8 @@ export default function OrderPage() {
                 className="group relative flex overflow-hidden rounded-3xl border-2 border-gray-400 bg-white shadow-xl transition-all hover:-translate-y-0.5 hover:shadow-2xl"
               >
                 {loc.isNew && (
-                  <span className="absolute right-4 top-4 rounded-full bg-brand px-2.5 py-1 font-heading text-[11px] font-bold uppercase tracking-wide text-brand-foreground shadow-sm">
-                    Opening soon
+                  <span className="absolute right-4 top-4 rounded-full bg-brand px-2.5 py-1 font-heading text-[8px] font-bold uppercase tracking-wide text-brand-foreground shadow-sm">
+                    Closed
                   </span>
                 )}
                 {image && (
