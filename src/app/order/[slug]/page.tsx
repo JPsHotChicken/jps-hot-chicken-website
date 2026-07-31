@@ -174,7 +174,7 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
           {!loc.orderingUrl && !loc.doordashUrl && !loc.uberEatsUrl && (
             <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-xs font-semibold text-muted-foreground">
               <Store className="size-4 shrink-0" aria-hidden="true" />
-              Online ordering coming soon — come by the store to order
+              This location is currently closed, opening will be soon
             </p>
           )}
         </section>

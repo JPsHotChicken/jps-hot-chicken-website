@@ -310,7 +310,7 @@ export default function HomePage() {
                         {loc.isNew && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-brand px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-brand-foreground">
                             <Star className="size-3 fill-current" aria-hidden="true" />
-                            New
+                            Opening soon
                           </span>
                         )}
                       </h3>

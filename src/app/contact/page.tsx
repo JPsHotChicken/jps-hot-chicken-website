@@ -58,7 +58,7 @@ export default function ContactPage() {
                     <h3 className="text-xl font-bold tracking-tight">{loc.name}</h3>
                     {loc.isNew && (
                       <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
-                        New
+                        Opening soon
                       </span>
                     )}
                   </div>
