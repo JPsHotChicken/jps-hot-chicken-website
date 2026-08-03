@@ -10,10 +10,11 @@ export type FoodImage = { src: string; name: string; alt: string };
 
 export const entrees: FoodImage[] = [
   { src: "/images/food/entree/jpsSandwich.jpg", name: "JP's Sandwich", alt: "JP's Nashville hot chicken sandwich" },
+  { src: "/images/food/entree/jumboTenders.png", name: "Jumbo Tenders", alt: "hot tenders" },
   { src: "/images/food/entree/chickenAndWaffles.jpg", name: "Chicken & Waffles", alt: "Nashville hot chicken and waffles" },
   { src: "/images/food/entree/wholeWings.jpg", name: "Whole Wings", alt: "Nashville hot wings" },
   { src: "/images/food/entree/Wings NonBreaded.jpg", name: "Wings", alt: "hot chicken wings" },
-  { src: "/images/food/entree/chickenBurrito.jpg", name: "JPs Burrito", alt: "hot chicken burrito" },
+  { src: "/images/food/entree/chickenBurrito.jpg", name: "JPs Chicken Burrito", alt: "hot chicken burrito" },
   { src: "/images/food/entree/catfish.jpg", name: "Catfish", alt: "Southern fried catfish" },
 ];
 
