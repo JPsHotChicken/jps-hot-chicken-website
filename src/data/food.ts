@@ -47,7 +47,7 @@ export const drinks: FoodImage[] = [
   { src: "/images/food/drinks/dietCoke.jpg", name: "Diet Coke", alt: "Diet Coke" },
   { src: "/images/food/drinks/cokeZero.jpg", name: "Coke Zero", alt: "Coca-Cola Zero Sugar" },
   { src: "/images/food/drinks/sprite.jpg", name: "Sprite", alt: "Sprite" },
-  { src: "/images/food/drinks/fruitPunch.jpg", name: "Fruit Punch", alt: "Fruit punch" },
+  { src: "/images/food/drinks/lemonade.jpg", name: "Lemonade", alt: "Lemonade" },
   { src: "/images/food/drinks/sweetTea.jpg", name: "Sweet Tea", alt: "Southern sweet tea" },
 ];
 
