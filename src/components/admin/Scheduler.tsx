@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, LogOut, Minus, Plus } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  CopyPlus,
+  LogOut,
+  Minus,
+  Plus,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { logout } from "@/app/admin/actions";
@@ -152,6 +160,40 @@ export function Scheduler() {
   };
 
   /**
+   * Duplicate the whole visible week into the one after it, then follow it
+   * there. Overwriting a week that already has shifts on it asks first — that
+   * is somebody's schedule, and there is no undo.
+   */
+  const copyWeekToNext = () => {
+    const target = toISODate(addDays(fromISODate(weekStart), 7));
+    const existing = doc?.weeks[target];
+    const occupied = existing
+      ? DAY_KEYS.some((day) => existing[day]?.some((row) => row.some((cell) => cell !== null)))
+      : false;
+
+    if (
+      occupied &&
+      !confirm(
+        `${formatWeekRange(target)} already has shifts on it.\n\n` +
+          "Replace that week with this one?",
+      )
+    ) {
+      return;
+    }
+
+    updateDoc((current) => {
+      const source = current.weeks[weekStart] ?? makeEmptyWeek(current.rowCount);
+      // Deep copy, or the two weeks would share row arrays and edit together.
+      const copy = Object.fromEntries(
+        DAY_KEYS.map((day) => [day, (source[day] ?? []).map((row) => [...row])]),
+      ) as WeekSchedule;
+      return { ...current, weeks: { ...current.weeks, [target]: copy } };
+    });
+
+    setWeekStart(target);
+  };
+
+  /**
    * Open the native date picker for the hidden input. It stays uncontrolled and
    * is re-seeded here, so picking a day inside the week already on screen (which
    * leaves `weekStart` unchanged) can't leave the two out of step.
@@ -250,6 +292,16 @@ export function Scheduler() {
               <ChevronRight />
             </Button>
           </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyWeekToNext}
+            title="Copy every shift on this week into the following week, and go there"
+          >
+            <CopyPlus data-icon="inline-start" />
+            Copy to next week
+          </Button>
 
           {/* Rows per day */}
           <div className="flex items-center gap-1 rounded-lg border border-border p-1">
