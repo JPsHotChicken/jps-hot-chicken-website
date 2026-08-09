@@ -12,6 +12,7 @@ import {
   formatShortDate,
   formatWeekRange,
   isClosedDay,
+  isClosingShift,
   SHIFT_GROUP_LABELS,
   type Employee,
   type WeekSchedule,
@@ -204,6 +205,75 @@ function drawWeekOverview(
 
 /* --------------------------------------------- one page per employee */
 
+/** "Monday, Thursday and Friday" */
+function joinList(items: string[]): string {
+  if (items.length < 2) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/**
+ * A tinted callout with an accent bar down its left edge. Wraps its own text,
+ * and moves to a new page rather than running off the bottom of this one.
+ * Returns the y coordinate just below the box it drew.
+ */
+function drawNote(
+  doc: jsPDF,
+  options: {
+    x: number;
+    y: number;
+    width: number;
+    title: string;
+    body: string;
+    accent: [number, number, number];
+    fill: [number, number, number];
+  },
+): number {
+  const { x, width, title, body, accent, fill } = options;
+  const padding = 11;
+  const textX = x + padding + 5;
+  const textWidth = width - padding * 2 - 5;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  const titleLines = doc.splitTextToSize(title, textWidth) as string[];
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  // A note can be a single headline, in which case it gets no body lines.
+  const bodyLines = body ? (doc.splitTextToSize(body, textWidth) as string[]) : [];
+
+  const height = padding * 2 + titleLines.length * 14 + bodyLines.length * 12;
+
+  let top = options.y;
+  if (top + height > doc.internal.pageSize.getHeight() - MARGIN) {
+    doc.addPage("letter", "portrait");
+    top = MARGIN;
+  }
+
+  doc.setFillColor(...fill);
+  doc.roundedRect(x, top, width, height, 3, 3, "F");
+  doc.setFillColor(...accent);
+  doc.rect(x, top + 2, 3.5, height - 4, "F");
+
+  let textY = top + padding + 9;
+  doc.setTextColor(...accent);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  titleLines.forEach((line) => {
+    doc.text(line, textX, textY);
+    textY += 14;
+  });
+
+  doc.setTextColor(...INK);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  bodyLines.forEach((line) => {
+    doc.text(line, textX, textY);
+    textY += 12;
+  });
+
+  return top + height;
+}
+
 function drawEmployeePage(
   doc: jsPDF,
   employee: Employee,
@@ -230,14 +300,29 @@ function drawEmployeePage(
     MARGIN + 38,
   );
 
+  // The days this person is on for the 8–9 PM hour, i.e. closing.
+  const closingDays = days.filter(({ ranges }) => isClosingShift(ranges)).map(({ label }) => label);
+
   // Total hours badge — sized to its text so the number is never clipped.
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   const badgeLabel = `Total hours this week: ${totalHours}`;
+  const badgeWidth = doc.getTextWidth(badgeLabel) + 20;
   doc.setFillColor(...BRAND);
-  doc.roundedRect(MARGIN, MARGIN + 48, doc.getTextWidth(badgeLabel) + 20, 26, 4, 4, "F");
+  doc.roundedRect(MARGIN, MARGIN + 48, badgeWidth, 26, 4, 4, "F");
   doc.setTextColor(255, 255, 255);
   doc.text(badgeLabel, MARGIN + 10, MARGIN + 65);
+
+  // Closing shifts change when you actually get to leave, so they get a marker
+  // at the top of the page as well as the full explanation further down.
+  if (closingDays.length > 0) {
+    doc.setFontSize(10.5);
+    const pillLabel = "CLOSING SHIFT";
+    doc.setFillColor(...INK);
+    doc.roundedRect(MARGIN + badgeWidth + 8, MARGIN + 48, doc.getTextWidth(pillLabel) + 20, 26, 4, 4, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.text(pillLabel, MARGIN + badgeWidth + 18, MARGIN + 65);
+  }
 
   let y = MARGIN + 96;
 
@@ -289,15 +374,52 @@ function drawEmployeePage(
     doc.setLineWidth(0.4);
     doc.line(MARGIN, y - 14, pageWidth - MARGIN, y - 14);
   });
+
+  const noteWidth = pageWidth - MARGIN * 2;
+  y += 6;
+
+  if (closingDays.length > 0) {
+    y =
+      drawNote(doc, {
+        x: MARGIN,
+        y,
+        width: noteWidth,
+        title: "Closing shift",
+        body:
+          `You are scheduled to close on ${joinList(closingDays)}. Closing staff are ` +
+          "expected to stay until the restaurant is fully closed down, which is typically " +
+          "between 9:15 and 9:45 PM. Please plan your evening accordingly, and speak with " +
+          "your manager if this creates a conflict.",
+        accent: BRAND,
+        fill: FILL,
+      }) + 10;
+  }
+
+  drawNote(doc, {
+    x: MARGIN,
+    y,
+    width: noteWidth,
+    title: "The times above are a very close approximation of your shift, not absolute hours.",
+    body: "",
+    accent: INK,
+    fill: CLOSED_FILL,
+  });
 }
 
 /* ------------------------------------------------------------------ export */
 
-/** How much of the schedule to put in the PDF. */
+/**
+ * How much of the schedule to export. `all` is not one document: it downloads a
+ * zip holding the week sheet plus a separate PDF per person, so each sheet can
+ * be handed out on its own.
+ */
 export type ExportScope =
   | { kind: "all" }
   | { kind: "week" }
   | { kind: "employee"; employeeId: string };
+
+/** A scope that describes exactly one file. */
+type FileScope = Exclude<ExportScope, { kind: "all" }>;
 
 export type SchedulePdfOptions = {
   week: WeekSchedule;
@@ -306,6 +428,8 @@ export type SchedulePdfOptions = {
   weekStartISO: string;
   scope?: ExportScope;
 };
+
+type FilePdfOptions = Omit<SchedulePdfOptions, "scope"> & { scope: FileScope };
 
 function slugify(name: string): string {
   return (
@@ -316,9 +440,9 @@ function slugify(name: string): string {
   );
 }
 
-/** Build the document for the requested scope. */
-export async function buildSchedulePdf(options: SchedulePdfOptions): Promise<jsPDF> {
-  const { week, employees, rowCount, weekStartISO, scope = { kind: "all" } } = options;
+/** Build the single document a file scope describes. */
+export async function buildSchedulePdf(options: FilePdfOptions): Promise<jsPDF> {
+  const { week, employees, rowCount, weekStartISO, scope } = options;
   // Loaded on demand so jsPDF never ships with the initial dashboard bundle.
   const { jsPDF: JsPdf } = await import("jspdf");
 
@@ -334,29 +458,78 @@ export async function buildSchedulePdf(options: SchedulePdfOptions): Promise<jsP
 
   const doc = new JsPdf({ orientation: "landscape", unit: "pt", format: "letter" });
   drawWeekOverview(doc, week, employees, rowCount, weekStartISO);
-
-  if (scope.kind === "all") {
-    // One portrait page per employee, in the same order as the sidebar.
-    [...employees].sort(compareEmployees).forEach((employee) => {
-      doc.addPage("letter", "portrait");
-      drawEmployeePage(doc, employee, week, weekStartISO);
-    });
-  }
-
   return doc;
 }
 
-function fileNameFor(options: SchedulePdfOptions): string {
-  const { weekStartISO, employees, scope = { kind: "all" } } = options;
-  if (scope.kind === "week") return `jp-schedule-sheet-${weekStartISO}.pdf`;
+function fileNameFor({ weekStartISO, employees, scope }: FilePdfOptions): string {
   if (scope.kind === "employee") {
     const employee = employees.find((candidate) => candidate.id === scope.employeeId);
     return `jp-schedule-${slugify(employee?.name ?? "")}-${weekStartISO}.pdf`;
   }
-  return `jp-schedule-${weekStartISO}.pdf`;
+  return `jp-schedule-sheet-${weekStartISO}.pdf`;
 }
 
+/** Every file in the full export: the week sheet, then one sheet per person. */
+function fileScopes(employees: Employee[]): FileScope[] {
+  return [
+    { kind: "week" },
+    // Same order as the sidebar, so the zip lists people the familiar way.
+    ...[...employees]
+      .sort(compareEmployees)
+      .map((employee): FileScope => ({ kind: "employee", employeeId: employee.id })),
+  ];
+}
+
+/** The zip, and the folder inside it: `jp-schedule-week-of-2026-08-03`. */
+function weekFolderName(weekStartISO: string): string {
+  return `jp-schedule-week-of-${weekStartISO}`;
+}
+
+/** Hand a blob to the browser as a download. */
+function saveBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  // Safari only honours the download on an anchor that is in the document.
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Revoking immediately can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/**
+ * Download the whole week as a single zip: one folder holding the schedule
+ * sheet and every person's own PDF. One file keeps the browser's
+ * multiple-download prompt out of the way and keeps the week together.
+ */
+async function exportWeekZip(options: SchedulePdfOptions): Promise<void> {
+  const folder = weekFolderName(options.weekStartISO);
+  const contents: Record<string, Uint8Array> = {};
+
+  for (const scope of fileScopes(options.employees)) {
+    const fileOptions = { ...options, scope };
+    const doc = await buildSchedulePdf(fileOptions);
+    contents[fileNameFor(fileOptions)] = new Uint8Array(doc.output("arraybuffer"));
+  }
+
+  // Loaded on demand, like jsPDF — neither belongs in the dashboard bundle.
+  const { zipSync } = await import("fflate");
+  // The PDFs are already compressed internally, so deflating again only costs
+  // time; `level: 0` stores them as they are.
+  const zipped = zipSync({ [folder]: contents }, { level: 0 });
+
+  saveBlob(new Blob([zipped as BlobPart], { type: "application/zip" }), `${folder}.zip`);
+}
+
+/** Run the export the scope asks for. */
 export async function exportSchedulePdf(options: SchedulePdfOptions): Promise<void> {
-  const doc = await buildSchedulePdf(options);
-  doc.save(fileNameFor(options));
+  const scope = options.scope ?? { kind: "all" };
+  if (scope.kind === "all") return exportWeekZip(options);
+
+  const fileOptions = { ...options, scope };
+  const doc = await buildSchedulePdf(fileOptions);
+  await doc.save(fileNameFor(fileOptions), { returnPromise: true });
 }

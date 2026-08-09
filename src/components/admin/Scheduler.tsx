@@ -163,7 +163,7 @@ export function Scheduler() {
       });
     } catch (error) {
       console.error("[scheduler] PDF export failed:", error);
-      alert("Sorry — the PDF couldn't be generated. Please try again.");
+      alert("Sorry — the export didn't finish. Please try again.");
     } finally {
       setExporting(false);
     }

@@ -201,6 +201,17 @@ export function rangeHours(ranges: ShiftRange[]): number {
   return ranges.reduce((total, range) => total + (range.end - range.start), 0);
 }
 
+/**
+ * Working the 8–9 PM hour means closing: the grid stops at a clean hour, but
+ * shutting down runs past it, so these shifts are flagged on the printed sheet.
+ */
+export const CLOSING_HOUR = 20;
+
+/** True when the person is on for the 8–9 PM hour, i.e. they close that day. */
+export function isClosingShift(ranges: ShiftRange[]): boolean {
+  return ranges.some((range) => range.start <= CLOSING_HOUR && range.end > CLOSING_HOUR);
+}
+
 /** "8:00 AM – 2:00 PM" */
 export function formatRange(range: ShiftRange): string {
   return `${formatHourLong(range.start)} – ${formatHourLong(range.end)}`;

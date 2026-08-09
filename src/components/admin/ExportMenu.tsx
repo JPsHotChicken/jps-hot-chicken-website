@@ -19,9 +19,9 @@ type Props = {
 };
 
 /**
- * Split button: the main half exports everything (week sheet + a page per
- * person), the caret opens narrower choices — just the sheet, or just one
- * person's hours.
+ * Split button: the main half downloads the whole week as a zip (the schedule
+ * sheet plus a PDF per person), the caret opens narrower choices — just the
+ * sheet, or just one person's hours, as a single PDF.
  */
 export function ExportMenu({ employees, exporting, onExport }: Props) {
   const [open, setOpen] = useState(false);
