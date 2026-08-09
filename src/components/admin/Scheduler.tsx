@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
-import { ChevronLeft, ChevronRight, LogOut, Minus, Plus } from "lucide-react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { CalendarDays, ChevronLeft, ChevronRight, LogOut, Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { logout } from "@/app/admin/actions";
@@ -50,6 +50,7 @@ export function Scheduler() {
   const [weekStart, setWeekStart] = useState(() => toISODate(mondayOf()));
   const [editing, setEditing] = useState<Editing | null>(null);
   const [exporting, setExporting] = useState(false);
+  const weekPickerRef = useRef<HTMLInputElement>(null);
 
   const week: WeekSchedule = useMemo(
     () => doc?.weeks[weekStart] ?? makeEmptyWeek(doc?.rowCount ?? 0),
@@ -150,6 +151,24 @@ export function Scheduler() {
     setWeekStart(toISODate(addDays(fromISODate(weekStart), deltaWeeks * 7)));
   };
 
+  /**
+   * Open the native date picker for the hidden input. It stays uncontrolled and
+   * is re-seeded here, so picking a day inside the week already on screen (which
+   * leaves `weekStart` unchanged) can't leave the two out of step.
+   */
+  const openWeekPicker = () => {
+    const input = weekPickerRef.current;
+    if (!input) return;
+    input.value = weekStart;
+    try {
+      input.showPicker();
+    } catch {
+      // Older browsers, or a picker the browser refused to open on its own.
+      input.focus();
+      input.click();
+    }
+  };
+
   const handleExport = async (scope: ExportScope) => {
     if (!doc) return;
     setExporting(true);
@@ -184,10 +203,10 @@ export function Scheduler() {
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           <div className="mr-auto">
             <h1 className="font-heading text-lg font-bold tracking-tight">Schedule maker</h1>
-            <p className="text-xs text-muted-foreground">{formatWeekRange(weekStart)}</p>
+            <p className="text-xs text-muted-foreground">Monday – Sunday</p>
           </div>
 
-          {/* Week navigation */}
+          {/* Week navigation — the control shows the whole week, not one date. */}
           <div className="flex items-center gap-1 rounded-lg border border-border p-1">
             <Button
               variant="ghost"
@@ -197,20 +216,31 @@ export function Scheduler() {
             >
               <ChevronLeft />
             </Button>
-            <label htmlFor="week-start" className="sr-only">
-              Week starting
-            </label>
-            <input
-              id="week-start"
-              type="date"
-              value={weekStart}
-              // Snap whatever date is picked back to that week's Monday.
-              onChange={(event) =>
-                event.target.value &&
-                setWeekStart(toISODate(mondayOf(fromISODate(event.target.value))))
-              }
-              className="rounded-md bg-transparent px-1 text-sm outline-none"
-            />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={openWeekPicker}
+                aria-label={`Week of ${formatWeekRange(weekStart)} — pick a different week`}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold whitespace-nowrap hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                <CalendarDays className="size-3.5 text-muted-foreground" />
+                {formatWeekRange(weekStart)}
+              </button>
+              {/* The native picker itself: any day picked snaps to its Monday,
+                  so the button above always reads as a whole week. */}
+              <input
+                ref={weekPickerRef}
+                type="date"
+                defaultValue={weekStart}
+                onChange={(event) => {
+                  if (!event.target.value) return;
+                  setWeekStart(toISODate(mondayOf(fromISODate(event.target.value))));
+                }}
+                tabIndex={-1}
+                aria-hidden
+                className="pointer-events-none absolute inset-0 size-full opacity-0"
+              />
+            </div>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -263,6 +293,7 @@ export function Scheduler() {
       <div className="flex flex-1 flex-col gap-4 p-4 sm:px-6 lg:flex-row-reverse lg:items-start">
         <EmployeePanel
           employees={doc.employees}
+          week={week}
           onAdd={addEmployee}
           onRemove={removeEmployee}
         />

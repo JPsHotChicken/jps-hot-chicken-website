@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import {
   SHIFT_GROUPS,
   SHIFT_GROUP_LABELS,
+  employeeWeek,
   employeesByGroup,
   type Employee,
   type ShiftGroup,
+  type WeekSchedule,
 } from "@/lib/schedule";
 
 const GROUP_DOT: Record<ShiftGroup, string> = {
@@ -20,14 +22,19 @@ const GROUP_DOT: Record<ShiftGroup, string> = {
 
 type Props = {
   employees: Employee[];
+  /** The week on screen, so each person can show their hours for it. */
+  week: WeekSchedule;
   onAdd: (name: string, group: ShiftGroup) => void;
   onRemove: (id: string) => void;
 };
 
-export function EmployeePanel({ employees, onAdd, onRemove }: Props) {
+export function EmployeePanel({ employees, week, onAdd, onRemove }: Props) {
   const [name, setName] = useState("");
   const [group, setGroup] = useState<ShiftGroup>("morning");
   const grouped = employeesByGroup(employees);
+  const hoursById = new Map(
+    employees.map((employee) => [employee.id, employeeWeek(week, employee.id).totalHours]),
+  );
 
   const submit = () => {
     const trimmed = name.trim();
@@ -99,23 +106,34 @@ export function EmployeePanel({ employees, onAdd, onRemove }: Props) {
               <p className="mt-1.5 text-xs text-muted-foreground/70">None yet</p>
             ) : (
               <ul className="mt-1.5 space-y-0.5">
-                {grouped[value].map((employee) => (
-                  <li
-                    key={employee.id}
-                    className="group flex items-center justify-between gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted"
-                  >
-                    <span className="truncate">{employee.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={`Remove ${employee.name}`}
-                      onClick={() => onRemove(employee.id)}
-                      className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                {grouped[value].map((employee) => {
+                  const hours = hoursById.get(employee.id) ?? 0;
+                  return (
+                    <li
+                      key={employee.id}
+                      className="group flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted"
                     >
-                      <Trash2 className="text-destructive" />
-                    </Button>
-                  </li>
-                ))}
+                      <span className="min-w-0 flex-1 truncate">{employee.name}</span>
+                      <span
+                        title={`${hours} scheduled ${hours === 1 ? "hour" : "hours"} this week`}
+                        className={`shrink-0 text-xs font-semibold tabular-nums ${
+                          hours > 0 ? "text-muted-foreground" : "text-muted-foreground/50"
+                        }`}
+                      >
+                        {hours}h
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`Remove ${employee.name}`}
+                        onClick={() => onRemove(employee.id)}
+                        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                      >
+                        <Trash2 className="text-destructive" />
+                      </Button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
