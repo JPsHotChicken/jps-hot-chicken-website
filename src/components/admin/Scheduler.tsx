@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
-import { ChevronLeft, ChevronRight, Download, LogOut, Minus, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { logout } from "@/app/admin/actions";
 import { getServerSnapshot, getSnapshot, subscribe, updateDoc } from "@/lib/schedule-storage";
-import { exportSchedulePdf } from "@/lib/schedule-pdf";
+import { exportSchedulePdf, type ExportScope } from "@/lib/schedule-pdf";
 import {
   DAY_KEYS,
   MAX_ROW_COUNT,
@@ -26,17 +26,29 @@ import {
   type WeekSchedule,
 } from "@/lib/schedule";
 import { CellEditor } from "./CellEditor";
-import { DayGrid } from "./DayGrid";
+import { DayGrid, type CellRange } from "./DayGrid";
 import { EmployeePanel } from "./EmployeePanel";
+import { ExportMenu } from "./ExportMenu";
 
-type EditingCell = { day: DayKey; row: number; hour: number; el: HTMLElement };
+type Editing = { day: DayKey; range: CellRange; el: HTMLElement };
+
+/** Every cell id inside an inclusive range, row-major. */
+function cellsIn(week: WeekSchedule, day: DayKey, range: CellRange): (string | null)[] {
+  const cells: (string | null)[] = [];
+  for (let row = range.rowStart; row <= range.rowEnd; row++) {
+    for (let hour = range.hourStart; hour <= range.hourEnd; hour++) {
+      cells.push(week[day]?.[row]?.[hour] ?? null);
+    }
+  }
+  return cells;
+}
 
 export function Scheduler() {
   // `null` on the server and for the first client render — the schedule lives
   // in localStorage, so rendering it any earlier would mismatch the SSR'd HTML.
   const doc = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const [weekStart, setWeekStart] = useState(() => toISODate(mondayOf()));
-  const [editing, setEditing] = useState<EditingCell | null>(null);
+  const [editing, setEditing] = useState<Editing | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const week: WeekSchedule = useMemo(
@@ -45,6 +57,12 @@ export function Scheduler() {
   );
 
   const dates = useMemo(() => datesForWeek(weekStart), [weekStart]);
+
+  /** Who currently occupies the block being edited — drives the ticked entry. */
+  const selectedCells = useMemo(
+    () => (editing ? cellsIn(week, editing.day, editing.range) : []),
+    [editing, week],
+  );
 
   /** Apply a change to the currently-selected week. */
   const updateWeek = useCallback(
@@ -57,13 +75,16 @@ export function Scheduler() {
     [weekStart],
   );
 
-  const setCell = useCallback(
-    (day: DayKey, row: number, hour: number, employeeId: string | null) => {
+  /** Assign (or clear, with `null`) every cell in a dragged block at once. */
+  const setRange = useCallback(
+    (day: DayKey, range: CellRange, employeeId: string | null) => {
       updateWeek((current) => ({
         ...current,
         [day]: current[day].map((cells, rowIndex) =>
-          rowIndex === row
-            ? cells.map((cell, hourIndex) => (hourIndex === hour ? employeeId : cell))
+          rowIndex >= range.rowStart && rowIndex <= range.rowEnd
+            ? cells.map((cell, hourIndex) =>
+                hourIndex >= range.hourStart && hourIndex <= range.hourEnd ? employeeId : cell,
+              )
             : cells,
         ),
       }));
@@ -129,7 +150,7 @@ export function Scheduler() {
     setWeekStart(toISODate(addDays(fromISODate(weekStart), deltaWeeks * 7)));
   };
 
-  const handleExport = async () => {
+  const handleExport = async (scope: ExportScope) => {
     if (!doc) return;
     setExporting(true);
     try {
@@ -138,6 +159,7 @@ export function Scheduler() {
         employees: doc.employees,
         rowCount: doc.rowCount,
         weekStartISO: weekStart,
+        scope,
       });
     } catch (error) {
       console.error("[scheduler] PDF export failed:", error);
@@ -223,10 +245,11 @@ export function Scheduler() {
             </Button>
           </div>
 
-          <Button onClick={handleExport} disabled={exporting}>
-            <Download data-icon="inline-start" />
-            {exporting ? "Exporting…" : "Export PDF"}
-          </Button>
+          <ExportMenu
+            employees={doc.employees}
+            exporting={exporting}
+            onExport={handleExport}
+          />
 
           <form action={logout}>
             <Button type="submit" variant="ghost" size="sm">
@@ -253,10 +276,8 @@ export function Scheduler() {
               schedule={week[day] ?? makeEmptyDay(doc.rowCount)}
               rowCount={doc.rowCount}
               employees={doc.employees}
-              editingCell={
-                editing?.day === day ? { row: editing.row, hour: editing.hour } : null
-              }
-              onEditCell={(row, hour, el) => setEditing({ day, row, hour, el })}
+              selection={editing?.day === day ? editing.range : null}
+              onEditRange={(range, el) => setEditing({ day, range, el })}
               onCopyToDays={copyDay}
             />
           ))}
@@ -267,9 +288,13 @@ export function Scheduler() {
         <CellEditor
           anchorEl={editing.el}
           employees={doc.employees}
-          selectedId={week[editing.day]?.[editing.row]?.[editing.hour] ?? null}
+          cellCount={selectedCells.length}
+          // `undefined` when the block holds a mix of people — nothing is ticked.
+          selectedId={
+            selectedCells.every((cell) => cell === selectedCells[0]) ? selectedCells[0] : undefined
+          }
           onSelect={(employeeId) => {
-            setCell(editing.day, editing.row, editing.hour, employeeId);
+            setRange(editing.day, editing.range, employeeId);
             setEditing(null);
           }}
           onClose={() => setEditing(null)}

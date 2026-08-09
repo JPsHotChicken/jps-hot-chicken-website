@@ -14,7 +14,13 @@ type Props = {
   /** The cell being edited — the popup is anchored to this element. */
   anchorEl: HTMLElement;
   employees: Employee[];
-  selectedId: string | null;
+  /** How many cells the choice applies to — 1 for a double-click, more for a drag. */
+  cellCount: number;
+  /**
+   * The person filling every selected cell, `null` if all are empty, or
+   * `undefined` when the selection holds a mix (so nothing gets a tick).
+   */
+  selectedId: string | null | undefined;
   onSelect: (employeeId: string | null) => void;
   onClose: () => void;
 };
@@ -27,7 +33,14 @@ const POPUP_WIDTH = 232;
  * scroll container, and re-anchored on scroll so it tracks the cell rather
  * than being left stranded.
  */
-export function CellEditor({ anchorEl, employees, selectedId, onSelect, onClose }: Props) {
+export function CellEditor({
+  anchorEl,
+  employees,
+  cellCount,
+  selectedId,
+  onSelect,
+  onClose,
+}: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState(() => {
     const rect = anchorEl.getBoundingClientRect();
@@ -78,13 +91,19 @@ export function CellEditor({ anchorEl, employees, selectedId, onSelect, onClose 
       style={{ top: position.top, left: position.left, width: POPUP_WIDTH }}
       className="fixed z-50 max-h-80 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg"
     >
+      {cellCount > 1 && (
+        <p className="border-b border-border px-2 py-1.5 text-[0.65rem] font-bold tracking-widest text-muted-foreground uppercase">
+          {cellCount} hours selected
+        </p>
+      )}
+
       <button
         type="button"
         onClick={() => onSelect(null)}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted"
+        className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted"
       >
         <X className="size-3.5" />
-        Clear this hour
+        {cellCount > 1 ? "Clear these hours" : "Clear this hour"}
         {selectedId === null && <Check className="ml-auto size-3.5" />}
       </button>
 

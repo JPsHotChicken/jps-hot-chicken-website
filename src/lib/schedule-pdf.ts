@@ -293,32 +293,70 @@ function drawEmployeePage(
 
 /* ------------------------------------------------------------------ export */
 
+/** How much of the schedule to put in the PDF. */
+export type ExportScope =
+  | { kind: "all" }
+  | { kind: "week" }
+  | { kind: "employee"; employeeId: string };
+
 export type SchedulePdfOptions = {
   week: WeekSchedule;
   employees: Employee[];
   rowCount: number;
   weekStartISO: string;
+  scope?: ExportScope;
 };
 
-/** Build the document: the week overview, then one page per employee. */
+function slugify(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "employee"
+  );
+}
+
+/** Build the document for the requested scope. */
 export async function buildSchedulePdf(options: SchedulePdfOptions): Promise<jsPDF> {
-  const { week, employees, rowCount, weekStartISO } = options;
+  const { week, employees, rowCount, weekStartISO, scope = { kind: "all" } } = options;
   // Loaded on demand so jsPDF never ships with the initial dashboard bundle.
   const { jsPDF: JsPdf } = await import("jspdf");
+
+  // A single person's sheet is portrait, so it has to be the page the document
+  // is created with — jsPDF fixes the first page's orientation at construction.
+  if (scope.kind === "employee") {
+    const employee = employees.find((candidate) => candidate.id === scope.employeeId);
+    if (!employee) throw new Error(`No employee with id ${scope.employeeId}`);
+    const doc = new JsPdf({ orientation: "portrait", unit: "pt", format: "letter" });
+    drawEmployeePage(doc, employee, week, weekStartISO);
+    return doc;
+  }
 
   const doc = new JsPdf({ orientation: "landscape", unit: "pt", format: "letter" });
   drawWeekOverview(doc, week, employees, rowCount, weekStartISO);
 
-  // One portrait page per employee, in the same order as the sidebar.
-  [...employees].sort(compareEmployees).forEach((employee) => {
-    doc.addPage("letter", "portrait");
-    drawEmployeePage(doc, employee, week, weekStartISO);
-  });
+  if (scope.kind === "all") {
+    // One portrait page per employee, in the same order as the sidebar.
+    [...employees].sort(compareEmployees).forEach((employee) => {
+      doc.addPage("letter", "portrait");
+      drawEmployeePage(doc, employee, week, weekStartISO);
+    });
+  }
 
   return doc;
 }
 
+function fileNameFor(options: SchedulePdfOptions): string {
+  const { weekStartISO, employees, scope = { kind: "all" } } = options;
+  if (scope.kind === "week") return `jp-schedule-sheet-${weekStartISO}.pdf`;
+  if (scope.kind === "employee") {
+    const employee = employees.find((candidate) => candidate.id === scope.employeeId);
+    return `jp-schedule-${slugify(employee?.name ?? "")}-${weekStartISO}.pdf`;
+  }
+  return `jp-schedule-${weekStartISO}.pdf`;
+}
+
 export async function exportSchedulePdf(options: SchedulePdfOptions): Promise<void> {
   const doc = await buildSchedulePdf(options);
-  doc.save(`jp-schedule-${options.weekStartISO}.pdf`);
+  doc.save(fileNameFor(options));
 }

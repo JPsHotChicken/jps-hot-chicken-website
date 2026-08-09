@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,9 +30,44 @@ type Props = {
   schedule: DaySchedule;
   rowCount: number;
   employees: Employee[];
-  editingCell: { row: number; hour: number } | null;
-  onEditCell: (row: number, hour: number, cell: HTMLElement) => void;
+  /** The block currently being edited, when it belongs to this day. */
+  selection: CellRange | null;
+  onEditRange: (range: CellRange, anchor: HTMLElement) => void;
   onCopyToDays: (from: DayKey, targets: DayKey[]) => void;
+};
+
+/** Inclusive rectangle of cells, always stored lowest-first. */
+export type CellRange = { rowStart: number; rowEnd: number; hourStart: number; hourEnd: number };
+
+function within(value: number, start: number, end: number): boolean {
+  return value >= start && value <= end;
+}
+
+function inRange(range: CellRange | null, row: number, hour: number): boolean {
+  return (
+    range !== null &&
+    within(row, range.rowStart, range.rowEnd) &&
+    within(hour, range.hourStart, range.hourEnd)
+  );
+}
+
+/** Build a normalised range from the two corners the user dragged between. */
+function rangeBetween(
+  a: { row: number; hour: number },
+  b: { row: number; hour: number },
+): CellRange {
+  return {
+    rowStart: Math.min(a.row, b.row),
+    rowEnd: Math.max(a.row, b.row),
+    hourStart: Math.min(a.hour, b.hour),
+    hourEnd: Math.max(a.hour, b.hour),
+  };
+}
+
+type Drag = {
+  anchor: { row: number; hour: number };
+  head: { row: number; hour: number };
+  headEl: HTMLElement;
 };
 
 export function DayGrid({
@@ -41,14 +76,41 @@ export function DayGrid({
   schedule,
   rowCount,
   employees,
-  editingCell,
-  onEditCell,
+  selection,
+  onEditRange,
   onCopyToDays,
 }: Props) {
   const [copyOpen, setCopyOpen] = useState(false);
   const [targets, setTargets] = useState<DayKey[]>([]);
+  const [drag, setDrag] = useState<Drag | null>(null);
   const closed = isClosedDay(day);
   const employeeById = new Map(employees.map((e) => [e.id, e]));
+
+  // Finish the drag wherever the pointer is released — including outside the
+  // grid, so a stray release can't leave the day stuck in selection mode.
+  useEffect(() => {
+    if (!drag) return;
+
+    const finish = () => {
+      const { anchor, head, headEl } = drag;
+      setDrag(null);
+      // A press and release on one cell is a plain click, not a drag — leave
+      // single cells to double-click so clicking around doesn't open the menu.
+      if (anchor.row !== head.row || anchor.hour !== head.hour) {
+        onEditRange(rangeBetween(anchor, head), headEl);
+      }
+    };
+
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+    return () => {
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+    };
+  }, [drag, onEditRange]);
+
+  // While dragging, show the live rectangle; otherwise show what's being edited.
+  const highlight = drag ? rangeBetween(drag.anchor, drag.head) : selection;
 
   // You can't paste onto a day the store is closed, or onto the source day.
   const copyTargets = DAY_KEYS.filter((key) => key !== day && !isClosedDay(key));
@@ -87,7 +149,8 @@ export function DayGrid({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <div className="min-w-max p-2">
+          {/* select-none so dragging across cells doesn't smear a text selection. */}
+          <div className="min-w-max p-2 select-none">
             {/* Hour header */}
             <div
               className="grid gap-px"
@@ -117,26 +180,50 @@ export function DayGrid({
                 {HOURS.map((hour, hourIndex) => {
                   const employeeId = schedule[rowIndex]?.[hourIndex] ?? null;
                   const employee = employeeId ? employeeById.get(employeeId) : undefined;
-                  const isEditing =
-                    editingCell?.row === rowIndex && editingCell?.hour === hourIndex;
+                  const selected = inRange(highlight, rowIndex, hourIndex);
+                  const cell = { row: rowIndex, hour: hourIndex };
 
                   return (
                     <button
                       key={hour}
                       type="button"
-                      title={`${DAY_LABELS[day]} ${formatHour(hour)} — double-click to assign`}
-                      onDoubleClick={(event) => onEditCell(rowIndex, hourIndex, event.currentTarget)}
+                      title={`${DAY_LABELS[day]} ${formatHour(hour)} — double-click to assign, or drag across cells`}
+                      onPointerDown={(event) => {
+                        // Left button only; ignore right-click and middle-click.
+                        if (event.button !== 0) return;
+                        // Touch implicitly captures the pointer to this button,
+                        // which would stop the cells we drag over from seeing it.
+                        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                          event.currentTarget.releasePointerCapture(event.pointerId);
+                        }
+                        setDrag({ anchor: cell, head: cell, headEl: event.currentTarget });
+                      }}
+                      onPointerMove={(event) => {
+                        const target = event.currentTarget;
+                        setDrag((current) => {
+                          if (!current) return null;
+                          // Same cell as last time — return the identical object
+                          // so React skips the re-render.
+                          if (current.head.row === cell.row && current.head.hour === cell.hour) {
+                            return current;
+                          }
+                          return { ...current, head: cell, headEl: target };
+                        });
+                      }}
+                      onDoubleClick={(event) =>
+                        onEditRange(rangeBetween(cell, cell), event.currentTarget)
+                      }
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
-                          onEditCell(rowIndex, hourIndex, event.currentTarget);
+                          onEditRange(rangeBetween(cell, cell), event.currentTarget);
                         }
                       }}
                       className={`h-8 truncate rounded border px-1 text-xs font-semibold transition-colors ${
                         employee
                           ? `border-transparent ${GROUP_CELL_STYLES[employee.group]}`
                           : "border-dashed border-border bg-muted/40 hover:bg-muted"
-                      } ${isEditing ? "ring-2 ring-ring" : ""}`}
+                      } ${selected ? "ring-2 ring-brand ring-inset" : ""}`}
                     >
                       {employee?.name ?? ""}
                     </button>
