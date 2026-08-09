@@ -7,7 +7,7 @@ import {
   employeeWeek,
   compareEmployees,
   datesForWeek,
-  formatHour,
+  formatHourBlock,
   formatRange,
   formatShortDate,
   formatWeekRange,
@@ -100,7 +100,7 @@ function drawWeekOverview(
     });
     HOURS.forEach((hour, index) => {
       const x = MARGIN + dayColWidth + numColWidth + index * hourColWidth + hourColWidth / 2;
-      doc.text(formatHour(hour), x, y + headerHeight / 2 + 2.5, { align: "center" });
+      doc.text(formatHourBlock(hour), x, y + headerHeight / 2 + 2.5, { align: "center" });
     });
     y += headerHeight;
   };

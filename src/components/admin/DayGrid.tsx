@@ -8,7 +8,7 @@ import {
   DAY_KEYS,
   DAY_LABELS,
   HOURS,
-  formatHour,
+  formatHourBlock,
   formatShortDate,
   isClosedDay,
   type DayKey,
@@ -162,7 +162,7 @@ export function DayGrid({
                   key={hour}
                   className="px-1 pb-1 text-center text-[0.65rem] font-bold tracking-wide text-muted-foreground uppercase"
                 >
-                  {formatHour(hour)}
+                  {formatHourBlock(hour)}
                 </div>
               ))}
             </div>
@@ -187,7 +187,7 @@ export function DayGrid({
                     <button
                       key={hour}
                       type="button"
-                      title={`${DAY_LABELS[day]} ${formatHour(hour)} — double-click to assign, or drag across cells`}
+                      title={`${DAY_LABELS[day]} ${formatHourBlock(hour)} — double-click to assign, or drag across cells`}
                       onPointerDown={(event) => {
                         // Left button only; ignore right-click and middle-click.
                         if (event.button !== 0) return;

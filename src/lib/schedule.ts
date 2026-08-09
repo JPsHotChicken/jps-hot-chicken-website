@@ -40,18 +40,29 @@ export function isClosedDay(day: DayKey): boolean {
   return CLOSED_DAYS.includes(day);
 }
 
-/** "8 AM", "12 PM", "9 PM" — used for the compact column headers. */
-export function formatHour(hour: number): string {
-  const period = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${hour12} ${period}`;
+function to12Hour(hour: number): number {
+  return hour % 12 === 0 ? 12 : hour % 12;
+}
+
+/**
+ * "10–11 AM" — the whole hour a column covers, so the last cell you fill
+ * clearly includes that hour rather than reading like an end time.
+ */
+export function formatHourBlock(hour: number): string {
+  const end = hour + 1;
+  const startPeriod = hour >= 12 ? "PM" : "AM";
+  const endPeriod = end >= 12 ? "PM" : "AM";
+  // The block that straddles noon (11–12) drops the period rather than
+  // claiming AM or PM for a range that is both.
+  return startPeriod === endPeriod
+    ? `${to12Hour(hour)}–${to12Hour(end)} ${startPeriod}`
+    : `${to12Hour(hour)}–${to12Hour(end)}`;
 }
 
 /** "8:00 AM" — used in the per-employee shift lists. */
 export function formatHourLong(hour: number): string {
   const period = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${hour12}:00 ${period}`;
+  return `${to12Hour(hour)}:00 ${period}`;
 }
 
 /* ------------------------------------------------------------------ the doc */
