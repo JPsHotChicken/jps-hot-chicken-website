@@ -1,0 +1,324 @@
+import type { jsPDF } from "jspdf";
+
+import {
+  DAY_KEYS,
+  DAY_LABELS,
+  HOURS,
+  employeeWeek,
+  compareEmployees,
+  datesForWeek,
+  formatHour,
+  formatRange,
+  formatShortDate,
+  formatWeekRange,
+  isClosedDay,
+  SHIFT_GROUP_LABELS,
+  type Employee,
+  type WeekSchedule,
+} from "@/lib/schedule";
+
+/** Brand chili red, as RGB for jsPDF. */
+const BRAND: [number, number, number] = [232, 93, 26];
+const INK: [number, number, number] = [32, 32, 32];
+const MUTED: [number, number, number] = [120, 120, 120];
+const LINE: [number, number, number] = [205, 205, 205];
+const FILL: [number, number, number] = [248, 236, 229];
+const CLOSED_FILL: [number, number, number] = [240, 240, 240];
+
+const MARGIN = 28;
+
+/** Shrink text until it fits `maxWidth`, preferring "First L." over an ellipsis. */
+function fitText(doc: jsPDF, text: string, maxWidth: number): string {
+  if (doc.getTextWidth(text) <= maxWidth) return text;
+
+  const [first, ...rest] = text.split(" ");
+  if (rest.length > 0) {
+    const abbreviated = `${first} ${rest[rest.length - 1][0]}.`;
+    if (doc.getTextWidth(abbreviated) <= maxWidth) return abbreviated;
+  }
+
+  let clipped = first ?? text;
+  while (clipped.length > 1 && doc.getTextWidth(`${clipped}…`) > maxWidth) {
+    clipped = clipped.slice(0, -1);
+  }
+  return `${clipped}…`;
+}
+
+/* ------------------------------------------------------- page 1: whole week */
+
+function drawWeekOverview(
+  doc: jsPDF,
+  week: WeekSchedule,
+  employees: Employee[],
+  rowCount: number,
+  weekStartISO: string,
+): void {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const nameById = new Map(employees.map((e) => [e.id, e.name]));
+  const dates = datesForWeek(weekStartISO);
+
+  // Title block.
+  doc.setTextColor(...BRAND);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text("JP's Hot Chicken — Weekly Schedule", MARGIN, MARGIN + 8);
+
+  doc.setTextColor(...MUTED);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(formatWeekRange(weekStartISO), MARGIN, MARGIN + 24);
+
+  const tableTop = MARGIN + 36;
+  const dayColWidth = 66;
+  const numColWidth = 20;
+  const hourColWidth = (pageWidth - MARGIN * 2 - dayColWidth - numColWidth) / HOURS.length;
+  const headerHeight = 16;
+
+  // Closed days collapse to a single band instead of a block of empty rows.
+  const totalBodyRows = DAY_KEYS.reduce(
+    (total, day) => total + (isClosedDay(day) ? 1 : rowCount),
+    0,
+  );
+  // A few points of slack so rounding can't push the last day onto page 2 —
+  // the whole week is meant to fit on page one.
+  const available = pageHeight - tableTop - MARGIN - headerHeight - 6;
+  const rowHeight = Math.max(9, Math.min(18, available / totalBodyRows));
+
+  let y = tableTop;
+
+  const drawHeaderRow = () => {
+    doc.setFillColor(...INK);
+    doc.rect(MARGIN, y, pageWidth - MARGIN * 2, headerHeight, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+
+    doc.text("Day", MARGIN + 4, y + headerHeight / 2 + 2.5);
+    doc.text("#", MARGIN + dayColWidth + numColWidth / 2, y + headerHeight / 2 + 2.5, {
+      align: "center",
+    });
+    HOURS.forEach((hour, index) => {
+      const x = MARGIN + dayColWidth + numColWidth + index * hourColWidth + hourColWidth / 2;
+      doc.text(formatHour(hour), x, y + headerHeight / 2 + 2.5, { align: "center" });
+    });
+    y += headerHeight;
+  };
+
+  drawHeaderRow();
+
+  DAY_KEYS.forEach((day) => {
+    const closed = isClosedDay(day);
+    const blockRows = closed ? 1 : rowCount;
+    const blockHeight = blockRows * rowHeight;
+
+    // Start a new page if this day's block would run off the bottom.
+    if (y + blockHeight > pageHeight - MARGIN) {
+      doc.addPage();
+      y = MARGIN;
+      drawHeaderRow();
+    }
+
+    const blockTop = y;
+
+    // Day label cell, spanning the whole block.
+    doc.setFillColor(250, 250, 250);
+    doc.rect(MARGIN, blockTop, dayColWidth, blockHeight, "F");
+    doc.setTextColor(...INK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.text(DAY_LABELS[day], MARGIN + 4, blockTop + 10);
+    // The date goes on a second line, but only when the block is tall enough
+    // for it (a one-row closed day isn't).
+    if (blockHeight >= 22) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(...MUTED);
+      doc.text(formatShortDate(dates[day]), MARGIN + 4, blockTop + 19);
+    }
+
+    if (closed) {
+      doc.setFillColor(...CLOSED_FILL);
+      doc.rect(MARGIN + dayColWidth, blockTop, pageWidth - MARGIN * 2 - dayColWidth, rowHeight, "F");
+      doc.setTextColor(...MUTED);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text(
+        "CLOSED — everyone off",
+        MARGIN + dayColWidth + (pageWidth - MARGIN * 2 - dayColWidth) / 2,
+        blockTop + rowHeight / 2 + 3,
+        { align: "center" },
+      );
+      y += rowHeight;
+    } else {
+      for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+        const rowY = blockTop + rowIndex * rowHeight;
+
+        doc.setTextColor(...MUTED);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.text(String(rowIndex + 1), MARGIN + dayColWidth + numColWidth / 2, rowY + rowHeight / 2 + 2, {
+          align: "center",
+        });
+
+        HOURS.forEach((_, hourIndex) => {
+          const employeeId = week[day]?.[rowIndex]?.[hourIndex] ?? null;
+          if (!employeeId) return;
+          const name = nameById.get(employeeId);
+          if (!name) return;
+
+          const x = MARGIN + dayColWidth + numColWidth + hourIndex * hourColWidth;
+          doc.setFillColor(...FILL);
+          doc.rect(x, rowY, hourColWidth, rowHeight, "F");
+          doc.setTextColor(...INK);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(6.5);
+          doc.text(fitText(doc, name, hourColWidth - 4), x + hourColWidth / 2, rowY + rowHeight / 2 + 2, {
+            align: "center",
+          });
+        });
+      }
+      y += blockHeight;
+    }
+
+    // Grid lines for the block. Closed days get no internal hour lines — they
+    // would slice through the "CLOSED" label.
+    doc.setDrawColor(...LINE);
+    doc.setLineWidth(0.4);
+    if (!closed) {
+      for (let i = 0; i <= HOURS.length; i++) {
+        const x = MARGIN + dayColWidth + numColWidth + i * hourColWidth;
+        doc.line(x, blockTop, x, y);
+      }
+      for (let i = 1; i < blockRows; i++) {
+        const lineY = blockTop + i * rowHeight;
+        doc.line(MARGIN + dayColWidth, lineY, pageWidth - MARGIN, lineY);
+      }
+    }
+    doc.line(MARGIN + dayColWidth, blockTop, MARGIN + dayColWidth, y);
+    doc.setLineWidth(0.8);
+    doc.setDrawColor(...INK);
+    doc.line(MARGIN, y, pageWidth - MARGIN, y);
+  });
+}
+
+/* --------------------------------------------- one page per employee */
+
+function drawEmployeePage(
+  doc: jsPDF,
+  employee: Employee,
+  week: WeekSchedule,
+  weekStartISO: string,
+): void {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const dates = datesForWeek(weekStartISO);
+  const { days, totalHours } = employeeWeek(week, employee.id);
+
+  // Name.
+  doc.setTextColor(...INK);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(24);
+  doc.text(employee.name, MARGIN, MARGIN + 20);
+
+  // Date range + group.
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(...MUTED);
+  doc.text(
+    `${formatWeekRange(weekStartISO)}  ·  ${SHIFT_GROUP_LABELS[employee.group]}`,
+    MARGIN,
+    MARGIN + 38,
+  );
+
+  // Total hours badge — sized to its text so the number is never clipped.
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  const badgeLabel = `Total hours this week: ${totalHours}`;
+  doc.setFillColor(...BRAND);
+  doc.roundedRect(MARGIN, MARGIN + 48, doc.getTextWidth(badgeLabel) + 20, 26, 4, 4, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.text(badgeLabel, MARGIN + 10, MARGIN + 65);
+
+  let y = MARGIN + 96;
+
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.6);
+  doc.line(MARGIN, y - 14, pageWidth - MARGIN, y - 14);
+
+  days.forEach(({ label, day, closed, ranges }) => {
+    const dayHours = ranges.reduce((total, range) => total + (range.end - range.start), 0);
+
+    doc.setTextColor(...INK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(label, MARGIN, y);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...MUTED);
+    doc.text(formatShortDate(dates[day]), MARGIN, y + 13);
+
+    const valueX = MARGIN + 130;
+    if (closed) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(11);
+      doc.setTextColor(...MUTED);
+      doc.text("Closed — off", valueX, y);
+    } else if (ranges.length === 0) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(11);
+      doc.setTextColor(...MUTED);
+      doc.text("Off", valueX, y);
+    } else {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(...INK);
+      ranges.forEach((range, index) => {
+        doc.text(formatRange(range), valueX, y + index * 15);
+      });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(...MUTED);
+      doc.text(`${dayHours} h`, pageWidth - MARGIN, y, { align: "right" });
+    }
+
+    // Advance past the tallest column in this row.
+    y += Math.max(34, ranges.length * 15 + 19);
+
+    doc.setDrawColor(...LINE);
+    doc.setLineWidth(0.4);
+    doc.line(MARGIN, y - 14, pageWidth - MARGIN, y - 14);
+  });
+}
+
+/* ------------------------------------------------------------------ export */
+
+export type SchedulePdfOptions = {
+  week: WeekSchedule;
+  employees: Employee[];
+  rowCount: number;
+  weekStartISO: string;
+};
+
+/** Build the document: the week overview, then one page per employee. */
+export async function buildSchedulePdf(options: SchedulePdfOptions): Promise<jsPDF> {
+  const { week, employees, rowCount, weekStartISO } = options;
+  // Loaded on demand so jsPDF never ships with the initial dashboard bundle.
+  const { jsPDF: JsPdf } = await import("jspdf");
+
+  const doc = new JsPdf({ orientation: "landscape", unit: "pt", format: "letter" });
+  drawWeekOverview(doc, week, employees, rowCount, weekStartISO);
+
+  // One portrait page per employee, in the same order as the sidebar.
+  [...employees].sort(compareEmployees).forEach((employee) => {
+    doc.addPage("letter", "portrait");
+    drawEmployeePage(doc, employee, week, weekStartISO);
+  });
+
+  return doc;
+}
+
+export async function exportSchedulePdf(options: SchedulePdfOptions): Promise<void> {
+  const doc = await buildSchedulePdf(options);
+  doc.save(`jp-schedule-${options.weekStartISO}.pdf`);
+}

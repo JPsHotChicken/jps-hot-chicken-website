@@ -93,6 +93,16 @@ export function Footer() {
                 </Link>
               </li>
             ))}
+            {/* Staff-only dashboard. Deliberately linked from here and nowhere
+                else, and gated behind a password. */}
+            <li>
+              <Link
+                href="/admin"
+                className="inline-flex h-9 items-center text-background/50 transition-colors hover:text-brand-light"
+              >
+                Admin
+              </Link>
+            </li>
           </ul>
         </div>
       </div>

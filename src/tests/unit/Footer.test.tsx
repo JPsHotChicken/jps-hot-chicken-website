@@ -18,14 +18,20 @@ import { formatPhone } from "@/lib/format";
 describe("Footer", () => {
   it("renders the navigation links from config", () => {
     render(<Footer />);
+    // Careers is deliberately hidden while hiring is paused — see NAV_LINKS.
     for (const [label, href] of [
       ["Home", "/"],
       ["Locations", "/locations"],
-      ["Careers", "/careers"],
       ["Contact", "/contact"],
     ] as const) {
       expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", href);
     }
+    expect(screen.queryByRole("link", { name: "Careers" })).not.toBeInTheDocument();
+  });
+
+  it("links to the staff admin dashboard", () => {
+    render(<Footer />);
+    expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
   });
 
   it("renders a phone number for each location that has one plus the email from siteConfig", () => {
