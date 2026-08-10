@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlertTriangle, ArrowLeft, MapPin, Navigation, Store } from "lucide-react";
+import { AlertTriangle, ArrowLeft, MapPin, Navigation } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { getOnlineWeekRows } from "@/lib/hours";
@@ -170,13 +170,6 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
               </button>
             )}
           </div>
-
-          {!loc.orderingUrl && !loc.doordashUrl && !loc.uberEatsUrl && (
-            <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-xs font-semibold text-muted-foreground">
-              <Store className="size-4 shrink-0" aria-hidden="true" />
-              This location is currently closed, opening will be soon
-            </p>
-          )}
         </section>
 
         {/* Details: address + maps on the left, hours inline on the right */}

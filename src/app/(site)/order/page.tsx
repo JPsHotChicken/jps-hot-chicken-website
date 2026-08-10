@@ -58,7 +58,7 @@ export default function OrderPage() {
               >
                 {loc.isNew && (
                   <span className="absolute right-4 top-4 rounded-full bg-brand px-2.5 py-1 font-heading text-[8px] font-bold uppercase tracking-wide text-brand-foreground shadow-sm">
-                    Closed
+                    Open
                   </span>
                 )}
                 {image && (

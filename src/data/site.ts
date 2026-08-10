@@ -3,8 +3,8 @@
 //
 // ⚠️ MISSING BUSINESS DATA (owner to provide). These fields are *omitted* — never
 // faked — so no placeholder can reach the live site, Google, or the structured data:
-//   - Clarksville: phone, orderingUrl, doordashUrl, uberEatsUrl (ordering CTAs and
-//     the phone line appear automatically once these are set)
+//   - Clarksville: phone, uberEatsUrl (the CTA and phone line appear automatically
+//     once these are set)
 //   - socials: real Instagram / Facebook page URLs (published as schema.org sameAs)
 //   - googleBusinessUrl per location: Google Business Profile / Maps listing link
 // ✏️ CONFIRM with the owner:
@@ -92,7 +92,11 @@ const locations: readonly RestaurantLocation[] = [
     zip: "37040",
     lat: 36.57885,
     lng: -87.31505,
-    // phone / orderingUrl / doordashUrl / uberEatsUrl: pending — see header note.
+    // phone / uberEatsUrl: pending — see header note. Uber Eats stays omitted until
+    // this store has its own listing; Oak Grove's link would misroute orders here.
+    orderingUrl: "https://jpshotchicken.toast.site/",
+    doordashUrl:
+      "https://www.doordash.com/store/jp's-hot-chicken-clarksville-47994625/116482960/?event_type=autocomplete&pickup=false",
     isOpen: true,
     isNew: true,
   },
@@ -108,9 +112,9 @@ export const siteConfig = {
   //   • href    : where the whole bar links to (omit/empty to make it non-clickable).
   announcement: {
     enabled: true,
-    message: "Now hiring at JP's Trenton Rd Clarksville TN. Click here to apply",
+    message: "Trenton location now open!",
     variant: "gray",
-    href: "/careers",
+    href: "/order/clarksville",
   },
   description:
     "JP's Hot Chicken serves Nashville-style hot chicken in Clarksville, TN and Oak Grove, KY.",

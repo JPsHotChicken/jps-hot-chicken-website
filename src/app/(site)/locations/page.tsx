@@ -50,7 +50,7 @@ export default function LocationsPage() {
                 {loc.isNew && (
                   <span className="absolute left-4 top-4 z-10 inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 font-heading text-[11px] font-bold uppercase tracking-wide text-brand-foreground shadow-sm">
                     <Star className="size-3 fill-current" aria-hidden="true" />
-                    Opening soon
+                    Now Open
                   </span>
                 )}
                 {image && (

@@ -40,7 +40,7 @@ export function DeliveryClient() {
               >
                 {loc.isNew && (
                   <span className="absolute right-4 top-4 z-10 rounded-full bg-brand px-2.5 py-1 font-heading text-[11px] font-bold uppercase tracking-wide text-brand-foreground shadow-sm">
-                    Opening soon
+                    Now Open
                   </span>
                 )}
                 {/* Faint home-state silhouette, clipped to the card. Kentucky's
