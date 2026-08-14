@@ -24,6 +24,9 @@ import {
   copyDayAction,
   copyWeekAction,
   loadWeekAction,
+  publishStateAction,
+  publishWeekAction,
+  regenerateLoginCodeAction,
   reloadAction,
   removeEmployeeAction,
   removeRecurringTimeOffAction,
@@ -57,6 +60,7 @@ import { CellEditor } from "./CellEditor";
 import { DayGrid, type CellRange } from "./DayGrid";
 import { EmployeePanel } from "./EmployeePanel";
 import { ExportMenu } from "./ExportMenu";
+import { GoLiveButton, type PublishState } from "./GoLiveButton";
 import {
   TimeOffPanel,
   type NewRecurringTimeOff,
@@ -73,6 +77,8 @@ export type SchedulerProps = {
   /** Monday of the week the page was opened on. */
   weekStart: string;
   week: WeekSchedule;
+  /** Whether that week has been sent to staff, and whether it has drifted since. */
+  publishState: PublishState;
 };
 
 /** Every cell id inside an inclusive range, row-major. */
@@ -103,6 +109,7 @@ export function Scheduler({
   recurringTimeOff: initialRecurring,
   weekStart: initialWeekStart,
   week: initialWeek,
+  publishState: initialPublishState,
 }: SchedulerProps) {
   const [rowCount, setRowCount] = useState(initialRowCount);
   const [employees, setEmployees] = useState(initialEmployees);
@@ -117,6 +124,8 @@ export function Scheduler({
   const [exporting, setExporting] = useState(false);
   const [loadingWeek, setLoadingWeek] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publishState, setPublishState] = useState(initialPublishState);
+  const [publishing, setPublishing] = useState(false);
   const weekPickerRef = useRef<HTMLInputElement>(null);
   const pendingWeek = useRef(initialWeekStart);
 
@@ -161,6 +170,26 @@ export function Scheduler({
   );
 
   /**
+   * Any edit to the grid puts it ahead of what staff can see, so the Go Live
+   * button has to stop claiming the week is up to date. Marking it dirty rather
+   * than re-comparing against the database keeps editing free of round trips;
+   * the exact comparison happens again whenever the week is (re)loaded.
+   */
+  const markDirty = useCallback(() => {
+    setPublishState((current) =>
+      current.hasUnpublishedChanges ? current : { ...current, hasUnpublishedChanges: true },
+    );
+  }, []);
+
+  const refreshPublishState = useCallback(async (target: string) => {
+    try {
+      setPublishState(await publishStateAction(target));
+    } catch (cause) {
+      console.error(`[scheduler] Could not read publish state for ${target}:`, cause);
+    }
+  }, []);
+
+  /**
    * Move to a week, reading it from the database the first time it's needed —
    * only the week the page opened on arrives with the page.
    *
@@ -172,6 +201,7 @@ export function Scheduler({
     async (target: string) => {
       setWeekStart(target);
       setEditing(null);
+      void refreshPublishState(target);
       if (weeks[target]) return;
 
       pendingWeek.current = target;
@@ -188,7 +218,7 @@ export function Scheduler({
         if (pendingWeek.current === target) setLoadingWeek(false);
       }
     },
-    [rowCount, weeks],
+    [rowCount, weeks, refreshPublishState],
   );
 
   /** Apply a change to one week in the local cache. */
@@ -215,9 +245,10 @@ export function Scheduler({
             : cells,
         ),
       }));
+      markDirty();
       void save("save that shift", () => assignBlockAction(weekStart, day, range, employeeId));
     },
-    [patchWeek, save, weekStart],
+    [markDirty, patchWeek, save, weekStart],
   );
 
   const copyDay = useCallback(
@@ -229,9 +260,10 @@ export function Scheduler({
         for (const target of targets) next[target] = source.map((row) => [...row]);
         return next;
       });
+      markDirty();
       void save("copy that day", () => copyDayAction(weekStart, from, targets));
     },
-    [patchWeek, save, weekStart],
+    [markDirty, patchWeek, save, weekStart],
   );
 
   const addEmployee = useCallback(
@@ -264,7 +296,21 @@ export function Scheduler({
           ]),
         ),
       );
+      markDirty();
       void save("remove that employee", () => removeEmployeeAction(id));
+    },
+    [markDirty, save],
+  );
+
+  /** Issue a fresh sign-in code, e.g. when somebody forgets theirs. */
+  const regenerateCode = useCallback(
+    (id: string) => {
+      void save("issue a new code", async () => {
+        const loginCode = await regenerateLoginCodeAction(id);
+        setEmployees((current) =>
+          current.map((employee) => (employee.id === id ? { ...employee, loginCode } : employee)),
+        );
+      });
     },
     [save],
   );
@@ -279,12 +325,27 @@ export function Scheduler({
           Object.entries(current).map(([key, value]) => [key, resizeWeek(value, next)]),
         ),
       );
+      markDirty();
       void save("change the row count", async () => {
         await setRowCountAction(next);
       });
     },
-    [rowCount, save],
+    [markDirty, rowCount, save],
   );
+
+  /** Send the visible week to every employee's `/staff` schedule. */
+  const publish = async () => {
+    setPublishing(true);
+    try {
+      const publishedAt = await publishWeekAction(weekStart);
+      setPublishState({ publishedAt, hasUnpublishedChanges: false });
+    } catch (cause) {
+      console.error("[scheduler] Could not publish the week:", cause);
+      setError("Couldn't send that week to your staff. Please try again.");
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const shiftWeek = (deltaWeeks: number) => {
     void goToWeek(toISODate(addDays(fromISODate(weekStart), deltaWeeks * 7)));
@@ -333,6 +394,8 @@ export function Scheduler({
     setWeeks((current) => ({ ...current, [target]: copy }));
     setWeekStart(target);
     await save("copy the week", () => copyWeekAction(weekStart, target));
+    // The week we've landed on has its own publish history, not this one's.
+    await refreshPublishState(target);
   };
 
   /* -------------------------------------------------------------- time off */
@@ -519,6 +582,8 @@ export function Scheduler({
 
           <ExportMenu employees={employees} exporting={exporting} onExport={handleExport} />
 
+          <GoLiveButton state={publishState} publishing={publishing} onPublish={publish} />
+
           <form action={logout}>
             <Button type="submit" variant="ghost" size="sm">
               <LogOut data-icon="inline-start" />
@@ -554,6 +619,7 @@ export function Scheduler({
             week={week}
             onAdd={addEmployee}
             onRemove={removeEmployee}
+            onRegenerateCode={regenerateCode}
           />
 
           <TimeOffPanel

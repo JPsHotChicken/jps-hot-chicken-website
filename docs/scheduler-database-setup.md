@@ -53,10 +53,13 @@ That is the intended posture, not a finding to fix.
 | Table | Holds |
 |---|---|
 | `schedule_settings` | Single row. `row_count` — rows shown per day. |
-| `employees` | Name and shift group. |
-| `shift_assignments` | One row per filled grid cell. |
+| `employees` | Name, shift group, and the four digit `login_code`. |
+| `shift_assignments` | One row per filled grid cell — the owner's working copy. |
 | `time_off_requests` | Dated requests, `pending` / `approved` / `denied`. |
 | `recurring_time_off` | Standing weekly conflicts, one per person per weekday. |
+| `published_weeks` | One row per week the owner has sent to staff. |
+| `published_shifts` | Snapshot of the grid as of the last "Go Live". |
+| `staff_login_attempts` | Sign-in throttling for `/staff`. |
 
 `shift_assignments` is keyed by real calendar date — `(shift_date, row_index,
 hour)` — rather than by week plus weekday, so a date can only ever mean one
@@ -65,6 +68,39 @@ is the absolute hour (8 = the 8–9 AM block, 21 = the 9–10 PM block).
 
 Everything hangs off `employees` with `on delete cascade`, so removing someone
 takes their shifts, requests and recurring entries with them in one statement.
+
+## The staff side (`/staff`)
+
+Employees sign in at `/staff/login` with a four digit code held on their row in
+`employees`. There is no environment variable and no account to create: the owner
+reads the code off the employee list in `/admin` and tells them.
+
+New employees are given a code automatically when they're added. Anyone added
+before this existed has `login_code = null` and cannot sign in until the owner
+clicks the refresh icon beside their name to issue one.
+
+### Publishing is a snapshot, not a flag
+
+The owner's edits land in `shift_assignments` immediately. Staff never read that
+table — they read `published_shifts`, which is only written by the **Go Live**
+button. So a half-built week is invisible to employees until it's deliberately
+sent, and republishing *replaces* the snapshot so a deleted shift actually
+disappears for them.
+
+The button shows three states: `Go live` (never sent), `Push changes` (sent, but
+edited since), and `Live` (sent and unchanged).
+
+### Why the code is stored as typed
+
+`login_code` is stored in plain text rather than hashed, because the owner has to
+be able to read it back to the employee. That is a deliberate trade-off, and the
+reason the throttle in `staff_login_attempts` exists — four digits is only 10,000
+possibilities. What the code protects is one person's own shift times and their
+time-off requests.
+
+If that ever feels too thin, the change is small: widen the column and the
+`employee_login_code_is_four_digits` check to six digits, and update `LENGTH` in
+`src/app/staff/login/LoginForm.tsx`.
 
 ## Changing the schema
 

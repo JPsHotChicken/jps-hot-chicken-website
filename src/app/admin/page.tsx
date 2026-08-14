@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 import { loadScheduleBase, loadWeek } from "@/lib/schedule-repo";
+import { getPublishState } from "@/lib/staff-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { mondayOf, toISODate } from "@/lib/schedule";
 import { Scheduler } from "@/components/admin/Scheduler";
@@ -30,7 +31,10 @@ export default async function AdminPage() {
 
   const weekStart = toISODate(mondayOf());
   const base = await loadScheduleBase();
-  const week = await loadWeek(weekStart, base.rowCount);
+  const [week, publishState] = await Promise.all([
+    loadWeek(weekStart, base.rowCount),
+    getPublishState(weekStart),
+  ]);
 
   return (
     <Scheduler
@@ -40,6 +44,7 @@ export default async function AdminPage() {
       recurringTimeOff={base.recurringTimeOff}
       weekStart={weekStart}
       week={week}
+      publishState={publishState}
     />
   );
 }

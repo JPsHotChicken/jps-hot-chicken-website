@@ -67,7 +67,7 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
 
   const [settings, employees, timeOff, recurring] = await Promise.all([
     db.from("schedule_settings").select("row_count").eq("id", true).single(),
-    db.from("employees").select("id, name, shift_group").order("name"),
+    db.from("employees").select("id, name, shift_group, login_code").order("name"),
     db
       .from("time_off_requests")
       .select("id, employee_id, start_date, end_date, reason, status, requested_at")
@@ -86,6 +86,7 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
       id: row.id,
       name: row.name,
       group: row.shift_group,
+      loginCode: row.login_code,
     })),
     timeOff: timeOff.data.map((row) => ({
       id: row.id,
@@ -132,15 +133,24 @@ export async function loadWeek(weekStartISO: string, rowCount: number): Promise<
 
 /* ---------------------------------------------------------------- employees */
 
-export async function insertEmployee(name: string, group: ShiftGroup): Promise<Employee> {
+export async function insertEmployee(
+  name: string,
+  group: ShiftGroup,
+  loginCode: string | null,
+): Promise<Employee> {
   const { data, error } = await getDb()
     .from("employees")
-    .insert({ name, shift_group: group })
-    .select("id, name, shift_group")
+    .insert({ name, shift_group: group, login_code: loginCode })
+    .select("id, name, shift_group, login_code")
     .single();
 
   if (error) fail("adding an employee", error);
-  return { id: data.id, name: data.name, group: data.shift_group };
+  return {
+    id: data.id,
+    name: data.name,
+    group: data.shift_group,
+    loginCode: data.login_code,
+  };
 }
 
 /**

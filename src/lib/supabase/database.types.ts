@@ -17,20 +17,98 @@ export type Database = {
         Row: {
           created_at: string;
           id: string;
+          login_code: string | null;
           name: string;
           shift_group: Database["public"]["Enums"]["shift_group"];
         };
         Insert: {
           created_at?: string;
           id?: string;
+          login_code?: string | null;
           name: string;
           shift_group?: Database["public"]["Enums"]["shift_group"];
         };
         Update: {
           created_at?: string;
           id?: string;
+          login_code?: string | null;
           name?: string;
           shift_group?: Database["public"]["Enums"]["shift_group"];
+        };
+        Relationships: [];
+      };
+      published_shifts: {
+        Row: {
+          employee_id: string;
+          hour: number;
+          row_index: number;
+          shift_date: string;
+          week_start: string;
+        };
+        Insert: {
+          employee_id: string;
+          hour: number;
+          row_index: number;
+          shift_date: string;
+          week_start: string;
+        };
+        Update: {
+          employee_id?: string;
+          hour?: number;
+          row_index?: number;
+          shift_date?: string;
+          week_start?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "published_shifts_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "published_shifts_week_start_fkey";
+            columns: ["week_start"];
+            isOneToOne: false;
+            referencedRelation: "published_weeks";
+            referencedColumns: ["week_start"];
+          },
+        ];
+      };
+      published_weeks: {
+        Row: {
+          published_at: string;
+          week_start: string;
+        };
+        Insert: {
+          published_at?: string;
+          week_start: string;
+        };
+        Update: {
+          published_at?: string;
+          week_start?: string;
+        };
+        Relationships: [];
+      };
+      staff_login_attempts: {
+        Row: {
+          attempted_at: string;
+          id: number;
+          ip: string;
+          succeeded: boolean;
+        };
+        Insert: {
+          attempted_at?: string;
+          id?: never;
+          ip: string;
+          succeeded: boolean;
+        };
+        Update: {
+          attempted_at?: string;
+          id?: never;
+          ip?: string;
+          succeeded?: boolean;
         };
         Relationships: [];
       };

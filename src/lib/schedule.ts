@@ -18,6 +18,12 @@ export type Employee = {
   id: string;
   name: string;
   group: ShiftGroup;
+  /**
+   * The four digit code this person signs in with at `/staff`. Only ever loaded
+   * for the owner's dashboard — the staff side never receives anyone's code but
+   * their own, and it is absent everywhere else.
+   */
+  loginCode?: string | null;
 };
 
 /* ----------------------------------------------------------------- time off */
@@ -25,10 +31,15 @@ export type Employee = {
 export const TIME_OFF_STATUSES = ["pending", "approved", "denied"] as const;
 export type TimeOffStatus = (typeof TIME_OFF_STATUSES)[number];
 
+/**
+ * The stored values stay `pending` / `approved` / `denied`; these are what both
+ * the owner and staff read, so the two sides never describe the same request
+ * with different words.
+ */
 export const TIME_OFF_STATUS_LABELS: Record<TimeOffStatus, string> = {
-  pending: "Pending",
-  approved: "Approved",
-  denied: "Denied",
+  pending: "In review",
+  approved: "Accepted",
+  denied: "Declined",
 };
 
 /** A one-off request to be away. `startDate`–`endDate` are inclusive ISO dates. */
@@ -66,8 +77,11 @@ export function coversWeek(request: TimeOffRequest, weekStartISO: string): boole
   return request.startDate <= weekEndISO && weekStartISO <= request.endDate;
 }
 
-/** Whole days covered, counting both ends — a single-day request is 1. */
-export function requestDayCount(request: TimeOffRequest): number {
+/**
+ * Whole days covered, counting both ends — a single-day request is 1. Takes just
+ * the dates so it also works for a range being picked but not yet filed.
+ */
+export function requestDayCount(request: Pick<TimeOffRequest, "startDate" | "endDate">): number {
   const start = fromISODate(request.startDate);
   const end = fromISODate(request.endDate);
   const days = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;

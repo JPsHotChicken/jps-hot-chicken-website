@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 import * as repo from "@/lib/schedule-repo";
+import * as staff from "@/lib/staff-repo";
 import {
   DAY_KEYS,
   HOURS,
@@ -115,10 +116,38 @@ export async function reloadAction(
 
 /* --------------------------------------------------------------- employees */
 
+/** New employees get a sign-in code straight away, so they can be told it on the spot. */
 export async function addEmployeeAction(name: string, group: ShiftGroup): Promise<Employee> {
   await requireAdmin();
   if (!SHIFT_GROUPS.includes(group)) throw new Error(`Unknown shift group "${group}".`);
-  return repo.insertEmployee(assertText(name, "Name", { max: 80, required: true }), group);
+  return repo.insertEmployee(
+    assertText(name, "Name", { max: 80, required: true }),
+    group,
+    await staff.generateUniqueLoginCode(),
+  );
+}
+
+/** Issue a fresh code — used when one is forgotten, or shared too widely. */
+export async function regenerateLoginCodeAction(employeeId: string): Promise<string> {
+  await requireAdmin();
+  const code = await staff.generateUniqueLoginCode();
+  await staff.setLoginCode(assertUuid(employeeId, "Employee"), code);
+  return code;
+}
+
+/* -------------------------------------------------------------- publishing */
+
+/** Push the visible week to every employee's `/staff` view. */
+export async function publishWeekAction(weekStart: string): Promise<string> {
+  await requireAdmin();
+  assertMonday(weekStart);
+  return staff.publishWeek(weekStart);
+}
+
+export async function publishStateAction(weekStart: string): Promise<staff.PublishState> {
+  await requireAdmin();
+  assertMonday(weekStart);
+  return staff.getPublishState(weekStart);
 }
 
 export async function removeEmployeeAction(id: string): Promise<void> {
