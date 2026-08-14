@@ -1,19 +1,36 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   CopyPlus,
+  LoaderCircle,
   LogOut,
   Minus,
   Plus,
+  TriangleAlert,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { logout } from "@/app/admin/actions";
-import { getServerSnapshot, getSnapshot, subscribe, updateDoc } from "@/lib/schedule-storage";
+import {
+  addEmployeeAction,
+  addRecurringTimeOffAction,
+  addTimeOffAction,
+  assignBlockAction,
+  copyDayAction,
+  copyWeekAction,
+  loadWeekAction,
+  reloadAction,
+  removeEmployeeAction,
+  removeRecurringTimeOffAction,
+  removeTimeOffAction,
+  setRowCountAction,
+  setTimeOffStatusAction,
+} from "@/app/admin/schedule-actions";
 import { exportSchedulePdf, type ExportScope } from "@/lib/schedule-pdf";
 import {
   DAY_KEYS,
@@ -30,15 +47,33 @@ import {
   toISODate,
   type DayKey,
   type Employee,
+  type RecurringTimeOff,
   type ShiftGroup,
+  type TimeOffRequest,
+  type TimeOffStatus,
   type WeekSchedule,
 } from "@/lib/schedule";
 import { CellEditor } from "./CellEditor";
 import { DayGrid, type CellRange } from "./DayGrid";
 import { EmployeePanel } from "./EmployeePanel";
 import { ExportMenu } from "./ExportMenu";
+import {
+  TimeOffPanel,
+  type NewRecurringTimeOff,
+  type NewTimeOffRequest,
+} from "./TimeOffPanel";
 
 type Editing = { day: DayKey; range: CellRange; el: HTMLElement };
+
+export type SchedulerProps = {
+  rowCount: number;
+  employees: Employee[];
+  timeOff: TimeOffRequest[];
+  recurringTimeOff: RecurringTimeOff[];
+  /** Monday of the week the page was opened on. */
+  weekStart: string;
+  week: WeekSchedule;
+};
 
 /** Every cell id inside an inclusive range, row-major. */
 function cellsIn(week: WeekSchedule, day: DayKey, range: CellRange): (string | null)[] {
@@ -51,43 +86,126 @@ function cellsIn(week: WeekSchedule, day: DayKey, range: CellRange): (string | n
   return cells;
 }
 
-export function Scheduler() {
-  // `null` on the server and for the first client render — the schedule lives
-  // in localStorage, so rendering it any earlier would mismatch the SSR'd HTML.
-  const doc = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const [weekStart, setWeekStart] = useState(() => toISODate(mondayOf()));
+/**
+ * The schedule maker.
+ *
+ * Data lives in Supabase and is reached only through the Server Actions in
+ * `schedule-actions.ts`. Edits are applied to local state first and saved in the
+ * background — dragging across a row of cells has to feel instant, and waiting
+ * on a round trip per cell would not. If a save fails, the banner says so and
+ * the whole week is re-read from the database, so what's on screen is never
+ * quietly out of step with what's stored.
+ */
+export function Scheduler({
+  rowCount: initialRowCount,
+  employees: initialEmployees,
+  timeOff: initialTimeOff,
+  recurringTimeOff: initialRecurring,
+  weekStart: initialWeekStart,
+  week: initialWeek,
+}: SchedulerProps) {
+  const [rowCount, setRowCount] = useState(initialRowCount);
+  const [employees, setEmployees] = useState(initialEmployees);
+  const [timeOff, setTimeOff] = useState(initialTimeOff);
+  const [recurring, setRecurring] = useState(initialRecurring);
+  const [weeks, setWeeks] = useState<Record<string, WeekSchedule>>({
+    [initialWeekStart]: initialWeek,
+  });
+
+  const [weekStart, setWeekStart] = useState(initialWeekStart);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [loadingWeek, setLoadingWeek] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const weekPickerRef = useRef<HTMLInputElement>(null);
+  const pendingWeek = useRef(initialWeekStart);
 
-  const week: WeekSchedule = useMemo(
-    () => doc?.weeks[weekStart] ?? makeEmptyWeek(doc?.rowCount ?? 0),
-    [doc, weekStart],
-  );
-
+  const week = weeks[weekStart] ?? makeEmptyWeek(rowCount);
   const dates = useMemo(() => datesForWeek(weekStart), [weekStart]);
 
-  /** Who currently occupies the block being edited — drives the ticked entry. */
-  const selectedCells = useMemo(
-    () => (editing ? cellsIn(week, editing.day, editing.range) : []),
-    [editing, week],
+  /** Pull the database's version of everything back into state. */
+  const reload = useCallback(async (forWeek: string) => {
+    const fresh = await reloadAction(forWeek);
+    setRowCount(fresh.rowCount);
+    setEmployees(fresh.employees);
+    setTimeOff(fresh.timeOff);
+    setRecurring(fresh.recurringTimeOff);
+    // Drop the rest of the cache: other weeks may have been touched too, and
+    // they will be re-read when navigated to.
+    setWeeks({ [forWeek]: fresh.week });
+  }, []);
+
+  /**
+   * Run a save. On failure the optimistic edit is thrown away and the week is
+   * re-read, so a rejected change never lingers on screen looking saved.
+   */
+  const save = useCallback(
+    async (description: string, action: () => Promise<void>) => {
+      try {
+        await action();
+      } catch (cause) {
+        console.error(`[scheduler] Could not ${description}:`, cause);
+        setError(`Couldn't ${description}. That change wasn't saved.`);
+        try {
+          await reload(weekStart);
+        } catch (reloadCause) {
+          console.error("[scheduler] Reload after a failed save also failed:", reloadCause);
+          setError(
+            `Couldn't ${description}, and reloading failed too. ` +
+              "Check your connection and refresh the page.",
+          );
+        }
+      }
+    },
+    [reload, weekStart],
   );
 
-  /** Apply a change to the currently-selected week. */
-  const updateWeek = useCallback(
-    (mutate: (current: WeekSchedule) => WeekSchedule) => {
-      updateDoc((current) => {
-        const existing = current.weeks[weekStart] ?? makeEmptyWeek(current.rowCount);
-        return { ...current, weeks: { ...current.weeks, [weekStart]: mutate(existing) } };
-      });
+  /**
+   * Move to a week, reading it from the database the first time it's needed —
+   * only the week the page opened on arrives with the page.
+   *
+   * `pendingWeek` tracks the most recent destination so a slow read for a week
+   * the owner has already navigated away from can't clear the wrong spinner or
+   * report a stale error.
+   */
+  const goToWeek = useCallback(
+    async (target: string) => {
+      setWeekStart(target);
+      setEditing(null);
+      if (weeks[target]) return;
+
+      pendingWeek.current = target;
+      setLoadingWeek(true);
+      try {
+        const loaded = await loadWeekAction(target, rowCount);
+        setWeeks((current) => ({ ...current, [target]: loaded }));
+      } catch (cause) {
+        console.error(`[scheduler] Could not load ${target}:`, cause);
+        if (pendingWeek.current === target) {
+          setError(`Couldn't load ${formatWeekRange(target)}.`);
+        }
+      } finally {
+        if (pendingWeek.current === target) setLoadingWeek(false);
+      }
     },
-    [weekStart],
+    [rowCount, weeks],
+  );
+
+  /** Apply a change to one week in the local cache. */
+  const patchWeek = useCallback(
+    (target: string, mutate: (current: WeekSchedule) => WeekSchedule) => {
+      setWeeks((current) => ({
+        ...current,
+        [target]: mutate(current[target] ?? makeEmptyWeek(rowCount)),
+      }));
+    },
+    [rowCount],
   );
 
   /** Assign (or clear, with `null`) every cell in a dragged block at once. */
   const setRange = useCallback(
     (day: DayKey, range: CellRange, employeeId: string | null) => {
-      updateWeek((current) => ({
+      patchWeek(weekStart, (current) => ({
         ...current,
         [day]: current[day].map((cells, rowIndex) =>
           rowIndex >= range.rowStart && rowIndex <= range.rowEnd
@@ -97,66 +215,79 @@ export function Scheduler() {
             : cells,
         ),
       }));
+      void save("save that shift", () => assignBlockAction(weekStart, day, range, employeeId));
     },
-    [updateWeek],
+    [patchWeek, save, weekStart],
   );
 
   const copyDay = useCallback(
     (from: DayKey, targets: DayKey[]) => {
-      updateWeek((current) => {
+      patchWeek(weekStart, (current) => {
         const source = current[from];
         const next = { ...current };
-        for (const target of targets) {
-          // Deep copy so the days don't share row arrays.
-          next[target] = source.map((row) => [...row]);
-        }
+        // Deep copy so the days don't share row arrays.
+        for (const target of targets) next[target] = source.map((row) => [...row]);
         return next;
       });
+      void save("copy that day", () => copyDayAction(weekStart, from, targets));
     },
-    [updateWeek],
+    [patchWeek, save, weekStart],
   );
 
-  const addEmployee = useCallback((name: string, group: ShiftGroup) => {
-    const employee: Employee = { id: crypto.randomUUID(), name, group };
-    updateDoc((current) => ({ ...current, employees: [...current.employees, employee] }));
-  }, []);
+  const addEmployee = useCallback(
+    (name: string, group: ShiftGroup) => {
+      void save("add that employee", async () => {
+        const employee = await addEmployeeAction(name, group);
+        setEmployees((current) => [...current, employee]);
+      });
+    },
+    [save],
+  );
 
-  const removeEmployee = useCallback((id: string) => {
-    updateDoc((current) => {
-      // Clear the person out of every week, not just the visible one, so no
-      // stale ids are left behind pointing at a deleted employee.
-      const weeks = Object.fromEntries(
-        Object.entries(current.weeks).map(([key, value]) => [
-          key,
-          Object.fromEntries(
-            DAY_KEYS.map((day) => [
-              day,
-              value[day].map((row) => row.map((cell) => (cell === id ? null : cell))),
-            ]),
-          ) as WeekSchedule,
-        ]),
+  const removeEmployee = useCallback(
+    (id: string) => {
+      setEmployees((current) => current.filter((employee) => employee.id !== id));
+      // Their shifts and time off cascade away in the database; clear the local
+      // copies too so nothing on screen points at somebody who is gone.
+      setTimeOff((current) => current.filter((request) => request.employeeId !== id));
+      setRecurring((current) => current.filter((entry) => entry.employeeId !== id));
+      setWeeks((current) =>
+        Object.fromEntries(
+          Object.entries(current).map(([key, value]) => [
+            key,
+            Object.fromEntries(
+              DAY_KEYS.map((day) => [
+                day,
+                value[day].map((row) => row.map((cell) => (cell === id ? null : cell))),
+              ]),
+            ) as WeekSchedule,
+          ]),
+        ),
       );
-      return {
-        ...current,
-        employees: current.employees.filter((employee) => employee.id !== id),
-        weeks,
-      };
-    });
-  }, []);
+      void save("remove that employee", () => removeEmployeeAction(id));
+    },
+    [save],
+  );
 
-  const changeRowCount = useCallback((delta: number) => {
-    updateDoc((current) => {
-      const rowCount = Math.max(MIN_ROW_COUNT, Math.min(MAX_ROW_COUNT, current.rowCount + delta));
-      if (rowCount === current.rowCount) return current;
-      const weeks = Object.fromEntries(
-        Object.entries(current.weeks).map(([key, value]) => [key, resizeWeek(value, rowCount)]),
+  const changeRowCount = useCallback(
+    (delta: number) => {
+      const next = Math.max(MIN_ROW_COUNT, Math.min(MAX_ROW_COUNT, rowCount + delta));
+      if (next === rowCount) return;
+      setRowCount(next);
+      setWeeks((current) =>
+        Object.fromEntries(
+          Object.entries(current).map(([key, value]) => [key, resizeWeek(value, next)]),
+        ),
       );
-      return { ...current, rowCount, weeks };
-    });
-  }, []);
+      void save("change the row count", async () => {
+        await setRowCountAction(next);
+      });
+    },
+    [rowCount, save],
+  );
 
   const shiftWeek = (deltaWeeks: number) => {
-    setWeekStart(toISODate(addDays(fromISODate(weekStart), deltaWeeks * 7)));
+    void goToWeek(toISODate(addDays(fromISODate(weekStart), deltaWeeks * 7)));
   };
 
   /**
@@ -164,13 +295,25 @@ export function Scheduler() {
    * there. Overwriting a week that already has shifts on it asks first — that
    * is somebody's schedule, and there is no undo.
    */
-  const copyWeekToNext = () => {
+  const copyWeekToNext = async () => {
     const target = toISODate(addDays(fromISODate(weekStart), 7));
-    const existing = doc?.weeks[target];
-    const occupied = existing
-      ? DAY_KEYS.some((day) => existing[day]?.some((row) => row.some((cell) => cell !== null)))
-      : false;
 
+    let existing = weeks[target];
+    if (!existing) {
+      // Has to be checked against the database, not just the cache — otherwise
+      // an unvisited week would look empty and get overwritten without asking.
+      try {
+        existing = await loadWeekAction(target, rowCount);
+      } catch (cause) {
+        console.error(`[scheduler] Could not check ${target} before copying:`, cause);
+        setError(`Couldn't check whether ${formatWeekRange(target)} is empty. Nothing was copied.`);
+        return;
+      }
+    }
+
+    const occupied = DAY_KEYS.some((day) =>
+      existing[day]?.some((row) => row.some((cell) => cell !== null)),
+    );
     if (
       occupied &&
       !confirm(
@@ -181,16 +324,83 @@ export function Scheduler() {
       return;
     }
 
-    updateDoc((current) => {
-      const source = current.weeks[weekStart] ?? makeEmptyWeek(current.rowCount);
-      // Deep copy, or the two weeks would share row arrays and edit together.
-      const copy = Object.fromEntries(
-        DAY_KEYS.map((day) => [day, (source[day] ?? []).map((row) => [...row])]),
-      ) as WeekSchedule;
-      return { ...current, weeks: { ...current.weeks, [target]: copy } };
-    });
+    const source = weeks[weekStart] ?? makeEmptyWeek(rowCount);
+    // Deep copy, or the two weeks would share row arrays and edit together.
+    const copy = Object.fromEntries(
+      DAY_KEYS.map((day) => [day, (source[day] ?? []).map((row) => [...row])]),
+    ) as WeekSchedule;
 
+    setWeeks((current) => ({ ...current, [target]: copy }));
     setWeekStart(target);
+    await save("copy the week", () => copyWeekAction(weekStart, target));
+  };
+
+  /* -------------------------------------------------------------- time off */
+
+  const addTimeOffRequest = useCallback(
+    (input: NewTimeOffRequest) => {
+      void save("add that request", async () => {
+        const request = await addTimeOffAction(input);
+        setTimeOff((current) => [...current, request]);
+      });
+    },
+    [save],
+  );
+
+  const setTimeOffStatus = useCallback(
+    (id: string, status: TimeOffStatus) => {
+      setTimeOff((current) =>
+        current.map((request) => (request.id === id ? { ...request, status } : request)),
+      );
+      void save("update that request", () => setTimeOffStatusAction(id, status));
+    },
+    [save],
+  );
+
+  const removeTimeOffRequest = useCallback(
+    (id: string) => {
+      setTimeOff((current) => current.filter((request) => request.id !== id));
+      void save("delete that request", () => removeTimeOffAction(id));
+    },
+    [save],
+  );
+
+  const addRecurringTimeOff = useCallback(
+    (input: NewRecurringTimeOff) => {
+      void save("add that recurring time off", async () => {
+        const entry = await addRecurringTimeOffAction(input);
+        // Adding a weekday somebody already has updates it in place rather than
+        // inserting a second row, so match on id instead of always appending.
+        setRecurring((current) =>
+          current.some((existing) => existing.id === entry.id)
+            ? current.map((existing) => (existing.id === entry.id ? entry : existing))
+            : [...current, entry],
+        );
+      });
+    },
+    [save],
+  );
+
+  const removeRecurringTimeOff = useCallback(
+    (id: string) => {
+      setRecurring((current) => current.filter((entry) => entry.id !== id));
+      void save("remove that recurring time off", () => removeRecurringTimeOffAction(id));
+    },
+    [save],
+  );
+
+  /* ---------------------------------------------------------------- export */
+
+  const handleExport = async (scope: ExportScope) => {
+    setExporting(true);
+    try {
+      await exportSchedulePdf({ week, employees, rowCount, weekStartISO: weekStart, scope });
+    } catch (cause) {
+      console.error("[scheduler] PDF export failed:", cause);
+      setError("The export didn't finish. Please try again.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   /**
@@ -211,32 +421,8 @@ export function Scheduler() {
     }
   };
 
-  const handleExport = async (scope: ExportScope) => {
-    if (!doc) return;
-    setExporting(true);
-    try {
-      await exportSchedulePdf({
-        week,
-        employees: doc.employees,
-        rowCount: doc.rowCount,
-        weekStartISO: weekStart,
-        scope,
-      });
-    } catch (error) {
-      console.error("[scheduler] PDF export failed:", error);
-      alert("Sorry — the export didn't finish. Please try again.");
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  if (!doc) {
-    return (
-      <div className="p-8 text-sm text-muted-foreground" role="status">
-        Loading schedule…
-      </div>
-    );
-  }
+  /** Selected cells drive the ticked entry in the editor. */
+  const selectedCells = editing ? cellsIn(week, editing.day, editing.range) : [];
 
   return (
     <div className="flex min-h-screen flex-col bg-muted">
@@ -265,7 +451,11 @@ export function Scheduler() {
                 aria-label={`Week of ${formatWeekRange(weekStart)} — pick a different week`}
                 className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm font-semibold whitespace-nowrap hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
               >
-                <CalendarDays className="size-3.5 text-muted-foreground" />
+                {loadingWeek ? (
+                  <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+                ) : (
+                  <CalendarDays className="size-3.5 text-muted-foreground" />
+                )}
                 {formatWeekRange(weekStart)}
               </button>
               {/* The native picker itself: any day picked snaps to its Monday,
@@ -276,7 +466,7 @@ export function Scheduler() {
                 defaultValue={weekStart}
                 onChange={(event) => {
                   if (!event.target.value) return;
-                  setWeekStart(toISODate(mondayOf(fromISODate(event.target.value))));
+                  void goToWeek(toISODate(mondayOf(fromISODate(event.target.value))));
                 }}
                 tabIndex={-1}
                 aria-hidden
@@ -311,27 +501,23 @@ export function Scheduler() {
               size="icon-sm"
               aria-label="Remove a row"
               onClick={() => changeRowCount(-1)}
-              disabled={doc.rowCount <= MIN_ROW_COUNT}
+              disabled={rowCount <= MIN_ROW_COUNT}
             >
               <Minus />
             </Button>
-            <span className="w-5 text-center text-sm font-semibold">{doc.rowCount}</span>
+            <span className="w-5 text-center text-sm font-semibold">{rowCount}</span>
             <Button
               variant="ghost"
               size="icon-sm"
               aria-label="Add a row"
               onClick={() => changeRowCount(1)}
-              disabled={doc.rowCount >= MAX_ROW_COUNT}
+              disabled={rowCount >= MAX_ROW_COUNT}
             >
               <Plus />
             </Button>
           </div>
 
-          <ExportMenu
-            employees={doc.employees}
-            exporting={exporting}
-            onExport={handleExport}
-          />
+          <ExportMenu employees={employees} exporting={exporting} onExport={handleExport} />
 
           <form action={logout}>
             <Button type="submit" variant="ghost" size="sm">
@@ -340,15 +526,48 @@ export function Scheduler() {
             </Button>
           </form>
         </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive sm:px-6"
+          >
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+            <p className="flex-1">{error}</p>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Dismiss"
+              onClick={() => setError(null)}
+            >
+              <X />
+            </Button>
+          </div>
+        )}
       </header>
 
       <div className="flex flex-1 flex-col gap-4 p-4 sm:px-6 lg:flex-row-reverse lg:items-start">
-        <EmployeePanel
-          employees={doc.employees}
-          week={week}
-          onAdd={addEmployee}
-          onRemove={removeEmployee}
-        />
+        {/* Sidebar: employees, then time off to its right once there's room. */}
+        <div className="flex w-full shrink-0 flex-col gap-4 lg:w-72 xl:w-[33rem] xl:flex-row xl:items-start">
+          <EmployeePanel
+            employees={employees}
+            week={week}
+            onAdd={addEmployee}
+            onRemove={removeEmployee}
+          />
+
+          <TimeOffPanel
+            employees={employees}
+            requests={timeOff}
+            recurring={recurring}
+            weekStart={weekStart}
+            onAddRequest={addTimeOffRequest}
+            onSetRequestStatus={setTimeOffStatus}
+            onRemoveRequest={removeTimeOffRequest}
+            onAddRecurring={addRecurringTimeOff}
+            onRemoveRecurring={removeRecurringTimeOff}
+          />
+        </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           {DAY_KEYS.map((day) => (
@@ -356,9 +575,9 @@ export function Scheduler() {
               key={day}
               day={day}
               date={dates[day]}
-              schedule={week[day] ?? makeEmptyDay(doc.rowCount)}
-              rowCount={doc.rowCount}
-              employees={doc.employees}
+              schedule={week[day] ?? makeEmptyDay(rowCount)}
+              rowCount={rowCount}
+              employees={employees}
               selection={editing?.day === day ? editing.range : null}
               onEditRange={(range, el) => setEditing({ day, range, el })}
               onCopyToDays={copyDay}
@@ -370,7 +589,7 @@ export function Scheduler() {
       {editing && (
         <CellEditor
           anchorEl={editing.el}
-          employees={doc.employees}
+          employees={employees}
           cellCount={selectedCells.length}
           // `undefined` when the block holds a mix of people — nothing is ticked.
           selectedId={

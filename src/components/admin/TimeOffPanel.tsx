@@ -1,0 +1,471 @@
+"use client";
+
+import { useState } from "react";
+import { CalendarOff, Check, Plus, Repeat, RotateCcw, Trash2, X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  DAY_KEYS,
+  DAY_LABELS,
+  TIME_OFF_STATUS_LABELS,
+  compareEmployees,
+  compareTimeOff,
+  coversWeek,
+  formatDateRange,
+  requestDayCount,
+  toISODate,
+  type DayKey,
+  type Employee,
+  type RecurringTimeOff,
+  type TimeOffRequest,
+  type TimeOffStatus,
+} from "@/lib/schedule";
+
+const STATUS_BADGE: Record<TimeOffStatus, string> = {
+  pending: "bg-amber-100 text-amber-900",
+  approved: "bg-emerald-100 text-emerald-900",
+  denied: "bg-rose-100 text-rose-900",
+};
+
+const FIELD =
+  "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
+export type NewTimeOffRequest = {
+  employeeId: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+};
+
+export type NewRecurringTimeOff = {
+  employeeId: string;
+  day: DayKey;
+  reason: string;
+};
+
+type Props = {
+  employees: Employee[];
+  requests: TimeOffRequest[];
+  recurring: RecurringTimeOff[];
+  /** Monday of the week on screen, so overlapping requests can be flagged. */
+  weekStart: string;
+  onAddRequest: (input: NewTimeOffRequest) => void;
+  onSetRequestStatus: (id: string, status: TimeOffStatus) => void;
+  onRemoveRequest: (id: string) => void;
+  onAddRecurring: (input: NewRecurringTimeOff) => void;
+  onRemoveRecurring: (id: string) => void;
+};
+
+/** Section heading shared by both halves of the card. */
+function SectionHeader({
+  icon,
+  title,
+  count,
+  open,
+  onToggle,
+  disabled,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <h3 className="flex flex-1 items-center gap-1.5 text-[0.65rem] font-bold tracking-widest text-muted-foreground uppercase">
+        {icon}
+        {title}
+        <span className="font-semibold tracking-normal normal-case">({count})</span>
+      </h3>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={open ? `Cancel adding to ${title}` : `Add to ${title}`}
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={onToggle}
+      >
+        {open ? <X /> : <Plus />}
+      </Button>
+    </div>
+  );
+}
+
+export function TimeOffPanel({
+  employees,
+  requests,
+  recurring,
+  weekStart,
+  onAddRequest,
+  onSetRequestStatus,
+  onRemoveRequest,
+  onAddRecurring,
+  onRemoveRecurring,
+}: Props) {
+  const today = toISODate(new Date());
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [recurringOpen, setRecurringOpen] = useState(false);
+
+  const [reqEmployee, setReqEmployee] = useState("");
+  const [reqStart, setReqStart] = useState(today);
+  const [reqEnd, setReqEnd] = useState(today);
+  const [reqReason, setReqReason] = useState("");
+
+  const [recEmployee, setRecEmployee] = useState("");
+  const [recDay, setRecDay] = useState<DayKey>("monday");
+  const [recReason, setRecReason] = useState("");
+
+  const sortedEmployees = [...employees].sort(compareEmployees);
+  const nameById = new Map(employees.map((employee) => [employee.id, employee.name]));
+  const noStaff = employees.length === 0;
+
+  const sortedRequests = [...requests].sort(compareTimeOff);
+  const sortedRecurring = [...recurring].sort(
+    (a, b) =>
+      DAY_KEYS.indexOf(a.day) - DAY_KEYS.indexOf(b.day) ||
+      (nameById.get(a.employeeId) ?? "").localeCompare(nameById.get(b.employeeId) ?? ""),
+  );
+  const pendingCount = requests.filter((request) => request.status === "pending").length;
+
+  const submitRequest = () => {
+    if (!reqEmployee) return;
+    // A backwards range is almost always a mis-click on the second picker —
+    // treat it as a single day rather than silently storing nothing.
+    const end = reqEnd < reqStart ? reqStart : reqEnd;
+    onAddRequest({
+      employeeId: reqEmployee,
+      startDate: reqStart,
+      endDate: end,
+      reason: reqReason.trim(),
+    });
+    setReqEmployee("");
+    setReqStart(today);
+    setReqEnd(today);
+    setReqReason("");
+    setRequestOpen(false);
+  };
+
+  const submitRecurring = () => {
+    if (!recEmployee) return;
+    onAddRecurring({ employeeId: recEmployee, day: recDay, reason: recReason.trim() });
+    setRecEmployee("");
+    setRecReason("");
+    setRecurringOpen(false);
+  };
+
+  return (
+    <aside className="flex w-full flex-col rounded-xl border border-border bg-background shadow-sm xl:min-w-0 xl:flex-1">
+      <header className="border-b border-border px-4 py-3">
+        <h2 className="flex items-center gap-2 font-heading text-base font-bold">
+          <CalendarOff className="size-4 text-brand" />
+          Time off
+        </h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {pendingCount > 0
+            ? `${pendingCount} awaiting a decision`
+            : `${requests.length + recurring.length} on record`}
+        </p>
+      </header>
+
+      {noStaff && (
+        <p className="border-b border-border px-4 py-3 text-xs text-muted-foreground">
+          Add an employee first — time off is always tied to a person.
+        </p>
+      )}
+
+      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        {/* ------------------------------------------------------ requests */}
+        <section>
+          <SectionHeader
+            icon={<CalendarOff className="size-3" />}
+            title="Requests"
+            count={requests.length}
+            open={requestOpen}
+            disabled={noStaff}
+            onToggle={() => setRequestOpen((open) => !open)}
+          />
+
+          {requestOpen && (
+            <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/40 p-2.5">
+              <label htmlFor="request-employee" className="sr-only">
+                Employee
+              </label>
+              <select
+                id="request-employee"
+                value={reqEmployee}
+                onChange={(event) => setReqEmployee(event.target.value)}
+                className={FIELD}
+              >
+                <option value="">Who is asking?</option>
+                {sortedEmployees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Stacked, not side by side: the card is ~250px wide once it sits
+                  beside the employee list, which truncates a native date input. */}
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="request-start"
+                  className="w-9 shrink-0 text-[0.65rem] font-semibold tracking-wide text-muted-foreground uppercase"
+                >
+                  From
+                </label>
+                <input
+                  id="request-start"
+                  type="date"
+                  value={reqStart}
+                  onChange={(event) => {
+                    const value = event.target.value || today;
+                    setReqStart(value);
+                    // Drag the end along so the range never inverts as you type.
+                    setReqEnd((end) => (end < value ? value : end));
+                  }}
+                  className={FIELD}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="request-end"
+                  className="w-9 shrink-0 text-[0.65rem] font-semibold tracking-wide text-muted-foreground uppercase"
+                >
+                  To
+                </label>
+                <input
+                  id="request-end"
+                  type="date"
+                  value={reqEnd}
+                  min={reqStart}
+                  onChange={(event) => setReqEnd(event.target.value || reqStart)}
+                  className={FIELD}
+                />
+              </div>
+
+              <label htmlFor="request-reason" className="sr-only">
+                Reason
+              </label>
+              <input
+                id="request-reason"
+                value={reqReason}
+                onChange={(event) => setReqReason(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitRequest();
+                  }
+                }}
+                placeholder="Reason (optional)"
+                className={FIELD}
+              />
+
+              <Button onClick={submitRequest} disabled={!reqEmployee} className="w-full">
+                <Plus data-icon="inline-start" />
+                Add request
+              </Button>
+            </div>
+          )}
+
+          {sortedRequests.length === 0 ? (
+            <p className="mt-1.5 text-xs text-muted-foreground/70">No requests yet</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {sortedRequests.map((request) => {
+                const days = requestDayCount(request);
+                return (
+                  <li
+                    key={request.id}
+                    className="rounded-lg border border-border px-2.5 py-2 text-sm"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="min-w-0 flex-1 truncate font-semibold">
+                        {nameById.get(request.employeeId) ?? "Removed employee"}
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[0.65rem] font-bold ${
+                          STATUS_BADGE[request.status]
+                        }`}
+                      >
+                        {TIME_OFF_STATUS_LABELS[request.status]}
+                      </span>
+                    </div>
+
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {formatDateRange(request.startDate, request.endDate)}
+                      <span className="mx-1">·</span>
+                      {days} {days === 1 ? "day" : "days"}
+                      {/* nowrap so the chip moves to the next line whole rather
+                          than splitting its own background across two lines. */}
+                      {coversWeek(request, weekStart) && (
+                        <span className="ml-1.5 inline-block rounded bg-brand/15 px-1.5 py-0.5 font-semibold whitespace-nowrap text-brand">
+                          This week
+                        </span>
+                      )}
+                    </p>
+
+                    {request.reason && (
+                      <p className="mt-1 text-xs break-words text-foreground/80">
+                        {request.reason}
+                      </p>
+                    )}
+
+                    <div className="mt-1.5 flex items-center gap-1">
+                      {request.status === "pending" ? (
+                        <>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            onClick={() => onSetRequestStatus(request.id, "approved")}
+                          >
+                            <Check data-icon="inline-start" className="text-emerald-600" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            onClick={() => onSetRequestStatus(request.id, "denied")}
+                          >
+                            <X data-icon="inline-start" className="text-destructive" />
+                            Deny
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => onSetRequestStatus(request.id, "pending")}
+                        >
+                          <RotateCcw data-icon="inline-start" />
+                          Reopen
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`Delete request for ${
+                          nameById.get(request.employeeId) ?? "removed employee"
+                        }`}
+                        onClick={() => onRemoveRequest(request.id)}
+                        className="ml-auto"
+                      >
+                        <Trash2 className="text-destructive" />
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        {/* ----------------------------------------------------- recurring */}
+        <section className="border-t border-border pt-4">
+          <SectionHeader
+            icon={<Repeat className="size-3" />}
+            title="Recurring"
+            count={recurring.length}
+            open={recurringOpen}
+            disabled={noStaff}
+            onToggle={() => setRecurringOpen((open) => !open)}
+          />
+
+          {recurringOpen && (
+            <div className="mt-2 space-y-2 rounded-lg border border-border bg-muted/40 p-2.5">
+              <label htmlFor="recurring-employee" className="sr-only">
+                Employee
+              </label>
+              <select
+                id="recurring-employee"
+                value={recEmployee}
+                onChange={(event) => setRecEmployee(event.target.value)}
+                className={FIELD}
+              >
+                <option value="">Who is unavailable?</option>
+                {sortedEmployees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name}
+                  </option>
+                ))}
+              </select>
+
+              <label htmlFor="recurring-day" className="sr-only">
+                Day of the week
+              </label>
+              <select
+                id="recurring-day"
+                value={recDay}
+                onChange={(event) => setRecDay(event.target.value as DayKey)}
+                className={FIELD}
+              >
+                {DAY_KEYS.map((day) => (
+                  <option key={day} value={day}>
+                    Every {DAY_LABELS[day]}
+                  </option>
+                ))}
+              </select>
+
+              <label htmlFor="recurring-reason" className="sr-only">
+                Reason
+              </label>
+              <input
+                id="recurring-reason"
+                value={recReason}
+                onChange={(event) => setRecReason(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitRecurring();
+                  }
+                }}
+                placeholder="Reason (optional)"
+                className={FIELD}
+              />
+
+              <Button onClick={submitRecurring} disabled={!recEmployee} className="w-full">
+                <Plus data-icon="inline-start" />
+                Add recurring
+              </Button>
+            </div>
+          )}
+
+          {sortedRecurring.length === 0 ? (
+            <p className="mt-1.5 text-xs text-muted-foreground/70">Nothing recurring yet</p>
+          ) : (
+            <ul className="mt-2 space-y-0.5">
+              {sortedRecurring.map((entry) => {
+                const name = nameById.get(entry.employeeId) ?? "Removed employee";
+                return (
+                  <li
+                    key={entry.id}
+                    className="group flex items-start gap-2 rounded-md px-2 py-1 hover:bg-muted"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm">
+                        <span className="font-semibold">{name}</span>
+                        <span className="text-muted-foreground"> · every {DAY_LABELS[entry.day]}</span>
+                      </p>
+                      {entry.reason && (
+                        <p className="text-xs break-words text-muted-foreground">{entry.reason}</p>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={`Remove ${name}'s recurring ${DAY_LABELS[entry.day]} time off`}
+                      onClick={() => onRemoveRecurring(entry.id)}
+                    >
+                      <Trash2 className="text-destructive" />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+    </aside>
+  );
+}

@@ -43,8 +43,9 @@ export function EmployeePanel({ employees, week, onAdd, onRemove }: Props) {
     setName("");
   };
 
+  // Width comes from the sidebar wrapper — this sits beside the time-off card.
   return (
-    <aside className="flex w-full shrink-0 flex-col rounded-xl border border-border bg-background shadow-sm lg:w-72">
+    <aside className="flex w-full flex-col rounded-xl border border-border bg-background shadow-sm xl:min-w-0 xl:flex-1">
       <header className="border-b border-border px-4 py-3">
         <h2 className="flex items-center gap-2 font-heading text-base font-bold">
           <Users className="size-4 text-brand" />

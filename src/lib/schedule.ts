@@ -20,6 +20,72 @@ export type Employee = {
   group: ShiftGroup;
 };
 
+/* ----------------------------------------------------------------- time off */
+
+export const TIME_OFF_STATUSES = ["pending", "approved", "denied"] as const;
+export type TimeOffStatus = (typeof TIME_OFF_STATUSES)[number];
+
+export const TIME_OFF_STATUS_LABELS: Record<TimeOffStatus, string> = {
+  pending: "Pending",
+  approved: "Approved",
+  denied: "Denied",
+};
+
+/** A one-off request to be away. `startDate`–`endDate` are inclusive ISO dates. */
+export type TimeOffRequest = {
+  id: string;
+  employeeId: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: TimeOffStatus;
+  /** ISO date the request was entered, so the list can order by age. */
+  requestedAt: string;
+};
+
+/**
+ * A standing weekly conflict — "never schedule me on Tuesdays". Unlike a
+ * request there is nothing to approve: it is already a fact about the week.
+ */
+export type RecurringTimeOff = {
+  id: string;
+  employeeId: string;
+  day: DayKey;
+  reason: string;
+};
+
+/** True when `dateISO` falls inside the request. ISO dates sort chronologically. */
+export function coversDate(request: TimeOffRequest, dateISO: string): boolean {
+  return request.startDate <= dateISO && dateISO <= request.endDate;
+}
+
+/** True when the request touches any day of the week starting `weekStartISO`. */
+export function coversWeek(request: TimeOffRequest, weekStartISO: string): boolean {
+  const weekEndISO = toISODate(addDays(fromISODate(weekStartISO), 6));
+  // Two inclusive ranges overlap unless one ends before the other begins.
+  return request.startDate <= weekEndISO && weekStartISO <= request.endDate;
+}
+
+/** Whole days covered, counting both ends — a single-day request is 1. */
+export function requestDayCount(request: TimeOffRequest): number {
+  const start = fromISODate(request.startDate);
+  const end = fromISODate(request.endDate);
+  const days = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  return Math.max(1, days);
+}
+
+/**
+ * Pending first (they are the ones still waiting on an answer), then by start
+ * date, so the next thing to deal with is always at the top.
+ */
+export function compareTimeOff(a: TimeOffRequest, b: TimeOffRequest): number {
+  if (a.status !== b.status) {
+    if (a.status === "pending") return -1;
+    if (b.status === "pending") return 1;
+  }
+  return a.startDate.localeCompare(b.startDate);
+}
+
 /* -------------------------------------------------------------------- hours */
 
 /** First hour block on the grid (8 AM). */
@@ -65,22 +131,17 @@ export function formatHourLong(hour: number): string {
   return `${to12Hour(hour)}:00 ${period}`;
 }
 
-/* ------------------------------------------------------------------ the doc */
+/* ------------------------------------------------------------------ the grid */
 
 /** A day's assignments: `day[rowIndex][hourIndex]` is an employee id or null. */
 export type DaySchedule = (string | null)[][];
 export type WeekSchedule = Record<DayKey, DaySchedule>;
 
-export type ScheduleDoc = {
-  version: 1;
-  /** Rows (concurrent positions) shown per day. */
-  rowCount: number;
-  employees: Employee[];
-  /** Keyed by the ISO date of that week's Monday. */
-  weeks: Record<string, WeekSchedule>;
-};
-
-export const DEFAULT_ROW_COUNT = 6;
+/**
+ * Rows (concurrent positions) shown per day. The starting value lives in the
+ * database as the default on `schedule_settings.row_count`; these bounds are
+ * enforced both here and by a check constraint on that column.
+ */
 export const MIN_ROW_COUNT = 1;
 export const MAX_ROW_COUNT = 20;
 
@@ -94,7 +155,7 @@ export function makeEmptyWeek(rowCount: number): WeekSchedule {
 
 /**
  * Grow or shrink a week to `rowCount` rows, keeping existing assignments.
- * Also repairs weeks loaded from storage that were saved at a different size.
+ * Rows past the new count fall off, matching what the database prunes.
  */
 export function resizeWeek(week: WeekSchedule, rowCount: number): WeekSchedule {
   return Object.fromEntries(
@@ -109,9 +170,6 @@ export function resizeWeek(week: WeekSchedule, rowCount: number): WeekSchedule {
   ) as WeekSchedule;
 }
 
-export function emptyDoc(): ScheduleDoc {
-  return { version: 1, rowCount: DEFAULT_ROW_COUNT, employees: [], weeks: {} };
-}
 
 /* -------------------------------------------------------------------- dates */
 
@@ -165,6 +223,17 @@ export function formatWeekRange(weekStartISO: string): string {
   return sameYear
     ? `${start} – ${end}, ${sunday.getFullYear()}`
     : `${start}, ${monday.getFullYear()} – ${end}, ${sunday.getFullYear()}`;
+}
+
+/** "Aug 3, 2026", or "Aug 3 – Aug 5, 2026" when the two dates differ. */
+export function formatDateRange(startISO: string, endISO: string): string {
+  const start = fromISODate(startISO);
+  const end = fromISODate(endISO);
+  if (startISO === endISO) return `${formatShortDate(start)}, ${start.getFullYear()}`;
+  return start.getFullYear() === end.getFullYear()
+    ? `${formatShortDate(start)} – ${formatShortDate(end)}, ${end.getFullYear()}`
+    : `${formatShortDate(start)}, ${start.getFullYear()} – ` +
+        `${formatShortDate(end)}, ${end.getFullYear()}`;
 }
 
 /* ------------------------------------------------------------------- shifts */
