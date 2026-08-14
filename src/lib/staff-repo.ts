@@ -52,11 +52,23 @@ export async function generateUniqueLoginCode(): Promise<string> {
   return available[Math.floor(Math.random() * available.length)];
 }
 
+/** Raised when the chosen code already belongs to somebody else. */
+export class LoginCodeTakenError extends Error {
+  constructor() {
+    super("Another employee already uses that code. Pick a different one.");
+    this.name = "LoginCodeTakenError";
+  }
+}
+
 export async function setLoginCode(employeeId: string, code: string): Promise<void> {
   const { error } = await getDb()
     .from("employees")
     .update({ login_code: code })
     .eq("id", employeeId);
+
+  // 23505 is Postgres' unique violation. Codes have to identify one person, so
+  // a clash is a normal thing for the owner to hit and fix, not a crash.
+  if (error?.code === "23505") throw new LoginCodeTakenError();
   if (error) fail("setting a login code", error);
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, Plus, RefreshCw, Trash2, Users } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,16 +26,9 @@ type Props = {
   week: WeekSchedule;
   onAdd: (name: string, group: ShiftGroup) => void;
   onRemove: (id: string) => void;
-  onRegenerateCode: (id: string) => void;
 };
 
-export function EmployeePanel({
-  employees,
-  week,
-  onAdd,
-  onRemove,
-  onRegenerateCode,
-}: Props) {
+export function EmployeePanel({ employees, week, onAdd, onRemove }: Props) {
   const [name, setName] = useState("");
   const [group, setGroup] = useState<ShiftGroup>("morning");
   const grouped = employeesByGroup(employees);
@@ -119,46 +112,26 @@ export function EmployeePanel({
                   return (
                     <li
                       key={employee.id}
-                      className="group rounded-md px-2 py-1 text-sm hover:bg-muted"
+                      className="group flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="min-w-0 flex-1 truncate">{employee.name}</span>
-                        <span
-                          title={`${hours} scheduled ${hours === 1 ? "hour" : "hours"} this week`}
-                          className={`shrink-0 text-xs font-semibold tabular-nums ${
-                            hours > 0 ? "text-muted-foreground" : "text-muted-foreground/50"
-                          }`}
-                        >
-                          {hours}h
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label={`Remove ${employee.name}`}
-                          onClick={() => onRemove(employee.id)}
-                        >
-                          <Trash2 className="text-destructive" />
-                        </Button>
-                      </div>
-
-                      {/* The code this person types in at /staff. Shown so it can
-                          be read out to them; the refresh issues a new one. */}
-                      <div className="flex items-center gap-1.5">
-                        <KeyRound className="size-3 shrink-0 text-muted-foreground/60" />
-                        <span className="font-mono text-xs tracking-[0.2em] text-muted-foreground">
-                          {employee.loginCode ?? "— — — —"}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label={`Issue a new sign-in code for ${employee.name}`}
-                          title="Issue a new code"
-                          onClick={() => onRegenerateCode(employee.id)}
-                          className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                        >
-                          <RefreshCw />
-                        </Button>
-                      </div>
+                      <span className="min-w-0 flex-1 truncate">{employee.name}</span>
+                      <span
+                        title={`${hours} scheduled ${hours === 1 ? "hour" : "hours"} this week`}
+                        className={`shrink-0 text-xs font-semibold tabular-nums ${
+                          hours > 0 ? "text-muted-foreground" : "text-muted-foreground/50"
+                        }`}
+                      >
+                        {hours}h
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`Remove ${employee.name}`}
+                        onClick={() => onRemove(employee.id)}
+                        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                      >
+                        <Trash2 className="text-destructive" />
+                      </Button>
                     </li>
                   );
                 })}

@@ -29,13 +29,7 @@ const employees = [
 describe("EmployeePanel weekly hours", () => {
   it("shows each person's total for the week on screen", () => {
     render(
-      <EmployeePanel
-        employees={employees}
-        week={buildWeek()}
-        onAdd={() => {}}
-        onRemove={() => {}}
-        onRegenerateCode={() => {}}
-      />,
+      <EmployeePanel employees={employees} week={buildWeek()} onAdd={() => {}} onRemove={() => {}} />,
     );
 
     const row = (name: string) => screen.getByText(name).closest("li")!;

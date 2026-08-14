@@ -127,10 +127,18 @@ export async function addEmployeeAction(name: string, group: ShiftGroup): Promis
   );
 }
 
-/** Issue a fresh code — used when one is forgotten, or shared too widely. */
+/** Issue a fresh random code — used when one is forgotten, or shared too widely. */
 export async function regenerateLoginCodeAction(employeeId: string): Promise<string> {
   await requireAdmin();
   const code = await staff.generateUniqueLoginCode();
+  await staff.setLoginCode(assertUuid(employeeId, "Employee"), code);
+  return code;
+}
+
+/** Set a specific sign-in code, chosen by the owner in Staff management. */
+export async function setLoginCodeAction(employeeId: string, code: string): Promise<string> {
+  await requireAdmin();
+  if (!/^[0-9]{4}$/.test(code)) throw new Error("A code has to be exactly four digits.");
   await staff.setLoginCode(assertUuid(employeeId, "Employee"), code);
   return code;
 }

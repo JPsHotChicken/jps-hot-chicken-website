@@ -8,6 +8,7 @@ import {
   CopyPlus,
   LoaderCircle,
   LogOut,
+  Menu,
   Minus,
   Plus,
   TriangleAlert,
@@ -31,6 +32,7 @@ import {
   removeEmployeeAction,
   removeRecurringTimeOffAction,
   removeTimeOffAction,
+  setLoginCodeAction,
   setRowCountAction,
   setTimeOffStatusAction,
 } from "@/app/admin/schedule-actions";
@@ -58,9 +60,11 @@ import {
 } from "@/lib/schedule";
 import { CellEditor } from "./CellEditor";
 import { DayGrid, type CellRange } from "./DayGrid";
+import { AdminDrawer, type AdminView } from "./AdminDrawer";
 import { EmployeePanel } from "./EmployeePanel";
 import { ExportMenu } from "./ExportMenu";
 import { GoLiveButton, type PublishState } from "./GoLiveButton";
+import { StaffManagement } from "./StaffManagement";
 import {
   TimeOffPanel,
   type NewRecurringTimeOff,
@@ -126,6 +130,8 @@ export function Scheduler({
   const [error, setError] = useState<string | null>(null);
   const [publishState, setPublishState] = useState(initialPublishState);
   const [publishing, setPublishing] = useState(false);
+  const [view, setView] = useState<AdminView>("scheduler");
+  const [menuOpen, setMenuOpen] = useState(false);
   const weekPickerRef = useRef<HTMLInputElement>(null);
   const pendingWeek = useRef(initialWeekStart);
 
@@ -302,18 +308,24 @@ export function Scheduler({
     [markDirty, save],
   );
 
-  /** Issue a fresh sign-in code, e.g. when somebody forgets theirs. */
-  const regenerateCode = useCallback(
-    (id: string) => {
-      void save("issue a new code", async () => {
-        const loginCode = await regenerateLoginCodeAction(id);
-        setEmployees((current) =>
-          current.map((employee) => (employee.id === id ? { ...employee, loginCode } : employee)),
-        );
-      });
-    },
-    [save],
-  );
+  /**
+   * Set an employee's sign-in code. Errors are thrown rather than swallowed into
+   * the banner: Staff management shows them against the row they belong to, so
+   * "that code is taken" appears next to the person it's about.
+   */
+  const saveLoginCode = useCallback(async (id: string, code: string) => {
+    const loginCode = await setLoginCodeAction(id, code);
+    setEmployees((current) =>
+      current.map((employee) => (employee.id === id ? { ...employee, loginCode } : employee)),
+    );
+  }, []);
+
+  const randomLoginCode = useCallback(async (id: string) => {
+    const loginCode = await regenerateLoginCodeAction(id);
+    setEmployees((current) =>
+      current.map((employee) => (employee.id === id ? { ...employee, loginCode } : employee)),
+    );
+  }, []);
 
   const changeRowCount = useCallback(
     (delta: number) => {
@@ -492,11 +504,29 @@ export function Scheduler({
       {/* Toolbar */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(true)}
+          >
+            <Menu />
+          </Button>
+
           <div className="mr-auto">
-            <h1 className="font-heading text-lg font-bold tracking-tight">Schedule maker</h1>
-            <p className="text-xs text-muted-foreground">Monday – Sunday</p>
+            <h1 className="font-heading text-lg font-bold tracking-tight">
+              {view === "scheduler" ? "Schedule maker" : "Staff management"}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {view === "scheduler" ? "Monday – Sunday" : "Sign-in codes"}
+            </p>
           </div>
 
+          {/* Everything from here to Sign out is about building a week, so it
+              only belongs on the scheduler. */}
+          {view === "scheduler" && (
+            <>
           {/* Week navigation — the control shows the whole week, not one date. */}
           <div className="flex items-center gap-1 rounded-lg border border-border p-1">
             <Button
@@ -583,6 +613,8 @@ export function Scheduler({
           <ExportMenu employees={employees} exporting={exporting} onExport={handleExport} />
 
           <GoLiveButton state={publishState} publishing={publishing} onPublish={publish} />
+            </>
+          )}
 
           <form action={logout}>
             <Button type="submit" variant="ghost" size="sm">
@@ -611,6 +643,23 @@ export function Scheduler({
         )}
       </header>
 
+      <AdminDrawer
+        open={menuOpen}
+        view={view}
+        onOpenChange={setMenuOpen}
+        onSelect={(next) => {
+          setView(next);
+          setEditing(null);
+        }}
+      />
+
+      {view === "staff" ? (
+        <StaffManagement
+          employees={employees}
+          onSaveCode={saveLoginCode}
+          onRandomCode={randomLoginCode}
+        />
+      ) : (
       <div className="flex flex-1 flex-col gap-4 p-4 sm:px-6 lg:flex-row-reverse lg:items-start">
         {/* Sidebar: employees, then time off to its right once there's room. */}
         <div className="flex w-full shrink-0 flex-col gap-4 lg:w-72 xl:w-[33rem] xl:flex-row xl:items-start">
@@ -619,7 +668,6 @@ export function Scheduler({
             week={week}
             onAdd={addEmployee}
             onRemove={removeEmployee}
-            onRegenerateCode={regenerateCode}
           />
 
           <TimeOffPanel
@@ -651,8 +699,9 @@ export function Scheduler({
           ))}
         </div>
       </div>
+      )}
 
-      {editing && (
+      {editing && view === "scheduler" && (
         <CellEditor
           anchorEl={editing.el}
           employees={employees}
