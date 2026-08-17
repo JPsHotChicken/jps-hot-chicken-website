@@ -72,8 +72,8 @@ type Column = {
  *
  * Hourly pay sits beside the hours it goes with, so wages read across in one
  * movement: this many hours, at this rate. It is also the one figure here that
- * is not part of the payout — it comes from the staff record and takes no part
- * in the split — which is a second reason to keep it left of the money columns.
+ * is not part of the payout — it is typed on the sheet and takes no part in the
+ * split — which is a second reason to keep it left of the money columns.
  *
  * Tips and bonuses are the payout, and there are only two of them: how a bonus
  * was arrived at — a share of the pool, an individual award, or both — is a
@@ -574,10 +574,10 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
       [
         person.name,
         formatHours(share.hours),
-        // A rate nobody has set, and a clocked name with no staff record behind
-        // it, both come through as null — and a dash is the honest answer to
-        // both. Printing $0.00 would say they work for nothing.
-        typeof person.hourlyPay === "number" ? money(person.hourlyPay) : "—",
+        // A wage nobody has typed into the sheet comes through as null, and a
+        // dash is the honest answer to it. Printing $0.00 would say they work
+        // for nothing.
+        share.wage === null ? "—" : money(share.wage),
         money(share.tipShare),
         money(share.bonuses),
       ],

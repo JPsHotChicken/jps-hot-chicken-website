@@ -72,14 +72,40 @@ function toNumber(text: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/**
+ * A typed-in hourly wage, or null where there isn't one.
+ *
+ * Unlike the other fields an empty box is not a zero here: nobody works for
+ * nothing, so a wage nobody has filled in has to stay unknown all the way to
+ * the PDF, which prints a dash for it rather than $0.00.
+ */
+function toWage(text: string): number | null {
+  const cleaned = text.replace(/[$,\s]/g, "");
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 /** How a person starts out: being paid, at the clock's hours, with no bonus. */
-const freshRow = (): RowState => ({ included: true, hours: null, extra: "" });
+const freshRow = (): RowState => ({ included: true, hours: null, extra: "", wage: "" });
 
 /** The sheet this browser was last working on. */
 function readDraft(): Draft {
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
-    return saved ? { ...EMPTY, ...(JSON.parse(saved) as Draft) } : EMPTY;
+    if (!saved) return EMPTY;
+
+    const draft = { ...EMPTY, ...(JSON.parse(saved) as Draft) };
+    // A sheet saved before wages were typed on it has rows with no wage field,
+    // and an input handed `undefined` stops being editable at all. Filling the
+    // gaps in on the way out of storage costs nothing and means a draft left
+    // open over the change still opens.
+    return {
+      ...draft,
+      rows: Object.fromEntries(
+        Object.entries(draft.rows).map(([id, row]) => [id, { ...freshRow(), ...row }]),
+      ),
+    };
   } catch {
     // A corrupted draft is not worth a broken page; start clean.
     return EMPTY;
@@ -166,9 +192,11 @@ function PayoutEditor() {
    *
    * The imported people are replaced rather than added to — a second import is
    * a corrected file or a new week, not a second restaurant. Anyone hand-added
-   * stays, and everybody who survives the swap keeps the tick and the bonus
-   * they already had, so re-importing after a fix doesn't undo an afternoon's
-   * work.
+   * stays, and everybody who survives the swap keeps the tick, the bonus and
+   * the wage they already had, so re-importing after a fix doesn't undo an
+   * afternoon's work. The wage matters most here: it is the one figure on the
+   * sheet that is the same next week as it was this week, and typing everyone's
+   * again every payout is how it stops getting typed at all.
    */
   const applyTimeEntries = useCallback((result: TimeEntriesImport) => {
     setDraft((current) => {
@@ -227,6 +255,7 @@ function PayoutEditor() {
             hours: row.hours === null ? hoursOf(person, basis) : toNumber(row.hours),
             included: row.included,
             extra: toNumber(row.extra),
+            wage: toWage(row.wage),
           };
         }),
         { tips: toNumber(tips), bonus: toNumber(bonus) },
@@ -382,6 +411,7 @@ function PayoutEditor() {
             onHours={(id, value) => patchRow(id, { hours: value })}
             onResetHours={(id) => patchRow(id, { hours: null })}
             onExtra={(id, value) => patchRow(id, { extra: value })}
+            onWage={(id, value) => patchRow(id, { wage: value })}
             onRemove={removePerson}
             onAdd={addPerson}
           />

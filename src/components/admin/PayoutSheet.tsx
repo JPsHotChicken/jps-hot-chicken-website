@@ -21,6 +21,12 @@ export type RowState = {
   /** Null while the hours are whatever the clock said. */
   hours: string | null;
   extra: string;
+  /**
+   * What this person is paid an hour. Kept as text rather than a number so a
+   * half-typed `12.` survives the keystroke, and blank until somebody says —
+   * which is not the same as zero, and is not printed as it.
+   */
+  wage: string;
 };
 
 type Props = {
@@ -32,6 +38,7 @@ type Props = {
   onHours: (id: string, value: string) => void;
   onResetHours: (id: string) => void;
   onExtra: (id: string, value: string) => void;
+  onWage: (id: string, value: string) => void;
   onRemove: (id: string) => void;
   onAdd: (name: string) => string | null;
 };
@@ -56,6 +63,12 @@ function Money({ value, muted }: { value: number; muted?: boolean }) {
  * at 4am is the obvious one, and those rows carry the clock's own warning so
  * they don't slip through. Unticking somebody takes them off the payout
  * entirely and shares their money out among everyone else.
+ *
+ * The hourly wage is typed here rather than read off any export. It earns
+ * nobody a cent of the tips — the split is hours and tips alone — but it is on
+ * the summary the accountant gets, so it is edited where the rest of the row is.
+ * Once typed it stays typed: wages live in this browser's draft and a fresh
+ * import lands on top of them rather than wiping them.
  */
 export function PayoutSheet({
   people,
@@ -66,6 +79,7 @@ export function PayoutSheet({
   onHours,
   onResetHours,
   onExtra,
+  onWage,
   onRemove,
   onAdd,
 }: Props) {
@@ -150,7 +164,7 @@ export function PayoutSheet({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-180 border-collapse">
+          <table className="w-full min-w-204 border-collapse">
             <thead>
               <tr className="border-b border-border">
                 <th className="w-8 px-2 py-2 print:hidden">
@@ -160,6 +174,12 @@ export function PayoutSheet({
                   Employee
                 </th>
                 <th className={HEAD}>Hours</th>
+                <th
+                  className={`${HEAD} w-28`}
+                  title="What this person is paid an hour. For the accountant's summary — it takes no part in the split."
+                >
+                  Hourly wage
+                </th>
                 <th className={HEAD}>Tips</th>
                 <th className={HEAD} title="Their share of the bonus pool, split evenly">
                   Shared bonus
@@ -216,9 +236,6 @@ export function PayoutSheet({
                             {person.shifts} {person.shifts === 1 ? "shift" : "shifts"}
                           </span>
                         ) : null}
-                        {typeof person.hourlyPay === "number" ? (
-                          <span>{formatMoney(person.hourlyPay)}/hr</span>
-                        ) : null}
                         {person.anomalies.map((anomaly) => (
                           <span
                             key={anomaly}
@@ -257,6 +274,18 @@ export function PayoutSheet({
                           </Button>
                         )}
                       </span>
+                    </td>
+
+                    <td className={CELL}>
+                      <input
+                        value={row.wage}
+                        onChange={(event) => onWage(person.id, event.target.value)}
+                        inputMode="decimal"
+                        placeholder="—"
+                        aria-label={`Hourly wage for ${person.name}`}
+                        disabled={!row.included}
+                        className={`!w-20 text-right font-mono tabular-nums ${FIELD_CLASS} print:border-0 print:p-0`}
+                      />
                     </td>
 
                     <Money value={share.tipShare} muted={!row.included} />
@@ -301,6 +330,8 @@ export function PayoutSheet({
                   {payout.people} {payout.people === 1 ? "person" : "people"}
                 </td>
                 <td className={`${CELL} font-semibold`}>{formatHours(payout.hours)}</td>
+                {/* Wages don't foot: a column of dollars-per-hour has no sum. */}
+                <td />
                 <td className={`${CELL} font-semibold`}>{formatMoney(payout.tips)}</td>
                 <td className={`${CELL} font-semibold`}>{formatMoney(payout.bonus)}</td>
                 <td className={`${CELL} font-semibold`}>{formatMoney(payout.extras)}</td>

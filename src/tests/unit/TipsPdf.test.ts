@@ -45,7 +45,13 @@ function staff(count: number): TipsPerson[] {
 }
 
 const paidEntries = (people: TipsPerson[], extra = 0): PayoutEntry[] =>
-  people.map((person) => ({ id: person.id, hours: person.payableHours, included: true, extra }));
+  people.map((person) => ({
+    id: person.id,
+    hours: person.payableHours,
+    included: true,
+    extra,
+    wage: null,
+  }));
 
 describe("the accountant's summary", () => {
   it("is one page", async () => {
@@ -162,6 +168,7 @@ describe("the accountant's summary", () => {
       hours: 0,
       included: true,
       extra: 0,
+      wage: null,
     }));
 
     const { text, payout } = await render({ people, entries, tips: 263.17, bonus: 50 });
@@ -178,6 +185,7 @@ describe("the accountant's summary", () => {
       hours: 0,
       included: true,
       extra: 0,
+      wage: null,
     }));
 
     const { text } = await render({ people, entries, tips: 263.17, bonus: 50 });
@@ -192,14 +200,15 @@ describe("the accountant's summary", () => {
     expect(totalsRow).not.toContain("263.17");
   });
 
-  it("prints each employee's hourly pay, and a dash where none is known", async () => {
+  it("prints the hourly wage typed on the sheet, and a dash where none was", async () => {
     const people = staff(3);
-    people[0].hourlyPay = 15.5;
-    people[1].hourlyPay = 12;
-    // people[2] has no staff record behind them, or no rate set on it.
+    const entries = paidEntries(people);
+    entries[0].wage = 15.5;
+    entries[1].wage = 12;
+    // Nobody has typed a wage for people[2].
 
     // A bonus pool as well, so no other column can be the source of a $0.00.
-    const { text } = await render({ people, entries: paidEntries(people), tips: 100, bonus: 60 });
+    const { text } = await render({ people, entries, tips: 100, bonus: 60 });
 
     expect(text).toContain("HOURLY PAY");
     expect(text).toContain("$15.50");

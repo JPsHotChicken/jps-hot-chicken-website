@@ -246,6 +246,99 @@ describe("editing the sheet", () => {
   });
 });
 
+describe("hourly wages", () => {
+  it("is a blank field on every row, wherever the person came from", () => {
+    render(<TipsPayout />);
+    importReport(TIME_ENTRIES);
+
+    // Nothing on either export sets one — not even the payroll file's own rate
+    // column, which is read for hours and nothing else.
+    expect(screen.getByLabelText("Hourly wage for Alazia Vann")).toHaveValue("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add someone" }));
+    fireEvent.change(screen.getByLabelText("Who wasn't on the clock export?"), {
+      target: { value: "Jordan Godfrey" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(screen.getByLabelText("Hourly wage for Jordan Godfrey")).toHaveValue("");
+  });
+
+  it("takes a wage without moving anybody's share of the tips", () => {
+    render(<TipsPayout />);
+    importReport(TIME_ENTRIES);
+    importReport(TIP_SUMMARY);
+
+    const before = total("Alazia Vann");
+    fireEvent.change(screen.getByLabelText("Hourly wage for Alazia Vann"), {
+      target: { value: "15.50" },
+    });
+
+    expect(screen.getByLabelText("Hourly wage for Alazia Vann")).toHaveValue("15.50");
+    // A wage is what the payout costs the business, not a claim on the pot.
+    expect(total("Alazia Vann")).toBeCloseTo(before, 2);
+    expect(total("Uddhipti Basnet")).toBeCloseTo(86.65, 2);
+  });
+
+  it("keeps wages across a re-import, since they are the same next week", () => {
+    render(<TipsPayout />);
+    importReport(TIME_ENTRIES);
+    fireEvent.change(screen.getByLabelText("Hourly wage for Alazia Vann"), {
+      target: { value: "15.50" },
+    });
+
+    importReport(TIME_ENTRIES);
+
+    expect(screen.getByLabelText("Hourly wage for Alazia Vann")).toHaveValue("15.50");
+  });
+
+  it("keeps wages across a refresh", () => {
+    const { unmount } = render(<TipsPayout />);
+    importReport(TIME_ENTRIES);
+    fireEvent.change(screen.getByLabelText("Hourly wage for Alazia Vann"), {
+      target: { value: "15.50" },
+    });
+    unmount();
+
+    render(<TipsPayout />);
+    expect(screen.getByLabelText("Hourly wage for Alazia Vann")).toHaveValue("15.50");
+  });
+
+  it("opens a draft saved before the sheet had wages on it", () => {
+    // Left open over the change, this draft's rows carry no wage at all. The
+    // field has to come back editable rather than stuck as an uncontrolled box.
+    window.localStorage.setItem(
+      "jps.tips.draft.v1",
+      JSON.stringify({
+        people: [
+          {
+            id: "alazia vann",
+            name: "Alazia Vann",
+            totalHours: 9.94,
+            payableHours: 9.94,
+            shifts: 2,
+            anomalies: [],
+          },
+        ],
+        rows: { "alazia vann": { included: true, hours: null, extra: "" } },
+        tips: "263.17",
+        bonus: "",
+        basis: "payable",
+        note: "",
+        from: null,
+        to: null,
+      }),
+    );
+
+    render(<TipsPayout />);
+    const wage = screen.getByLabelText("Hourly wage for Alazia Vann");
+    expect(wage).toHaveValue("");
+
+    fireEvent.change(wage, { target: { value: "15.50" } });
+    expect(screen.getByLabelText("Hourly wage for Alazia Vann")).toHaveValue("15.50");
+  });
+});
+
 describe("the sheet between visits", () => {
   it("is still there after a refresh", () => {
     const { unmount } = render(<TipsPayout />);

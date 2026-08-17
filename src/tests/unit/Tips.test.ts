@@ -9,6 +9,7 @@ import {
   displayName,
   formatPeriod,
   hoursOf,
+  MAX_WAGE,
   parseEntryDate,
   parsePeriodFromName,
   parseTimeEntries,
@@ -57,7 +58,7 @@ function person(overrides: Partial<TipsPerson> = {}): TipsPerson {
 }
 
 function entry(overrides: Partial<PayoutEntry> = {}): PayoutEntry {
-  return { id: "sam smith", hours: 10, included: true, extra: 0, ...overrides };
+  return { id: "sam smith", hours: 10, included: true, extra: 0, wage: null, ...overrides };
 }
 
 describe("names", () => {
@@ -195,6 +196,38 @@ describe("payout", () => {
     expect(payout.total).toBe(160);
   });
 
+  it("carries the hourly wage through without letting it touch the split", () => {
+    const payout = computePayout(
+      [entry({ id: "a", hours: 10, wage: 15.5 }), entry({ id: "b", hours: 10, wage: 12 })],
+      { tips: 100, bonus: 0 },
+    );
+
+    expect(payout.shares.map((share) => share.wage)).toEqual([15.5, 12]);
+    // The one on $15.50 gets no more of the tips than the one on $12: the split
+    // is hours and tips, and what those hours cost is a separate matter.
+    expect(payout.shares[0].tipShare).toBe(50);
+    expect(payout.shares[1].tipShare).toBe(50);
+  });
+
+  it("keeps a wage nobody has typed unknown, rather than calling it zero", () => {
+    const payout = computePayout([entry({ wage: null })], { tips: 100, bonus: 0 });
+    expect(payout.shares[0].wage).toBeNull();
+  });
+
+  it("keeps an unticked person's wage, which being left off the payout doesn't change", () => {
+    const payout = computePayout([entry({ included: false, wage: 14 })], { tips: 100, bonus: 0 });
+
+    expect(payout.shares[0].wage).toBe(14);
+    expect(payout.shares[0].total).toBe(0);
+  });
+
+  it("holds a fat-fingered wage to something a restaurant could pay", () => {
+    expect(computePayout([entry({ wage: 120_000 })], { tips: 0, bonus: 0 }).shares[0].wage).toBe(
+      MAX_WAGE,
+    );
+    expect(computePayout([entry({ wage: -5 })], { tips: 0, bonus: 0 }).shares[0].wage).toBe(0);
+  });
+
   it("says so when there is money it cannot hand out", () => {
     const nobody = computePayout([entry({ included: false })], { tips: 200, bonus: 50 });
     expect(nobody.unallocated).toBe(250);
@@ -309,9 +342,14 @@ describe("reading a payroll export", () => {
     expect(francis?.payableHours).toBe(42.5);
   });
 
-  it("takes each person's hourly rate off the file", () => {
-    expect(result.people.find((one) => one.name === "Jasmine Brown")?.hourlyPay).toBe(12);
-    expect(result.people.find((one) => one.name === "Francis Rivera")?.hourlyPay).toBe(14.25);
+  it("leaves the hourly rate on the file, because wages are typed on the sheet", () => {
+    // The payroll export carries a rate column and it is deliberately not read:
+    // it is last week's rate, it is missing from the clock export and from
+    // anyone added by hand, and a wage the owner typed is the one that goes on
+    // the accountant's summary. Nothing off this file may set one.
+    for (const one of result.people) {
+      expect(one).not.toHaveProperty("hourlyPay");
+    }
   });
 
   it("rounds the hours the export writes as a long float", () => {
@@ -342,7 +380,7 @@ describe("reading a payroll export", () => {
     expect(francis?.totalHours).toBeLessThan(50);
   });
 
-  it("shows the higher rate for somebody on two job codes", () => {
+  it("adds up somebody on two job codes into one row", () => {
     const twoJobs = parseTimeEntries(
       [
         "Employee,Job Title,Regular Hours,Overtime Hours,Hourly Rate",
@@ -353,13 +391,6 @@ describe("reading a payroll export", () => {
 
     expect(twoJobs.people).toHaveLength(1);
     expect(twoJobs.people[0].totalHours).toBe(16);
-    expect(twoJobs.people[0].hourlyPay).toBe(15.5);
-  });
-
-  it("leaves the rate off a clock export, which doesn't carry one", () => {
-    for (const one of parseTimeEntries(TIME_ENTRIES).people) {
-      expect(one.hourlyPay).toBeUndefined();
-    }
   });
 });
 

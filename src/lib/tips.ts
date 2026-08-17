@@ -39,13 +39,6 @@ export type TipsPerson = {
   anomalies: string[];
   /** True for a row typed in by hand rather than read from an export. */
   manual?: boolean;
-  /**
-   * What this person is paid an hour, as the payroll export reports it. Absent
-   * when the file doesn't carry rates — the shift-by-shift clock export doesn't
-   * — and for anyone added by hand. Printed on the labor summary for reference;
-   * it takes no part in the split, which is worked out from hours and tips.
-   */
-  hourlyPay?: number | null;
 };
 
 /** Which hours column the split is worked out from. */
@@ -102,6 +95,15 @@ export function clampMoney(value: number, max = MAX_POOL): number {
   return Math.min(max, Math.max(0, round2(value)));
 }
 
+/**
+ * A ceiling on a typed-in hourly wage.
+ *
+ * Set well above anything this business pays rather than near it: the field is
+ * there to stop a fat-fingered `1200` reading as a wage, not to second-guess
+ * what the owner says somebody earns.
+ */
+export const MAX_WAGE = 1_000;
+
 /** Nobody works more than this in a pay period, however the clock reads. */
 export const MAX_HOURS = 400;
 
@@ -154,6 +156,13 @@ export type PayoutEntry = {
   included: boolean;
   /** A bonus for this person alone, shared with nobody. */
   extra: number;
+  /**
+   * What this person is paid an hour, as the owner typed it on the sheet, and
+   * null where nobody has said. It takes no part in the split — tips are shared
+   * by the hour, whatever those hours cost in wages — and is carried here only
+   * so it reaches the summary the accountant gets.
+   */
+  wage: number | null;
 };
 
 /** What one person is owed, and where each part of it came from. */
@@ -161,6 +170,8 @@ export type PayoutShare = {
   id: string;
   hours: number;
   included: boolean;
+  /** Their hourly wage, carried through from the sheet. Not part of the split. */
+  wage: number | null;
   /** Their cut of the tips, by hours worked. */
   tipShare: number;
   /** Their cut of the bonus pool, split evenly. */
@@ -240,11 +251,16 @@ export function computePayout(entries: readonly PayoutEntry[], pools: PayoutPool
   );
 
   const shares: PayoutShare[] = entries.map((entry) => {
+    // A wage is a fact about the person rather than money being handed out, so
+    // it survives being left off the payout — unlike every figure below it.
+    const wage = entry.wage === null ? null : clampMoney(entry.wage, MAX_WAGE);
+
     const cut = cuts.get(entry.id);
     if (!cut) {
       return {
         ...entry,
         hours: clampHours(entry.hours),
+        wage,
         tipShare: 0,
         bonusShare: 0,
         extra: 0,
@@ -257,6 +273,7 @@ export function computePayout(entries: readonly PayoutEntry[], pools: PayoutPool
       id: entry.id,
       hours: clampHours(entry.hours),
       included: true,
+      wage,
       tipShare: cut.tipShare,
       bonusShare: cut.bonusShare,
       extra,
@@ -293,8 +310,13 @@ export function computePayout(entries: readonly PayoutEntry[], pools: PayoutPool
  *
  * The *time clock* export is one row per shift, with total and payable hours on
  * each. The *payroll* export is one row per person per job, with the hours split
- * into regular and overtime — and, unlike the clock, it carries what each person
- * is paid an hour.
+ * into regular and overtime.
+ *
+ * Hours are all that is read off either of them. A payroll export does carry an
+ * hourly rate, but it is the rate somebody was paid last week rather than the
+ * one in force now, and it is missing entirely from the clock export and from
+ * anyone added by hand — so wages are typed on the sheet instead, where there is
+ * one answer for everybody and the owner can see what they are signing off.
  *
  * `regularHours` is what marks a payroll export, so the aliases below have to be
  * tight enough not to fire on the other file. "overtime" on its own is left out
@@ -309,7 +331,6 @@ const TIME_ENTRY_ALIASES = {
   payableHours: ["payable hours", "paid hours", "net hours"],
   regularHours: ["regular hours", "reg hours"],
   overtimeHours: ["overtime hours", "ot hours"],
-  hourlyRate: ["hourly rate", "hourly pay", "pay rate", "base rate", "rate of pay"],
 } as const;
 
 type TimeEntryField = keyof typeof TIME_ENTRY_ALIASES;
@@ -479,14 +500,6 @@ export function parseTimeEntries(text: string): TimeEntriesImport {
     // as one shift would be a number the file never claimed, so the sheet is
     // left to say nothing about shifts at all.
     if (!payroll) person.shifts++;
-
-    const rate = parseNumber(at(row, columns.hourlyRate));
-    if (rate !== null && rate > 0) {
-      // Somebody on two job codes at two rates: show the higher. The rate is
-      // printed for information and takes no part in the split, and understating
-      // what a person earns is the worse of the two mistakes.
-      person.hourlyPay = Math.max(person.hourlyPay ?? 0, clampMoney(rate));
-    }
 
     const anomaly = at(row, columns.anomalies);
     if (anomaly && !person.anomalies.includes(anomaly)) person.anomalies.push(anomaly);

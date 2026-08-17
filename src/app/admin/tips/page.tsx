@@ -15,8 +15,9 @@ export const metadata: Metadata = {
  *
  * Unlike the rest of the dashboard there is nothing to load: a payout is built
  * from two reports the owner has just downloaded, read in the browser, and
- * handed out in cash the same night — hourly rates included, they are a column
- * on the payroll export. So this page is only the gate — see `TipsPayout` for
+ * handed out in cash the same night. Hourly wages are the one thing neither
+ * report supplies, and they are typed on the sheet and kept in the browser with
+ * the rest of the draft. So this page is only the gate — see `TipsPayout` for
  * the sheet itself, and `lib/tips.ts` for the arithmetic.
  *
  * It needs no Supabase, which means it keeps working on a day the database
