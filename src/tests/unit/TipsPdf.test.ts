@@ -206,6 +206,26 @@ describe("the accountant's summary", () => {
     expect(without.text).not.toContain("NOTES");
   });
 
+  it("still fits one sheet with a full roster and a long note", async () => {
+    // The notes card takes real space now, and it is drawn from what the table
+    // leaves behind — a busy week with a lot to explain is the worst case.
+    const people = staff(34);
+    const { doc, text } = await render({
+      people,
+      entries: paidEntries(people),
+      tips: 1840.55,
+      bonus: 300,
+      note:
+        "Paid out in cash Sunday night after close. Sam's Thursday clock-out was corrected by " +
+        "hand from 9:12pm to 10:30pm after he forgot to punch, confirmed against the closing " +
+        "checklist. Ana's bonus was for covering the Friday dinner rush on her own.",
+    });
+
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(text).toContain("NOTES");
+    for (const person of people) expect(text).toContain(person.name);
+  });
+
   it("names the file after the period", () => {
     expect(tipsPdfFilename("2026-08-10", "2026-08-15")).toBe(
       "jp-tips-payout-2026-08-10-to-2026-08-15.pdf",

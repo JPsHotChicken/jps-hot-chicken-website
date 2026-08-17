@@ -32,6 +32,8 @@ const LINE: [number, number, number] = [190, 190, 190];
 const HAIRLINE: [number, number, number] = [226, 226, 226];
 const ZEBRA: [number, number, number] = [247, 247, 247];
 const CARD: [number, number, number] = [245, 245, 245];
+/** Warm tint for the notes card, so it is not read as another figures card. */
+const NOTE_CARD: [number, number, number] = [253, 245, 238];
 
 const MARGIN = 40;
 
@@ -145,15 +147,17 @@ export type TipsPdfOptions = {
 function drawTitle(doc: jsPDF, options: TipsPdfOptions, right: number): number {
   const { period, payout, preparedAt = new Date() } = options;
 
+  // Named with the location: there is more than one store, and a cash payout
+  // record has to say which one's employees it accounts for.
   doc.setTextColor(...BRAND);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text("JP's Hot Chicken", MARGIN, MARGIN + 12);
+  doc.text("JP's Hot Chicken Trenton", MARGIN, MARGIN + 12);
 
   doc.setTextColor(...INK);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text("Tips Payout Summary", MARGIN, MARGIN + 28);
+  doc.text("Labor Summary", MARGIN, MARGIN + 28);
 
   doc.setTextColor(...MUTED);
   doc.setFont("helvetica", "normal");
@@ -304,6 +308,51 @@ function reconciliationHeight(payout: Payout): number {
 }
 
 /**
+ * The note is the one part of the page nobody else can reconstruct.
+ *
+ * Everything above it is arithmetic that can be re-derived from the source
+ * reports; the note is where whoever ran the payout says what happened — who
+ * was paid late, why somebody's hours look wrong, what was agreed. Set as a
+ * grey footnote it gets skipped, so it gets a card of its own, a warm ground
+ * against the grey ones, a brand rule down its edge, and body type larger than
+ * anything else on the sheet.
+ */
+const NOTE_LINE_HEIGHT = 13;
+const NOTE_FONT_SIZE = 9.5;
+const MAX_NOTE_LINES = 4;
+
+/** Height of the notes block including the gap above it; zero when there is no note. */
+function notesHeight(lines: readonly string[]): number {
+  return lines.length > 0 ? 41 + lines.length * NOTE_LINE_HEIGHT : 0;
+}
+
+function drawNotes(doc: jsPDF, lines: readonly string[], y: number, right: number): number {
+  const top = y + 10;
+  const height = notesHeight(lines) - 10;
+
+  doc.setFillColor(...NOTE_CARD);
+  doc.roundedRect(MARGIN, top, right - MARGIN, height, 3, 3, "F");
+
+  // Inside the rounded corners, so the rule sits on the card's straight edge.
+  doc.setFillColor(...BRAND);
+  doc.rect(MARGIN, top + 3, 3, height - 6, "F");
+
+  doc.setTextColor(...BRAND);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.text("NOTES", MARGIN + 16, top + 18);
+
+  doc.setTextColor(...INK);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(NOTE_FONT_SIZE);
+  lines.forEach((line, index) => {
+    doc.text(line, MARGIN + 16, top + 35 + index * NOTE_LINE_HEIGHT);
+  });
+
+  return top + height;
+}
+
+/**
  * The block that proves the page adds up.
  *
  * Written as a sum rather than a set of figures so it can be read straight
@@ -443,10 +492,14 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
   // Everything below the table has to be placed before the rows can be sized:
   // the totals line, the reconciliation block, the notes and the footer are
   // fixed costs, and what is left over is what the list has to fit into.
-  const noteLines = note.trim()
-    ? doc.splitTextToSize(note.trim(), right - MARGIN - 20).slice(0, 3)
+  // Wrapped at the size it will be drawn at — splitTextToSize measures in
+  // whatever font is current, and the table head above left it at 7pt bold.
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(NOTE_FONT_SIZE);
+  const noteLines: string[] = note.trim()
+    ? (doc.splitTextToSize(note.trim(), right - MARGIN - 32) as string[]).slice(0, MAX_NOTE_LINES)
     : [];
-  const notesHeight = noteLines.length > 0 ? 26 + noteLines.length * 10 : 0;
+  const noteBlock = notesHeight(noteLines);
   const excludedHeight = excluded.length > 0 ? 22 : 0;
   const totalsHeight = 20;
   const footerHeight = 26;
@@ -455,7 +508,7 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
     pageHeight -
     MARGIN -
     footerHeight -
-    notesHeight -
+    noteBlock -
     excludedHeight -
     reconciliationHeight(payout) -
     12 -
@@ -562,17 +615,7 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
   }
 
   if (noteLines.length > 0) {
-    doc.setTextColor(...INK);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.text("NOTES", MARGIN, y + 14);
-
-    doc.setTextColor(...MUTED);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    noteLines.forEach((line: string, index: number) => {
-      doc.text(line, MARGIN, y + 26 + index * 10);
-    });
+    y = drawNotes(doc, noteLines, y, right);
   }
 
   doc.setTextColor(...MUTED);
