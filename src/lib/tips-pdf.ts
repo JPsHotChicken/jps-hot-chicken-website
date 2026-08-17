@@ -67,25 +67,25 @@ type Column = {
  * The money columns are right-aligned and the widths are fixed rather than
  * proportional, because a column of figures that shifts position between rows
  * is unreadable — and these are read by someone adding them up.
+ *
+ * There are two money columns and no more: what the guests tipped the employee
+ * and what the employer added on top. How a bonus was arrived at — a share of
+ * the pool, an individual award, or both — is a matter of method rather than of
+ * payment, so it is stated once in the basis paragraph instead of being carried
+ * as columns the reader has to add across.
  */
 const COLUMNS: Column[] = [
-  { label: "EMPLOYEE", width: 138, align: "left" },
-  { label: "SHIFTS", width: 34, align: "right" },
-  { label: "HOURS", width: 50, align: "right" },
-  { label: "TIPS", width: 66, align: "right" },
-  // The two ways a bonus is arrived at, and then the two added up: the pair
-  // shows who was singled out, and the sum is what the employee was actually
-  // given on top of their tips.
-  { label: "SHARED", width: 56, align: "right" },
-  { label: "INDIVIDUAL", width: 62, align: "right" },
-  { label: "BONUSES", width: 60, align: "right" },
-  { label: "TOTAL", width: 66, align: "right" },
+  { label: "EMPLOYEE", width: 220, align: "left" },
+  { label: "SHIFTS", width: 50, align: "right" },
+  { label: "HOURS", width: 66, align: "right" },
+  { label: "TIPS", width: 98, align: "right" },
+  { label: "BONUSES", width: 98, align: "right" },
 ];
 
-/** Amounts in the table carry no dollar sign — the heading note says USD once. */
 const amount = (value: number) =>
   value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** Every figure on the page is money, and every one of them says so. */
 const money = (value: number) => `$${amount(value)}`;
 
 /** Clip text to `maxWidth`, with an ellipsis when there was more of it. */
@@ -269,7 +269,7 @@ function drawMethod(doc: jsPDF, options: TipsPdfOptions, y: number, right: numbe
   const lines: string[] = [
     `Tips were pooled and allocated in proportion to ${HOURS_BASIS_LABELS[basis].toLowerCase()} worked (${rate}).`,
     `The bonus pool was divided equally between the ${headcount} paid, regardless of hours worked.`,
-    "Individual bonuses were awarded to named employees and are not shared.",
+    "Individual bonuses were awarded to named employees, and are included in that employee's bonuses figure.",
     "Pool shares are apportioned to whole cents, so equal shares may differ by $0.01. All amounts in USD.",
   ].flatMap((line) => doc.splitTextToSize(line, right - MARGIN) as string[]);
 
@@ -333,7 +333,7 @@ function drawReconciliation(
     ["Tips collected per POS report", payout.tips],
     [
       payout.extras > 0
-        ? `Add: employer bonuses (${amount(payout.bonus)} shared, ${amount(payout.extras)} individual)`
+        ? `Add: employer bonuses (${money(payout.bonus)} shared, ${money(payout.extras)} individual)`
         : "Add: employer bonuses",
       payout.bonuses,
     ],
@@ -343,7 +343,10 @@ function drawReconciliation(
   // the figure they come to. What the right column then claims was paid out has
   // something to be checked against.
   const labelX = MARGIN + 10;
-  const valueX = MARGIN + 250;
+  const valueX = MARGIN + 280;
+  // Labels are clipped short of the figures rather than allowed to run into
+  // them: the bonuses line carries its make-up and so grows with the money.
+  const labelWidth = valueX - labelX - 44;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
@@ -351,9 +354,9 @@ function drawReconciliation(
   rows.forEach(([label, value], index) => {
     const lineY = y + 30 + index * 11;
     doc.setTextColor(...MUTED);
-    doc.text(label, labelX, lineY);
+    doc.text(clip(doc, label, labelWidth), labelX, lineY);
     doc.setTextColor(...INK);
-    doc.text(amount(value), valueX, lineY, { align: "right" });
+    doc.text(money(value), valueX, lineY, { align: "right" });
   });
 
   const ruleY = y + 30 + rows.length * 11 - 7;
@@ -365,10 +368,10 @@ function drawReconciliation(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.text("Total available for distribution", labelX, ruleY + 12);
-  doc.text(amount(payout.tips + payout.bonuses), valueX, ruleY + 12, { align: "right" });
+  doc.text(money(payout.tips + payout.bonuses), valueX, ruleY + 12, { align: "right" });
 
   // The claim being made, against the sum on the left.
-  const claimX = MARGIN + 290;
+  const claimX = MARGIN + 320;
   doc.setTextColor(...INK);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -429,8 +432,6 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
 
   const distributed = {
     tips: sum((share) => share.tipShare),
-    bonus: sum((share) => share.bonusShare),
-    extras: sum((share) => share.extra),
     bonuses: sum((share) => share.bonuses),
   };
 
@@ -487,11 +488,8 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
         person.name,
         person.manual ? "—" : String(person.shifts),
         formatHours(share.hours),
-        amount(share.tipShare),
-        amount(share.bonusShare),
-        share.extra > 0 ? amount(share.extra) : "—",
-        amount(share.bonuses),
-        amount(share.total),
+        money(share.tipShare),
+        money(share.bonuses),
       ],
       y,
       rowHeight,
@@ -530,11 +528,8 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
       `TOTAL — ${payout.people} ${payout.people === 1 ? "employee" : "employees"}`,
       "",
       formatHours(payout.hours),
-      amount(distributed.tips),
-      amount(distributed.bonus),
-      amount(distributed.extras),
-      amount(distributed.bonuses),
-      amount(payout.total),
+      money(distributed.tips),
+      money(distributed.bonuses),
     ],
     y,
     totalsHeight,
