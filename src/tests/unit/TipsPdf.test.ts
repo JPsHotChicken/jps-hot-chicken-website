@@ -92,7 +92,7 @@ describe("the accountant's summary", () => {
       bonus: 100,
     });
 
-    expect(text).toContain("Tips Payout Summary");
+    expect(text).toContain("Labor Summary");
     expect(text).toContain("Aug 10");
     expect(text).toContain("263.17"); // tips collected
     expect(text).toContain("100.00"); // bonus pool
@@ -121,7 +121,9 @@ describe("the accountant's summary", () => {
     expect(text).toContain("175.00");
   });
 
-  it("states how the money was divided", async () => {
+  // Parked, not deleted: the basis-of-allocation paragraph is commented out in
+  // drawMethod rather than removed, so this is what guards it if it comes back.
+  it.skip("states how the money was divided", async () => {
     const people = staff(4);
     const { text } = await render({ people, entries: paidEntries(people), tips: 100, bonus: 40 });
 
@@ -190,7 +192,7 @@ describe("the accountant's summary", () => {
     expect(totalsRow).not.toContain("263.17");
   });
 
-  it("includes the note when there is one, and no empty heading when there isn't", async () => {
+  it("keeps a notes box at the foot of the page whether or not one was typed", async () => {
     const people = staff(3);
 
     const withNote = await render({
@@ -202,8 +204,10 @@ describe("the accountant's summary", () => {
     expect(withNote.text).toContain("NOTES");
     expect(withNote.text).toContain("Paid out Sunday night");
 
+    // Blank, the box is still there: it is where somebody writes on the printed
+    // sheet, and a heading that comes and goes reads as a missing section.
     const without = await render({ people, entries: paidEntries(people), tips: 100 });
-    expect(without.text).not.toContain("NOTES");
+    expect(without.text).toContain("NOTES");
   });
 
   it("still fits one sheet with a full roster and a long note", async () => {

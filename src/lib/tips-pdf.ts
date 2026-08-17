@@ -321,14 +321,36 @@ const NOTE_LINE_HEIGHT = 13;
 const NOTE_FONT_SIZE = 9.5;
 const MAX_NOTE_LINES = 4;
 
-/** Height of the notes block including the gap above it; zero when there is no note. */
-function notesHeight(lines: readonly string[]): number {
-  return lines.length > 0 ? 41 + lines.length * NOTE_LINE_HEIGHT : 0;
+/**
+ * The block is pinned to the foot of the page and drawn whether or not anything
+ * was typed, for two reasons. It is always in the same place, so somebody who
+ * knows the sheet knows where to look instead of hunting for it under a table
+ * whose length changes every week. And on a sheet that gets printed and carried
+ * to a cash drawer, an empty ruled box is somewhere to write — a payout note is
+ * as often made at the drawer as it is at the keyboard.
+ */
+const NOTE_BLANK_LINES = 2;
+
+/** The card's own height: at least the blank ruled box, more when there is text. */
+function notesCardHeight(lines: readonly string[]): number {
+  return 31 + Math.max(lines.length, NOTE_BLANK_LINES) * NOTE_LINE_HEIGHT;
 }
 
-function drawNotes(doc: jsPDF, lines: readonly string[], y: number, right: number): number {
-  const top = y + 10;
-  const height = notesHeight(lines) - 10;
+/** What the pinned block costs the page — the card, and clear space above it. */
+function notesBlockHeight(lines: readonly string[]): number {
+  return notesCardHeight(lines) + 14;
+}
+
+function drawNotes(
+  doc: jsPDF,
+  lines: readonly string[],
+  right: number,
+  pageHeight: number,
+): void {
+  const height = notesCardHeight(lines);
+  // Sat on the footer rather than following the table, so its position on the
+  // sheet does not move with the size of the payout.
+  const top = pageHeight - MARGIN - 12 - height;
 
   doc.setFillColor(...NOTE_CARD);
   doc.roundedRect(MARGIN, top, right - MARGIN, height, 3, 3, "F");
@@ -342,14 +364,22 @@ function drawNotes(doc: jsPDF, lines: readonly string[], y: number, right: numbe
   doc.setFontSize(8.5);
   doc.text("NOTES", MARGIN + 16, top + 18);
 
+  if (lines.length === 0) {
+    doc.setDrawColor(...LINE);
+    doc.setLineWidth(0.4);
+    for (let index = 0; index < NOTE_BLANK_LINES; index += 1) {
+      const ruleY = top + 37 + index * NOTE_LINE_HEIGHT;
+      doc.line(MARGIN + 16, ruleY, right - 16, ruleY);
+    }
+    return;
+  }
+
   doc.setTextColor(...INK);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(NOTE_FONT_SIZE);
   lines.forEach((line, index) => {
     doc.text(line, MARGIN + 16, top + 35 + index * NOTE_LINE_HEIGHT);
   });
-
-  return top + height;
 }
 
 /**
@@ -499,7 +529,7 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
   const noteLines: string[] = note.trim()
     ? (doc.splitTextToSize(note.trim(), right - MARGIN - 32) as string[]).slice(0, MAX_NOTE_LINES)
     : [];
-  const noteBlock = notesHeight(noteLines);
+  const noteBlock = notesBlockHeight(noteLines);
   const excludedHeight = excluded.length > 0 ? 22 : 0;
   const totalsHeight = 20;
   const footerHeight = 26;
@@ -614,9 +644,7 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
     y += excludedHeight;
   }
 
-  if (noteLines.length > 0) {
-    y = drawNotes(doc, noteLines, y, right);
-  }
+  drawNotes(doc, noteLines, right, pageHeight);
 
   doc.setTextColor(...MUTED);
   doc.setFont("helvetica", "normal");
