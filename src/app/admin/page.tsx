@@ -19,7 +19,13 @@ export const metadata: Metadata = {
 // data, so there is nothing worth caching and a stale week would be misleading.
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  // `?view=staff` is how the dashboard is reached from another admin page —
+  // there is nowhere else to land, since both views live on this one route.
+  searchParams: Promise<{ view?: string }>;
+}) {
   // `proxy.ts` already redirects signed-out visitors, but the dashboard checks
   // again so the page can never render off the back of a forged cookie.
   const cookieStore = await cookies();
@@ -28,6 +34,8 @@ export default async function AdminPage() {
   }
 
   if (!isSupabaseConfigured()) return <SetupNotice />;
+
+  const view = (await searchParams).view === "staff" ? "staff" : "scheduler";
 
   const weekStart = toISODate(mondayOf());
   const base = await loadScheduleBase();
@@ -45,6 +53,7 @@ export default async function AdminPage() {
       weekStart={weekStart}
       week={week}
       publishState={publishState}
+      initialView={view}
     />
   );
 }

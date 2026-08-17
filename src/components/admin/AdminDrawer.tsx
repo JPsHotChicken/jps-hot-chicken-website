@@ -1,24 +1,54 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CalendarRange, Users, X } from "lucide-react";
+import Link from "next/link";
+import { CalendarRange, HandCoins, Truck, Users, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-export type AdminView = "scheduler" | "staff";
+export type AdminView = "scheduler" | "staff" | "truck" | "tips";
 
-const TABS: { view: AdminView; label: string; icon: React.ReactNode; hint: string }[] = [
+/** The two halves of `/admin`, which switch in place rather than navigating. */
+export type SchedulerView = Extract<AdminView, "scheduler" | "staff">;
+
+const isSchedulerView = (view: AdminView): view is SchedulerView =>
+  view === "scheduler" || view === "staff";
+
+const TABS: {
+  view: AdminView;
+  label: string;
+  icon: React.ReactNode;
+  hint: string;
+  /** Where the section lives, for when it has to be reached from another page. */
+  href: string;
+}[] = [
   {
     view: "scheduler",
     label: "Schedule maker",
     icon: <CalendarRange className="size-4" />,
     hint: "Build and publish the week",
+    href: "/admin",
   },
   {
     view: "staff",
     label: "Staff management",
     icon: <Users className="size-4" />,
     hint: "Sign-in codes for your team",
+    href: "/admin?view=staff",
+  },
+  {
+    view: "truck",
+    label: "Truck order",
+    icon: <Truck className="size-4" />,
+    hint: "What to order, and what you ordered",
+    href: "/admin/truck-order",
+  },
+  {
+    view: "tips",
+    label: "Tips payout",
+    icon: <HandCoins className="size-4" />,
+    hint: "Split the week's tips by the hour",
+    href: "/admin/tips",
   },
 ];
 
@@ -26,7 +56,11 @@ type Props = {
   open: boolean;
   view: AdminView;
   onOpenChange: (open: boolean) => void;
-  onSelect: (view: AdminView) => void;
+  /**
+   * Given only on `/admin`, where the scheduler and staff tabs are two views of
+   * one page. Tabs it can't handle — and every tab elsewhere — are links.
+   */
+  onSelect?: (view: SchedulerView) => void;
 };
 
 /**
@@ -90,20 +124,11 @@ export function AdminDrawer({ open, view, onOpenChange, onSelect }: Props) {
         <nav className="flex-1 space-y-1 p-3">
           {TABS.map((tab) => {
             const active = tab.view === view;
-            return (
-              <button
-                key={tab.view}
-                type="button"
-                aria-current={active ? "page" : undefined}
-                tabIndex={open ? 0 : -1}
-                onClick={() => {
-                  onSelect(tab.view);
-                  onOpenChange(false);
-                }}
-                className={`flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${
-                  active ? "bg-brand/10 text-brand" : "hover:bg-muted"
-                }`}
-              >
+            const className = `flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${
+              active ? "bg-brand/10 text-brand" : "hover:bg-muted"
+            }`;
+            const body = (
+              <>
                 <span className={`mt-0.5 ${active ? "text-brand" : "text-muted-foreground"}`}>
                   {tab.icon}
                 </span>
@@ -111,7 +136,42 @@ export function AdminDrawer({ open, view, onOpenChange, onSelect }: Props) {
                   <span className="block text-sm font-semibold">{tab.label}</span>
                   <span className="block text-xs text-muted-foreground">{tab.hint}</span>
                 </span>
+              </>
+            );
+
+            // Switching between the scheduler's own two views is a state change,
+            // not a navigation — it would be a shame to throw away the week on
+            // screen to look up somebody's sign-in code. Every other tab is a
+            // page of its own and has to be navigated to. Narrowed out here
+            // rather than inside the handler, where a property's type is no
+            // longer known to have been checked.
+            const schedulerView = isSchedulerView(tab.view) ? tab.view : null;
+
+            return schedulerView && onSelect ? (
+              <button
+                key={tab.view}
+                type="button"
+                aria-current={active ? "page" : undefined}
+                tabIndex={open ? 0 : -1}
+                onClick={() => {
+                  onSelect(schedulerView);
+                  onOpenChange(false);
+                }}
+                className={className}
+              >
+                {body}
               </button>
+            ) : (
+              <Link
+                key={tab.view}
+                href={tab.href}
+                aria-current={active ? "page" : undefined}
+                tabIndex={open ? 0 : -1}
+                onClick={() => onOpenChange(false)}
+                className={className}
+              >
+                {body}
+              </Link>
             );
           })}
         </nav>

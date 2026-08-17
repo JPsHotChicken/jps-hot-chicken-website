@@ -235,6 +235,153 @@ export type Database = {
           },
         ];
       };
+      truck_items: {
+        Row: {
+          brand: string;
+          category: string;
+          created_at: string;
+          id: string;
+          name: string;
+          pack_size: string;
+          par_quantity: number;
+          sort_order: number;
+          supplier: string;
+          supplier_item_code: string;
+          unit: string;
+          unit_price: number | null;
+        };
+        Insert: {
+          brand?: string;
+          category?: string;
+          created_at?: string;
+          id?: string;
+          name: string;
+          pack_size?: string;
+          par_quantity?: number;
+          sort_order?: number;
+          supplier?: string;
+          supplier_item_code?: string;
+          unit?: string;
+          unit_price?: number | null;
+        };
+        Update: {
+          brand?: string;
+          category?: string;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          pack_size?: string;
+          par_quantity?: number;
+          sort_order?: number;
+          supplier?: string;
+          supplier_item_code?: string;
+          unit?: string;
+          unit_price?: number | null;
+        };
+        Relationships: [];
+      };
+      truck_order_lines: {
+        Row: {
+          category: string;
+          created_at: string;
+          id: string;
+          item_id: string | null;
+          name: string;
+          order_id: string;
+          pack_size: string;
+          quantity: number;
+          sort_order: number;
+          supplier_item_code: string;
+          unit: string;
+          unit_price: number | null;
+        };
+        Insert: {
+          category?: string;
+          created_at?: string;
+          id?: string;
+          item_id?: string | null;
+          name: string;
+          order_id: string;
+          pack_size?: string;
+          quantity?: number;
+          sort_order?: number;
+          supplier_item_code?: string;
+          unit?: string;
+          unit_price?: number | null;
+        };
+        Update: {
+          category?: string;
+          created_at?: string;
+          id?: string;
+          item_id?: string | null;
+          name?: string;
+          order_id?: string;
+          pack_size?: string;
+          quantity?: number;
+          sort_order?: number;
+          supplier_item_code?: string;
+          unit?: string;
+          unit_price?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "truck_order_lines_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "truck_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "truck_order_lines_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "truck_orders";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      truck_orders: {
+        Row: {
+          created_at: string;
+          delivery_date: string | null;
+          id: string;
+          invoice_number: string;
+          invoice_total: number | null;
+          note: string;
+          order_date: string;
+          received_at: string | null;
+          status: Database["public"]["Enums"]["truck_order_status"];
+          submitted_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          delivery_date?: string | null;
+          id?: string;
+          invoice_number?: string;
+          invoice_total?: number | null;
+          note?: string;
+          order_date: string;
+          received_at?: string | null;
+          status?: Database["public"]["Enums"]["truck_order_status"];
+          submitted_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          delivery_date?: string | null;
+          id?: string;
+          invoice_number?: string;
+          invoice_total?: number | null;
+          note?: string;
+          order_date?: string;
+          received_at?: string | null;
+          status?: Database["public"]["Enums"]["truck_order_status"];
+          submitted_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -253,6 +400,7 @@ export type Database = {
         | "sunday";
       shift_group: "morning" | "night" | "other";
       time_off_status: "pending" | "approved" | "denied";
+      truck_order_status: "draft" | "submitted" | "received";
     };
     CompositeTypes: {
       [_ in never]: never;

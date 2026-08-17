@@ -60,7 +60,7 @@ import {
 } from "@/lib/schedule";
 import { CellEditor } from "./CellEditor";
 import { DayGrid, type CellRange } from "./DayGrid";
-import { AdminDrawer, type AdminView } from "./AdminDrawer";
+import { AdminDrawer, type SchedulerView } from "./AdminDrawer";
 import { EmployeePanel } from "./EmployeePanel";
 import { ExportMenu } from "./ExportMenu";
 import { GoLiveButton, type PublishState } from "./GoLiveButton";
@@ -83,6 +83,8 @@ export type SchedulerProps = {
   week: WeekSchedule;
   /** Whether that week has been sent to staff, and whether it has drifted since. */
   publishState: PublishState;
+  /** Which half of the dashboard to open on — `/admin?view=staff` picks staff. */
+  initialView?: SchedulerView;
 };
 
 /** Every cell id inside an inclusive range, row-major. */
@@ -114,6 +116,7 @@ export function Scheduler({
   weekStart: initialWeekStart,
   week: initialWeek,
   publishState: initialPublishState,
+  initialView = "scheduler",
 }: SchedulerProps) {
   const [rowCount, setRowCount] = useState(initialRowCount);
   const [employees, setEmployees] = useState(initialEmployees);
@@ -130,7 +133,7 @@ export function Scheduler({
   const [error, setError] = useState<string | null>(null);
   const [publishState, setPublishState] = useState(initialPublishState);
   const [publishing, setPublishing] = useState(false);
-  const [view, setView] = useState<AdminView>("scheduler");
+  const [view, setView] = useState<SchedulerView>(initialView);
   const [menuOpen, setMenuOpen] = useState(false);
   const weekPickerRef = useRef<HTMLInputElement>(null);
   const pendingWeek = useRef(initialWeekStart);
