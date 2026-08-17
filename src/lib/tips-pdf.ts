@@ -255,7 +255,7 @@ function drawMethod(doc: jsPDF, options: TipsPdfOptions, y: number, right: numbe
   doc.setTextColor(...INK);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
-  doc.text("BASIS OF ALLOCATION", MARGIN, y + 14);
+  //doc.text("BASIS OF ALLOCATION", MARGIN, y + 14);
 
   const rate = payout.perHour > 0 ? `$${payout.perHour.toFixed(4)} per hour` : "not distributed";
   const headcount = `${payout.people} ${payout.people === 1 ? "employee" : "employees"}`;
@@ -270,18 +270,18 @@ function drawMethod(doc: jsPDF, options: TipsPdfOptions, y: number, right: numbe
 
   // Wrapped rather than clipped: this is the paragraph that explains how the
   // table was arrived at, and half of it is worse than none.
-  const lines: string[] = [
-    `Tips were pooled and allocated in proportion to ${HOURS_BASIS_LABELS[basis].toLowerCase()} worked (${rate}).`,
-    `The bonus pool was divided equally between the ${headcount} paid, regardless of hours worked.`,
-    "Individual bonuses were awarded to named employees, and are included in that employee's bonuses figure.",
-    "Pool shares are apportioned to whole cents, so equal shares may differ by $0.01. All amounts in USD.",
-  ].flatMap((line) => doc.splitTextToSize(line, right - MARGIN) as string[]);
+  // const lines: string[] = [
+  //   `Tips were pooled and allocated in proportion to ${HOURS_BASIS_LABELS[basis].toLowerCase()} worked (${rate}).`,
+  //   `The bonus pool was divided equally between the ${headcount} paid, regardless of hours worked.`,
+  //   "Individual bonuses were awarded to named employees, and are included in that employee's bonuses figure.",
+  //   "Pool shares are apportioned to whole cents, so equal shares may differ by $0.01. All amounts in USD.",
+  // ].flatMap((line) => doc.splitTextToSize(line, right - MARGIN) as string[]);
 
-  lines.forEach((line, index) => {
-    doc.text(line, MARGIN, y + 26 + index * 10);
-  });
+  // lines.forEach((line, index) => {
+  //   doc.text(line, MARGIN, y + 26 + index * 10);
+  // });
 
-  return y + 26 + lines.length * 10 + 6;
+  return y;//+ 26 + lines.length * 10 + 6;
 }
 
 /** The column headings, on their dark band. */
