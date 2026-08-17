@@ -158,7 +158,14 @@ export type PayoutShare = {
   tipShare: number;
   /** Their cut of the bonus pool, split evenly. */
   bonusShare: number;
+  /** The bonus given to them alone. */
   extra: number;
+  /**
+   * Every bonus dollar they got — the even share plus their own. Both come out
+   * of the owner's pocket rather than the guests', so they are one figure
+   * wherever the payout is being summarised rather than edited.
+   */
+  bonuses: number;
   total: number;
 };
 
@@ -180,9 +187,17 @@ export type Payout = {
   /** The flat share of the bonus pool each person gets. */
   perPerson: number;
   tips: number;
+  /** The bonus pool, before the individual awards are counted with it. */
   bonus: number;
+  /** The individual bonuses, added up. */
   extras: number;
-  /** Everything being handed out, including the individual bonuses. */
+  /**
+   * Every bonus being paid — the pool and the individual awards together. They
+   * are divided differently but they are the same kind of money, so this is the
+   * figure that belongs against the tips in any summary of the payout.
+   */
+  bonuses: number;
+  /** Everything being handed out, tips and bonuses alike. */
   total: number;
   /**
    * Pool money with nowhere to go — nobody ticked, or nobody with hours. Shown
@@ -220,7 +235,15 @@ export function computePayout(entries: readonly PayoutEntry[], pools: PayoutPool
   const shares: PayoutShare[] = entries.map((entry) => {
     const cut = cuts.get(entry.id);
     if (!cut) {
-      return { ...entry, hours: clampHours(entry.hours), tipShare: 0, bonusShare: 0, extra: 0, total: 0 };
+      return {
+        ...entry,
+        hours: clampHours(entry.hours),
+        tipShare: 0,
+        bonusShare: 0,
+        extra: 0,
+        bonuses: 0,
+        total: 0,
+      };
     }
     const extra = clampMoney(entry.extra);
     return {
@@ -230,6 +253,7 @@ export function computePayout(entries: readonly PayoutEntry[], pools: PayoutPool
       tipShare: cut.tipShare,
       bonusShare: cut.bonusShare,
       extra,
+      bonuses: round2(cut.bonusShare + extra),
       total: round2(cut.tipShare + cut.bonusShare + extra),
     };
   });
@@ -249,6 +273,7 @@ export function computePayout(entries: readonly PayoutEntry[], pools: PayoutPool
     tips,
     bonus,
     extras,
+    bonuses: round2(bonus + extras),
     total: round2(handedOut + extras),
     unallocated: round2(tips + bonus - handedOut),
   };
@@ -521,9 +546,11 @@ export function toPayoutCsv(
 
   const rows: (string | number | null)[][] = [
     ["Tips payout", meta.period],
-    [HOURS_BASIS_LABELS[meta.basis], "", "", "", ""],
+    [HOURS_BASIS_LABELS[meta.basis], "", "", "", "", ""],
     [],
-    ["Employee", "Hours", "Tips", "Bonus", "Individual bonus", "Total"],
+    // The two bonus columns are broken out and then added together, because
+    // they are one kind of money — the owner's — arrived at two ways.
+    ["Employee", "Hours", "Tips", "Shared bonus", "Individual bonus", "Bonuses", "Total"],
   ];
 
   for (const person of people) {
@@ -535,6 +562,7 @@ export function toPayoutCsv(
       share.tipShare.toFixed(2),
       share.bonusShare.toFixed(2),
       share.extra.toFixed(2),
+      share.bonuses.toFixed(2),
       share.total.toFixed(2),
     ]);
   }
@@ -545,14 +573,17 @@ export function toPayoutCsv(
     payout.tips.toFixed(2),
     payout.bonus.toFixed(2),
     payout.extras.toFixed(2),
+    payout.bonuses.toFixed(2),
     payout.total.toFixed(2),
   ]);
 
   rows.push([]);
   rows.push(["Tips from report", payout.tips.toFixed(2)]);
   rows.push(["Per hour", payout.perHour.toFixed(4)]);
-  rows.push(["Bonus pool", payout.bonus.toFixed(2)]);
-  rows.push(["Per person", payout.perPerson.toFixed(2)]);
+  rows.push(["Bonuses", payout.bonuses.toFixed(2)]);
+  rows.push(["  Shared pool", payout.bonus.toFixed(2)]);
+  rows.push(["  Per person", payout.perPerson.toFixed(2)]);
+  rows.push(["  Individual bonuses", payout.extras.toFixed(2)]);
   if (payout.unallocated !== 0) rows.push(["Not handed out", payout.unallocated.toFixed(2)]);
   if (meta.note.trim()) rows.push([], ["Notes", meta.note.trim()]);
 

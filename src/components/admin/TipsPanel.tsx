@@ -106,8 +106,8 @@ export function TipsPanel({
             />
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Extra on top of the tips, split evenly — everyone gets the same, however long they
-            were on.
+            Your money on top of the tips, split evenly — everyone gets the same, however long
+            they were on. Individual bonuses on the sheet are counted with it.
           </p>
         </div>
 
@@ -141,12 +141,26 @@ export function TipsPanel({
             value={payout.perHour > 0 ? `${formatMoney(payout.perHour)}/hr` : "—"}
           />
           <Figure
-            label="Bonus per person"
+            label="Shared bonus per person"
             value={payout.perPerson > 0 ? formatMoney(payout.perPerson) : "—"}
           />
-          {payout.extras > 0 && (
-            <Figure label="Individual bonuses" value={formatMoney(payout.extras)} />
-          )}
+
+          <div className="border-t border-border pt-1.5">
+            <Figure label="Tips" value={formatMoney(payout.tips)} />
+            {/* The pool and the individual awards are one figure here: both are
+                the owner's own money, and what they add up to is what she is
+                putting in on top of the guests' tips. */}
+            <Figure
+              label="Bonuses"
+              hint={
+                payout.extras > 0
+                  ? `${formatMoney(payout.bonus)} shared + ${formatMoney(payout.extras)} individual`
+                  : undefined
+              }
+              value={formatMoney(payout.bonuses)}
+            />
+          </div>
+
           <div className="flex items-baseline justify-between gap-2 border-t border-border pt-1.5">
             <span className="text-sm font-semibold">Handing out</span>
             <span className="font-mono text-base font-bold tabular-nums">

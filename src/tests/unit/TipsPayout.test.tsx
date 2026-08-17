@@ -27,11 +27,17 @@ function importReport(csv: string) {
 /** The payout row for one person. */
 const row = (name: string) => screen.getByText(name).closest("tr")!;
 
-/** What a person's row says they are owed, as a number. */
-function total(name: string): number {
+/** Read a money cell from the end of a person's row, as a number. */
+function cell(name: string, fromEnd: number): number {
   const cells = within(row(name)).getAllByRole("cell");
-  return Number(cells[cells.length - 2].textContent!.replace(/[$,]/g, ""));
+  return Number(cells[cells.length - fromEnd].textContent!.replace(/[$,]/g, ""));
 }
+
+/** What a person's row says they are owed. */
+const total = (name: string) => cell(name, 2);
+
+/** Every bonus dollar on their row — the shared share plus their own. */
+const bonuses = (name: string) => cell(name, 3);
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -104,6 +110,23 @@ describe("splitting the money", () => {
     expect(total("Uddhipti Basnet")).toBeCloseTo(96.65, 2);
     expect(total("Alazia Vann")).toBeCloseTo(90.19, 2);
     expect(total("Example Staff Testing")).toBeCloseTo(106.33, 2);
+  });
+
+  it("counts an individual bonus in with the shared one, not with the tips", () => {
+    loaded();
+    fireEvent.change(screen.getByLabelText("Bonus pool"), { target: { value: "30" } });
+    fireEvent.change(screen.getByLabelText("Individual bonus for Alazia Vann"), {
+      target: { value: "20" },
+    });
+
+    // Alazia's $10 of the shared pool and her own $20 read as $30 of bonuses.
+    expect(bonuses("Alazia Vann")).toBeCloseTo(30, 2);
+    expect(bonuses("Uddhipti Basnet")).toBeCloseTo(10, 2);
+
+    // And the panel adds both pots of the owner's money into one figure. Found
+    // by its breakdown, since "Bonuses" is also a column heading on the sheet.
+    const figure = screen.getByText("$30.00 shared + $20.00 individual").closest("div")!;
+    expect(figure).toHaveTextContent("$50.00");
   });
 
   it("gives an individual bonus to one person and nobody else", () => {

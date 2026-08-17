@@ -113,6 +113,46 @@ describe("payout", () => {
     expect(payout.perPerson).toBe(50);
   });
 
+  it("counts an individual bonus as a bonus, not as tips", () => {
+    const payout = computePayout(
+      [entry({ id: "a", hours: 10, extra: 25 }), entry({ id: "b", hours: 10 })],
+      { tips: 100, bonus: 60 },
+    );
+
+    // Ann has $30 of the shared pool and $25 of her own.
+    expect(payout.shares[0].bonuses).toBe(55);
+    expect(payout.shares[1].bonuses).toBe(30);
+
+    // Both pots of the owner's money are one figure; the guests' tips are not
+    // touched by any of it.
+    expect(payout.bonus).toBe(60);
+    expect(payout.extras).toBe(25);
+    expect(payout.bonuses).toBe(85);
+    expect(payout.tips).toBe(100);
+    expect(payout.total).toBe(185);
+  });
+
+  it("leaves bonuses equal to the pool when nobody has an individual one", () => {
+    const payout = computePayout([entry({ id: "a" }), entry({ id: "b" })], {
+      tips: 100,
+      bonus: 40,
+    });
+
+    expect(payout.extras).toBe(0);
+    expect(payout.bonuses).toBe(40);
+    expect(payout.shares[0].bonuses).toBe(20);
+  });
+
+  it("keeps an unticked person's bonuses at nothing", () => {
+    const payout = computePayout([entry({ id: "a" }), entry({ id: "b", included: false, extra: 50 })], {
+      tips: 100,
+      bonus: 40,
+    });
+
+    expect(payout.shares[1].bonuses).toBe(0);
+    expect(payout.bonuses).toBe(40);
+  });
+
   it("adds an individual bonus on top without diluting anyone else", () => {
     const payout = computePayout(
       [entry({ id: "a", hours: 10, extra: 25 }), entry({ id: "b", hours: 10 })],
@@ -304,10 +344,11 @@ describe("the exported sheet", () => {
   });
 
   it("writes a row per person and a totals row", () => {
-    expect(csv).toContain("Employee,Hours,Tips,Bonus,Individual bonus,Total");
-    expect(csv).toContain("Ann Lee,10.00,50.00,10.00,5.00,65.00");
-    expect(csv).toContain("Bo Diaz,10.00,50.00,10.00,0.00,60.00");
-    expect(csv).toContain("Total (2 people),20.00,100.00,20.00,5.00,125.00");
+    expect(csv).toContain("Employee,Hours,Tips,Shared bonus,Individual bonus,Bonuses,Total");
+    // Ann's $10 share of the pool and her own $5 come to $15 of bonuses.
+    expect(csv).toContain("Ann Lee,10.00,50.00,10.00,5.00,15.00,65.00");
+    expect(csv).toContain("Bo Diaz,10.00,50.00,10.00,0.00,10.00,60.00");
+    expect(csv).toContain("Total (2 people),20.00,100.00,20.00,5.00,25.00,125.00");
   });
 
   it("explains where the figures came from", () => {
@@ -315,7 +356,10 @@ describe("the exported sheet", () => {
     expect(csv).toContain(`Tips payout,"Aug 10 – Aug 15, 2026"`);
     expect(csv).toContain("Payable hours");
     expect(csv).toContain("Tips from report,100.00");
-    expect(csv).toContain("Bonus pool,20.00");
+    // Both kinds of bonus, under one figure.
+    expect(csv).toContain("Bonuses,25.00");
+    expect(csv).toContain("  Shared pool,20.00");
+    expect(csv).toContain("  Individual bonuses,5.00");
     expect(csv).toContain("Notes,Cash from the safe");
   });
 

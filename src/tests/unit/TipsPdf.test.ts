@@ -100,6 +100,27 @@ describe("the accountant's summary", () => {
     expect(text).toContain("378.17"); // and what they come to
   });
 
+  it("counts individual bonuses in with the bonus pool", async () => {
+    const people = staff(3);
+    const { text } = await render({
+      people,
+      entries: paidEntries(people, 5),
+      tips: 100,
+      bonus: 60,
+    });
+
+    // One bonuses figure — the $60 pool and the three $5 awards — rather than
+    // the two being presented as separate sources of money.
+    expect(text).toContain("BONUSES");
+    expect(text).toContain("75.00");
+    expect(text).toContain("Add: employer bonuses");
+    // With the make-up still spelled out where it is claimed.
+    expect(text).toContain("60.00");
+    expect(text).toContain("15.00");
+    // And the sum against the tips.
+    expect(text).toContain("175.00");
+  });
+
   it("states how the money was divided", async () => {
     const people = staff(4);
     const { text } = await render({ people, entries: paidEntries(people), tips: 100, bonus: 40 });

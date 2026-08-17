@@ -150,7 +150,7 @@ export function PayoutSheet({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-160 border-collapse">
+          <table className="w-full min-w-180 border-collapse">
             <thead>
               <tr className="border-b border-border">
                 <th className="w-8 px-2 py-2 print:hidden">
@@ -161,8 +161,15 @@ export function PayoutSheet({
                 </th>
                 <th className={HEAD}>Hours</th>
                 <th className={HEAD}>Tips</th>
-                <th className={HEAD}>Bonus</th>
-                <th className={`${HEAD} w-32`}>Individual</th>
+                <th className={HEAD} title="Their share of the bonus pool, split evenly">
+                  Shared bonus
+                </th>
+                <th className={`${HEAD} w-32`} title="A bonus for this person alone">
+                  Individual bonus
+                </th>
+                <th className={HEAD} title="Shared bonus plus individual bonus">
+                  Bonuses
+                </th>
                 <th className={HEAD}>Total</th>
                 <th className="w-8 px-2 py-2 print:hidden">
                   <span className="sr-only">Remove</span>
@@ -261,6 +268,8 @@ export function PayoutSheet({
                       />
                     </td>
 
+                    <Money value={share.bonuses} muted={!row.included} />
+
                     <td className={`${CELL} font-semibold`}>{formatMoney(share.total)}</td>
 
                     <td className="px-2 py-1.5 print:hidden">
@@ -289,6 +298,7 @@ export function PayoutSheet({
                 <td className={`${CELL} font-semibold`}>{formatMoney(payout.tips)}</td>
                 <td className={`${CELL} font-semibold`}>{formatMoney(payout.bonus)}</td>
                 <td className={`${CELL} font-semibold`}>{formatMoney(payout.extras)}</td>
+                <td className={`${CELL} font-semibold`}>{formatMoney(payout.bonuses)}</td>
                 <td className={`${CELL} font-bold`}>{formatMoney(payout.total)}</td>
                 <td className="print:hidden" />
               </tr>

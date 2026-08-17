@@ -69,13 +69,17 @@ type Column = {
  * is unreadable — and these are read by someone adding them up.
  */
 const COLUMNS: Column[] = [
-  { label: "EMPLOYEE", width: 164, align: "left" },
-  { label: "SHIFTS", width: 40, align: "right" },
-  { label: "HOURS", width: 54, align: "right" },
-  { label: "TIPS", width: 74, align: "right" },
-  { label: "BONUS", width: 64, align: "right" },
-  { label: "INDIVIDUAL", width: 68, align: "right" },
-  { label: "TOTAL", width: 68, align: "right" },
+  { label: "EMPLOYEE", width: 138, align: "left" },
+  { label: "SHIFTS", width: 34, align: "right" },
+  { label: "HOURS", width: 50, align: "right" },
+  { label: "TIPS", width: 66, align: "right" },
+  // The two ways a bonus is arrived at, and then the two added up: the pair
+  // shows who was singled out, and the sum is what the employee was actually
+  // given on top of their tips.
+  { label: "SHARED", width: 56, align: "right" },
+  { label: "INDIVIDUAL", width: 62, align: "right" },
+  { label: "BONUSES", width: 60, align: "right" },
+  { label: "TOTAL", width: 66, align: "right" },
 ];
 
 /** Amounts in the table carry no dollar sign — the heading note says USD once. */
@@ -188,15 +192,23 @@ function drawTitle(doc: jsPDF, options: TipsPdfOptions, right: number): number {
 /**
  * Where the money came from, across the page.
  *
- * The three sources only — the total they come to is already the figure at the
- * top of the page, and a fourth card repeating it would make the same number
- * appear three times before the reconciliation gets to prove it.
+ * Two cards, because there are only two kinds of money here however many ways
+ * it is divided: what the guests tipped, and what the employer added. The
+ * split between the shared pool and the individual awards is a detail of the
+ * second, so it rides underneath it rather than standing as a third source.
+ *
+ * The total they come to is already the figure at the top of the page, so no
+ * card repeats it — the reconciliation is where the sum gets proved.
  */
 function drawCards(doc: jsPDF, payout: Payout, y: number, right: number): number {
+  const breakdown =
+    payout.extras > 0
+      ? `Employer funded — ${money(payout.bonus)} shared, ${money(payout.extras)} individual`
+      : "Employer funded, split evenly";
+
   const cards: [string, string, string][] = [
     ["TIPS COLLECTED", money(payout.tips), "Guest tips, per POS report"],
-    ["BONUS POOL", money(payout.bonus), "Employer funded, split evenly"],
-    ["INDIVIDUAL BONUSES", money(payout.extras), "Employer funded, by name"],
+    ["BONUSES", money(payout.bonuses), breakdown],
   ];
 
   const height = 46;
@@ -284,11 +296,19 @@ function drawTableHead(doc: jsPDF, y: number, right: number): number {
 }
 
 /**
+ * How tall the reconciliation block is, needed before it can be drawn: the
+ * table above it is sized from whatever space it leaves behind.
+ */
+function reconciliationHeight(payout: Payout): number {
+  return payout.unallocated === 0 ? 68 : 78;
+}
+
+/**
  * The block that proves the page adds up.
  *
  * Written as a sum rather than a set of figures so it can be read straight
- * down: the three sources on the left, the distribution on the right, and a
- * line saying whether they agree.
+ * down: what came in on the left, what went out on the right, and a line
+ * saying whether they agree.
  */
 function drawReconciliation(
   doc: jsPDF,
@@ -297,7 +317,7 @@ function drawReconciliation(
   right: number,
 ): number {
   const balanced = payout.unallocated === 0;
-  const height = balanced ? 76 : 88;
+  const height = reconciliationHeight(payout);
 
   doc.setFillColor(...CARD);
   doc.roundedRect(MARGIN, y, right - MARGIN, height, 3, 3, "F");
@@ -307,10 +327,16 @@ function drawReconciliation(
   doc.setFontSize(7.5);
   doc.text("RECONCILIATION", MARGIN + 10, y + 15);
 
+  // Bonuses are one line with their make-up spelled out, rather than two
+  // additions that have to be recognised as the same kind of money.
   const rows: [string, number][] = [
     ["Tips collected per POS report", payout.tips],
-    ["Add: employer bonus pool", payout.bonus],
-    ["Add: individual bonuses", payout.extras],
+    [
+      payout.extras > 0
+        ? `Add: employer bonuses (${amount(payout.bonus)} shared, ${amount(payout.extras)} individual)`
+        : "Add: employer bonuses",
+      payout.bonuses,
+    ],
   ];
 
   // The left column is a sum, so it is set out as one: the parts, a rule, and
@@ -339,9 +365,7 @@ function drawReconciliation(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.text("Total available for distribution", labelX, ruleY + 12);
-  doc.text(amount(payout.tips + payout.bonus + payout.extras), valueX, ruleY + 12, {
-    align: "right",
-  });
+  doc.text(amount(payout.tips + payout.bonuses), valueX, ruleY + 12, { align: "right" });
 
   // The claim being made, against the sum on the left.
   const claimX = MARGIN + 290;
@@ -407,6 +431,7 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
     tips: sum((share) => share.tipShare),
     bonus: sum((share) => share.bonusShare),
     extras: sum((share) => share.extra),
+    bonuses: sum((share) => share.bonuses),
   };
 
   let y = drawTitle(doc, options, right);
@@ -422,7 +447,6 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
     : [];
   const notesHeight = noteLines.length > 0 ? 26 + noteLines.length * 10 : 0;
   const excludedHeight = excluded.length > 0 ? 22 : 0;
-  const reconciliationHeight = payout.unallocated === 0 ? 76 : 88;
   const totalsHeight = 20;
   const footerHeight = 26;
 
@@ -432,7 +456,7 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
     footerHeight -
     notesHeight -
     excludedHeight -
-    reconciliationHeight -
+    reconciliationHeight(payout) -
     12 -
     totalsHeight -
     y;
@@ -466,6 +490,7 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
         amount(share.tipShare),
         amount(share.bonusShare),
         share.extra > 0 ? amount(share.extra) : "—",
+        amount(share.bonuses),
         amount(share.total),
       ],
       y,
@@ -508,6 +533,7 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
       amount(distributed.tips),
       amount(distributed.bonus),
       amount(distributed.extras),
+      amount(distributed.bonuses),
       amount(payout.total),
     ],
     y,
