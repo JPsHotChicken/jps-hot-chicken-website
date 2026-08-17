@@ -39,6 +39,13 @@ export type TipsPerson = {
   anomalies: string[];
   /** True for a row typed in by hand rather than read from an export. */
   manual?: boolean;
+  /**
+   * What this person is paid an hour, as the payroll export reports it. Absent
+   * when the file doesn't carry rates — the shift-by-shift clock export doesn't
+   * — and for anyone added by hand. Printed on the labor summary for reference;
+   * it takes no part in the split, which is worked out from hours and tips.
+   */
+  hourlyPay?: number | null;
 };
 
 /** Which hours column the split is worked out from. */
@@ -281,12 +288,28 @@ export function computePayout(entries: readonly PayoutEntry[], pools: PayoutPool
 
 /* --------------------------------------------------------------- time clock */
 
+/**
+ * Two shapes of hours export are read, and the headers tell them apart.
+ *
+ * The *time clock* export is one row per shift, with total and payable hours on
+ * each. The *payroll* export is one row per person per job, with the hours split
+ * into regular and overtime — and, unlike the clock, it carries what each person
+ * is paid an hour.
+ *
+ * `regularHours` is what marks a payroll export, so the aliases below have to be
+ * tight enough not to fire on the other file. "overtime" on its own is left out
+ * deliberately: it would match "Overtime Pay" in a file with no overtime hours
+ * column, and add dollars to somebody's hours.
+ */
 const TIME_ENTRY_ALIASES = {
   employee: ["employee", "employee name", "name", "team member", "staff", "worker"],
   date: ["date", "business date", "shift date", "work date"],
   anomalies: ["anomalies", "anomaly", "exceptions"],
   totalHours: ["total hours", "hours worked", "total time", "hours"],
   payableHours: ["payable hours", "paid hours", "net hours"],
+  regularHours: ["regular hours", "reg hours"],
+  overtimeHours: ["overtime hours", "ot hours"],
+  hourlyRate: ["hourly rate", "hourly pay", "pay rate", "base rate", "rate of pay"],
 } as const;
 
 type TimeEntryField = keyof typeof TIME_ENTRY_ALIASES;
@@ -347,6 +370,31 @@ export function parseEntryDate(value: string): string | null {
   return null;
 }
 
+/**
+ * The span a file's own name claims, e.g. `PayrollExport_2026_08_07-2026_08_09`.
+ *
+ * The payroll export has no date column anywhere in it — it is a week already
+ * added up — so without this the summary would have to say the pay period was
+ * not stated, on a file whose name says it twice. Only used when the rows
+ * themselves carry no dates, and the caller says where it came from, because a
+ * file somebody renamed would otherwise date the sheet wrongly with no clue as
+ * to why.
+ */
+export function parsePeriodFromName(filename: string): { from: string | null; to: string | null } {
+  const found = filename.match(/(\d{4})[-_.](\d{2})[-_.](\d{2})/g) ?? [];
+
+  const dates = found
+    .map((text) => text.replace(/[_.]/g, "-"))
+    .filter((iso) => {
+      const [, month, day] = iso.split("-").map(Number);
+      return month >= 1 && month <= 12 && day >= 1 && day <= 31;
+    })
+    .sort();
+
+  if (dates.length === 0) return { from: null, to: null };
+  return { from: dates[0], to: dates[dates.length - 1] };
+}
+
 /** A number off an export: strips `$`, thousands separators and stray spaces. */
 function parseNumber(value: string | undefined): number | null {
   if (value === undefined) return null;
@@ -374,6 +422,15 @@ export function parseTimeEntries(text: string): TimeEntriesImport {
 
   const at = (row: string[], index: number) => (index === -1 ? "" : (row[index] ?? "").trim());
 
+  /**
+   * A payroll export, rather than the shift-by-shift clock export.
+   *
+   * Decided from the header once, not guessed per row: on this file the loose
+   * `totalHours` alias also matches "Regular Hours", and reading both would
+   * either double count the regular hours or quietly drop the overtime.
+   */
+  const payroll = columns.regularHours !== -1;
+
   const found = new Map<string, TipsPerson>();
   const dates: string[] = [];
   let skipped = 0;
@@ -385,8 +442,17 @@ export function parseTimeEntries(text: string): TimeEntriesImport {
       continue;
     }
 
-    const total = parseNumber(at(row, columns.totalHours));
-    const payable = parseNumber(at(row, columns.payableHours));
+    // On a payroll export the hours are split in two and both were worked, so
+    // both earn a share of the tips. Nothing there says what came off for
+    // breaks, so total and payable are the same figure and the basis toggle has
+    // nothing to choose between — which is honest: the file doesn't know.
+    const regular = parseNumber(at(row, columns.regularHours));
+    const overtime = parseNumber(at(row, columns.overtimeHours));
+    const worked =
+      regular === null && overtime === null ? null : round2((regular ?? 0) + (overtime ?? 0));
+
+    const total = payroll ? worked : parseNumber(at(row, columns.totalHours));
+    const payable = payroll ? worked : parseNumber(at(row, columns.payableHours));
     if (total === null && payable === null) {
       skipped++;
       continue;
@@ -407,7 +473,20 @@ export function parseTimeEntries(text: string): TimeEntriesImport {
     // sensible number for both, or the basis toggle would zero the sheet.
     person.totalHours = round2(person.totalHours + (total ?? payable ?? 0));
     person.payableHours = round2(person.payableHours + (payable ?? total ?? 0));
-    person.shifts++;
+
+    // A payroll row is a person, not a shift: it is a week's hours already added
+    // up, and there is nothing on it to say how many days that took. Counting it
+    // as one shift would be a number the file never claimed, so the sheet is
+    // left to say nothing about shifts at all.
+    if (!payroll) person.shifts++;
+
+    const rate = parseNumber(at(row, columns.hourlyRate));
+    if (rate !== null && rate > 0) {
+      // Somebody on two job codes at two rates: show the higher. The rate is
+      // printed for information and takes no part in the split, and understating
+      // what a person earns is the worse of the two mistakes.
+      person.hourlyPay = Math.max(person.hourlyPay ?? 0, clampMoney(rate));
+    }
 
     const anomaly = at(row, columns.anomalies);
     if (anomaly && !person.anomalies.includes(anomaly)) person.anomalies.push(anomaly);
@@ -485,8 +564,13 @@ export function detectTipsImport(text: string): TipsImportKind {
   const [headers] = parseCsv(text);
   if (!headers) return "unknown";
 
+  // Hours first. A payroll export carries a per-person tips column as well, and
+  // it is an hours file: the pool comes off the sales summary, not off here.
   const columns = matchColumns<TimeEntryField>(headers, TIME_ENTRY_ALIASES);
-  if (columns.employee !== -1 && (columns.totalHours !== -1 || columns.payableHours !== -1)) {
+  if (
+    columns.employee !== -1 &&
+    (columns.totalHours !== -1 || columns.payableHours !== -1 || columns.regularHours !== -1)
+  ) {
     return "time";
   }
 

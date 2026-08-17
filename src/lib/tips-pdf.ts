@@ -70,18 +70,22 @@ type Column = {
  * proportional, because a column of figures that shifts position between rows
  * is unreadable — and these are read by someone adding them up.
  *
- * There are two money columns and no more: what the guests tipped the employee
- * and what the employer added on top. How a bonus was arrived at — a share of
- * the pool, an individual award, or both — is a matter of method rather than of
- * payment, so it is stated once in the basis paragraph instead of being carried
- * as columns the reader has to add across.
+ * Hourly pay sits beside the hours it goes with, so wages read across in one
+ * movement: this many hours, at this rate. It is also the one figure here that
+ * is not part of the payout — it comes from the staff record and takes no part
+ * in the split — which is a second reason to keep it left of the money columns.
+ *
+ * Tips and bonuses are the payout, and there are only two of them: how a bonus
+ * was arrived at — a share of the pool, an individual award, or both — is a
+ * matter of method rather than of payment, so it is not carried as columns the
+ * reader has to add across.
  */
 const COLUMNS: Column[] = [
-  { label: "EMPLOYEE", width: 220, align: "left" },
-  { label: "SHIFTS", width: 50, align: "right" },
-  { label: "HOURS", width: 66, align: "right" },
-  { label: "TIPS", width: 98, align: "right" },
-  { label: "BONUSES", width: 98, align: "right" },
+  { label: "EMPLOYEE", width: 202, align: "left" },
+  { label: "HOURS", width: 62, align: "right" },
+  { label: "HOURLY PAY", width: 80, align: "right" },
+  { label: "TIPS", width: 94, align: "right" },
+  { label: "BONUSES", width: 94, align: "right" },
 ];
 
 const amount = (value: number) =>
@@ -569,8 +573,11 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
       doc,
       [
         person.name,
-        person.manual ? "—" : String(person.shifts),
         formatHours(share.hours),
+        // A rate nobody has set, and a clocked name with no staff record behind
+        // it, both come through as null — and a dash is the honest answer to
+        // both. Printing $0.00 would say they work for nothing.
+        typeof person.hourlyPay === "number" ? money(person.hourlyPay) : "—",
         money(share.tipShare),
         money(share.bonuses),
       ],
@@ -609,8 +616,9 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
     doc,
     [
       `TOTAL — ${payout.people} ${payout.people === 1 ? "employee" : "employees"}`,
-      "",
       formatHours(payout.hours),
+      // Rates don't foot: a column of dollars-per-hour has no meaningful sum.
+      "",
       money(distributed.tips),
       money(distributed.bonuses),
     ],

@@ -9,6 +9,7 @@ import {
   detectTipsImport,
   formatMoney,
   formatPeriod,
+  parsePeriodFromName,
   parseTimeEntries,
   parseTipSummary,
   type TimeEntriesImport,
@@ -67,17 +68,24 @@ export function TipsImport({ onTimeEntries, onTips }: Props) {
     const kind = detectTipsImport(csv);
 
     if (kind === "time") {
-      const parsed = parseTimeEntries(csv);
-      if (parsed.people.length === 0) {
-        setError("That looks like a time clock export, but there were no hours on it.");
+      const read = parseTimeEntries(csv);
+      if (read.people.length === 0) {
+        setError("That looks like an hours export, but there were no hours on it.");
         return;
       }
+
+      // A payroll export has no dates in it, only in its name. Rows win when
+      // they have them; the name is the fallback, and is called out below so a
+      // period taken from a filename is never mistaken for one off the report.
+      const named = read.from === null ? parsePeriodFromName(fileName ?? "") : null;
+      const parsed = named ? { ...read, from: named.from, to: named.to } : read;
+
       onTimeEntries(parsed);
       const period = formatPeriod(parsed.from, parsed.to);
       setResult({
         message: `${plural(parsed.people.length, "person", "people")} on the sheet`,
         detail: [
-          period && `Hours for ${period}.`,
+          period && `Hours for ${period}${named?.from ? ", per the file name" : ""}.`,
           parsed.skipped > 0 &&
             `${plural(parsed.skipped, "row")} had no name or hours and ${parsed.skipped === 1 ? "was" : "were"} skipped.`,
           "This replaces the hours on the sheet. Anyone still on it keeps their tick and their bonus, and people added by hand stay.",

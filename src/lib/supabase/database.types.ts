@@ -16,6 +16,7 @@ export type Database = {
       employees: {
         Row: {
           created_at: string;
+          hourly_pay: number | null;
           id: string;
           login_code: string | null;
           name: string;
@@ -23,6 +24,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          hourly_pay?: number | null;
           id?: string;
           login_code?: string | null;
           name: string;
@@ -30,6 +32,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          hourly_pay?: number | null;
           id?: string;
           login_code?: string | null;
           name?: string;

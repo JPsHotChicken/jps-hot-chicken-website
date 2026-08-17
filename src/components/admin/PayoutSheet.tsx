@@ -208,11 +208,17 @@ export function PayoutSheet({
                       <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                         {person.manual ? (
                           <span>Added by hand</span>
-                        ) : (
+                        ) : person.shifts > 0 ? (
+                          // A payroll export reports a week already added up and
+                          // says nothing about how many shifts it took, so there
+                          // is no count to show for one.
                           <span>
                             {person.shifts} {person.shifts === 1 ? "shift" : "shifts"}
                           </span>
-                        )}
+                        ) : null}
+                        {typeof person.hourlyPay === "number" ? (
+                          <span>{formatMoney(person.hourlyPay)}/hr</span>
+                        ) : null}
                         {person.anomalies.map((anomaly) => (
                           <span
                             key={anomaly}

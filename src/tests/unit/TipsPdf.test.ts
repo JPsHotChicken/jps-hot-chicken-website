@@ -192,6 +192,24 @@ describe("the accountant's summary", () => {
     expect(totalsRow).not.toContain("263.17");
   });
 
+  it("prints each employee's hourly pay, and a dash where none is known", async () => {
+    const people = staff(3);
+    people[0].hourlyPay = 15.5;
+    people[1].hourlyPay = 12;
+    // people[2] has no staff record behind them, or no rate set on it.
+
+    // A bonus pool as well, so no other column can be the source of a $0.00.
+    const { text } = await render({ people, entries: paidEntries(people), tips: 100, bonus: 60 });
+
+    expect(text).toContain("HOURLY PAY");
+    expect(text).toContain("$15.50");
+    expect(text).toContain("$12.00");
+    // Never $0.00 for an unknown rate — that would read as working for nothing.
+    expect(text).not.toContain("$0.00");
+    // And the shifts column is gone.
+    expect(text).not.toContain("SHIFTS");
+  });
+
   it("keeps a notes box at the foot of the page whether or not one was typed", async () => {
     const people = staff(3);
 

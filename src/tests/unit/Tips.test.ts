@@ -10,6 +10,7 @@ import {
   formatPeriod,
   hoursOf,
   parseEntryDate,
+  parsePeriodFromName,
   parseTimeEntries,
   parseTipSummary,
   payoutFilename,
@@ -28,6 +29,20 @@ const TIME_ENTRIES = [
 ].join("\n");
 
 const TIP_SUMMARY = ["Tips collected,Tips refunded,Total tips", "263.17,0.0,263.17"].join("\n");
+
+/**
+ * A cut-down payroll export — the other shape of hours file, quirks intact: one
+ * row per person, hours split into regular and overtime, an hourly rate on every
+ * row, no dates anywhere, and a float that arrives with its rounding error
+ * showing. The trailing blank line is in the real file too.
+ */
+const PAYROLL = [
+  `Employee,Job Title,Regular Hours,Overtime Hours,Hourly Rate,Regular Pay,Overtime Pay,Total Pay,Net Sales,Declared Tips,Non-Cash Tips,Total Tips,Tips Withheld,Total Gratuity,Employee ID,Job Code,Location,Location Code`,
+  `"Brown, Jasmine",Staff,0.88,0.0,12.00,10.56,0.00,10.56,0.00,,0.00,0.00,0.00,0.00,,1234,Trenton Road,`,
+  `"Rivera, Francis",Staff,38.00,4.50,14.25,541.50,96.19,637.69,0.00,,0.00,0.00,0.00,0.00,,1234,Trenton Road,`,
+  `"Vann, Alazia ",Staff,2.5700000000000003,0.0,12.00,30.84,0.00,30.84,0.00,,0.00,0.00,0.00,0.00,,1234,Trenton Road,`,
+  ``,
+].join("\n");
 
 function person(overrides: Partial<TipsPerson> = {}): TipsPerson {
   return {
@@ -276,6 +291,78 @@ describe("reading a time clock export", () => {
   });
 });
 
+describe("reading a payroll export", () => {
+  const result = parseTimeEntries(PAYROLL);
+
+  it("makes one row per person, at the hours they worked", () => {
+    expect(result.people).toHaveLength(3);
+
+    const jasmine = result.people.find((one) => one.name === "Jasmine Brown");
+    expect(jasmine?.totalHours).toBe(0.88);
+    expect(jasmine?.payableHours).toBe(0.88);
+  });
+
+  it("counts overtime as hours worked, because it was", () => {
+    const francis = result.people.find((one) => one.name === "Francis Rivera");
+    // 38.00 regular and 4.50 over, and every one of them earns a share of tips.
+    expect(francis?.totalHours).toBe(42.5);
+    expect(francis?.payableHours).toBe(42.5);
+  });
+
+  it("takes each person's hourly rate off the file", () => {
+    expect(result.people.find((one) => one.name === "Jasmine Brown")?.hourlyPay).toBe(12);
+    expect(result.people.find((one) => one.name === "Francis Rivera")?.hourlyPay).toBe(14.25);
+  });
+
+  it("rounds the hours the export writes as a long float", () => {
+    // The real file carries 2.5700000000000003.
+    expect(result.people.find((one) => one.name === "Alazia Vann")?.totalHours).toBe(2.57);
+  });
+
+  it("claims no shift count, because the file doesn't have one", () => {
+    // A week already added up says nothing about how many days it took, and a
+    // made-up "1 shift" on a payout sheet is a figure nobody can check.
+    expect(result.people.every((one) => one.shifts === 0)).toBe(true);
+  });
+
+  it("has no period to report, and says so rather than guessing", () => {
+    expect(result.from).toBeNull();
+    expect(result.to).toBeNull();
+    expect(formatPeriod(result.from, result.to)).toBe("");
+  });
+
+  it("reads it as an hours file even though it carries a tips column", () => {
+    expect(detectTipsImport(PAYROLL)).toBe("time");
+  });
+
+  it("keeps the pay columns out of the hours", () => {
+    // "Overtime Pay" must never be read as overtime hours: Francis' $96.19 of it
+    // would otherwise land on the sheet as ninety-six hours.
+    const francis = result.people.find((one) => one.name === "Francis Rivera");
+    expect(francis?.totalHours).toBeLessThan(50);
+  });
+
+  it("shows the higher rate for somebody on two job codes", () => {
+    const twoJobs = parseTimeEntries(
+      [
+        "Employee,Job Title,Regular Hours,Overtime Hours,Hourly Rate",
+        '"Cole, Sam",Staff,10.00,0.0,12.00',
+        '"Cole, Sam",Shift Lead,6.00,0.0,15.50',
+      ].join("\n"),
+    );
+
+    expect(twoJobs.people).toHaveLength(1);
+    expect(twoJobs.people[0].totalHours).toBe(16);
+    expect(twoJobs.people[0].hourlyPay).toBe(15.5);
+  });
+
+  it("leaves the rate off a clock export, which doesn't carry one", () => {
+    for (const one of parseTimeEntries(TIME_ENTRIES).people) {
+      expect(one.hourlyPay).toBeUndefined();
+    }
+  });
+});
+
 describe("reading a tip summary", () => {
   it("takes the report's own total", () => {
     expect(parseTipSummary(TIP_SUMMARY)).toBe(263.17);
@@ -327,6 +414,21 @@ describe("dates", () => {
   it("names the export file after the period", () => {
     expect(payoutFilename("2026-08-10", "2026-08-15")).toBe("tips-2026-08-10-to-2026-08-15.csv");
     expect(payoutFilename("2026-08-10", "2026-08-10")).toBe("tips-2026-08-10.csv");
+  });
+
+  it("takes a period off a file name, for a file with no dates in it", () => {
+    // The payroll export's only statement of the week it covers.
+    expect(parsePeriodFromName("PayrollExport_2026_08_07-2026_08_09.csv")).toEqual({
+      from: "2026-08-07",
+      to: "2026-08-09",
+    });
+    expect(parsePeriodFromName("payroll-2026-08-07.csv")).toEqual({
+      from: "2026-08-07",
+      to: "2026-08-07",
+    });
+    expect(parsePeriodFromName("hours.csv")).toEqual({ from: null, to: null });
+    // Digits in the right shape but not a date anybody has.
+    expect(parsePeriodFromName("export_2026_99_99.csv")).toEqual({ from: null, to: null });
   });
 });
 
