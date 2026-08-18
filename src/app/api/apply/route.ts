@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
 import { siteConfig } from "@/data/site";
+import type { ApplicationDraft } from "@/lib/applications";
+import { insertApplication } from "@/lib/applications-repo";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -41,6 +44,24 @@ async function appendToSheet(row: Record<string, string>): Promise<boolean> {
     return true;
   } catch (err) {
     console.error("[careers] Sheet webhook error:", err);
+    return false;
+  }
+}
+
+/**
+ * Record the application on the Applications page at `/admin/applications`.
+ *
+ * Best-effort, exactly like `appendToSheet`: the owner losing a row is bad, but
+ * an applicant being told to try again — and submitting twice — is worse. A
+ * failure here is logged and the applicant still gets their confirmation.
+ */
+async function recordApplication(draft: ApplicationDraft): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    await insertApplication(draft);
+    return true;
+  } catch (err) {
+    console.error("[careers] Could not save the application to the dashboard:", err);
     return false;
   }
 }
@@ -95,8 +116,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
   }
 
-  // Save the application to the Google Sheet (best-effort — see appendToSheet).
-  const saved = await appendToSheet({
+  const application = {
     firstName,
     lastName,
     phone,
@@ -110,7 +130,15 @@ export async function POST(request: Request) {
     foodService,
     experience,
     transportation,
-  });
+  };
+
+  // Save it in both places (both best-effort — see the two functions above).
+  // The dashboard is the record the owner actually works from; the sheet stays
+  // because it is theirs, outlives this site, and costs nothing to keep writing.
+  const [saved, recorded] = await Promise.all([
+    appendToSheet(application),
+    recordApplication(application),
+  ]);
 
   const summaryHtml = `
     <h2>New application — ${esc(position)}</h2>
@@ -147,7 +175,7 @@ export async function POST(request: Request) {
     console.warn(
       `[careers] RESEND_API_KEY not set — application from ${email || phone} (${position}) not emailed.`,
     );
-    return NextResponse.json({ ok: true, emailed: false, saved });
+    return NextResponse.json({ ok: true, emailed: false, saved, recorded });
   }
 
   try {
@@ -172,13 +200,13 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ ok: true, emailed: true, saved });
+    return NextResponse.json({ ok: true, emailed: true, saved, recorded });
   } catch (err) {
     console.error("[careers] Resend error:", err);
-    // If the application already made it into the sheet, don't ask the applicant
+    // If the application was already stored somewhere, don't ask the applicant
     // to retry — that would create a duplicate row. Just report the email failed.
-    if (saved) {
-      return NextResponse.json({ ok: true, emailed: false, saved: true });
+    if (saved || recorded) {
+      return NextResponse.json({ ok: true, emailed: false, saved, recorded });
     }
     return NextResponse.json(
       { error: "We couldn't send your application. Please try again or email us." },

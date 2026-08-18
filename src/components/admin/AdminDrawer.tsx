@@ -2,11 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { CalendarRange, HandCoins, Truck, Users, X } from "lucide-react";
+import { CalendarRange, ClipboardList, HandCoins, Truck, Users, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-export type AdminView = "scheduler" | "staff" | "truck" | "tips";
+export type AdminView = "scheduler" | "staff" | "truck" | "tips" | "applications";
 
 /** The two halves of `/admin`, which switch in place rather than navigating. */
 export type SchedulerView = Extract<AdminView, "scheduler" | "staff">;
@@ -49,6 +49,13 @@ const TABS: {
     icon: <HandCoins className="size-4" />,
     hint: "Split the week's tips by the hour",
     href: "/admin/tips",
+  },
+  {
+    view: "applications",
+    label: "Applications",
+    icon: <ClipboardList className="size-4" />,
+    hint: "Who applied, who you're interviewing",
+    href: "/admin/applications",
   },
 ];
 

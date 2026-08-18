@@ -40,6 +40,107 @@ export type Database = {
         };
         Relationships: [];
       };
+      interviews: {
+        Row: {
+          application_id: string | null;
+          created_at: string;
+          id: string;
+          interview_date: string;
+          interview_time: string;
+          name: string;
+          note: string;
+          phone: string;
+        };
+        Insert: {
+          application_id?: string | null;
+          created_at?: string;
+          id?: string;
+          interview_date: string;
+          interview_time?: string;
+          name: string;
+          note?: string;
+          phone?: string;
+        };
+        Update: {
+          application_id?: string | null;
+          created_at?: string;
+          id?: string;
+          interview_date?: string;
+          interview_time?: string;
+          name?: string;
+          note?: string;
+          phone?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "interviews_application_id_fkey";
+            columns: ["application_id"];
+            isOneToOne: false;
+            referencedRelation: "job_applications";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      job_applications: {
+        Row: {
+          age: string;
+          availability: string;
+          email: string;
+          employment_type: string;
+          experience: string;
+          first_name: string;
+          food_service: string;
+          id: string;
+          last_name: string;
+          location: string;
+          note: string;
+          phone: string;
+          position: string;
+          status: Database["public"]["Enums"]["application_status"];
+          submitted_at: string;
+          transportation: string;
+          work_authorized: string;
+        };
+        Insert: {
+          age?: string;
+          availability?: string;
+          email?: string;
+          employment_type?: string;
+          experience?: string;
+          first_name?: string;
+          food_service?: string;
+          id?: string;
+          last_name?: string;
+          location?: string;
+          note?: string;
+          phone?: string;
+          position?: string;
+          status?: Database["public"]["Enums"]["application_status"];
+          submitted_at?: string;
+          transportation?: string;
+          work_authorized?: string;
+        };
+        Update: {
+          age?: string;
+          availability?: string;
+          email?: string;
+          employment_type?: string;
+          experience?: string;
+          first_name?: string;
+          food_service?: string;
+          id?: string;
+          last_name?: string;
+          location?: string;
+          note?: string;
+          phone?: string;
+          position?: string;
+          status?: Database["public"]["Enums"]["application_status"];
+          submitted_at?: string;
+          transportation?: string;
+          work_authorized?: string;
+        };
+        Relationships: [];
+      };
       published_shifts: {
         Row: {
           employee_id: string;
@@ -196,6 +297,33 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      text_snippets: {
+        Row: {
+          body: string;
+          created_at: string;
+          id: string;
+          sort_order: number;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          body?: string;
+          created_at?: string;
+          id?: string;
+          sort_order?: number;
+          title?: string;
+          updated_at?: string;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          id?: string;
+          sort_order?: number;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       time_off_requests: {
         Row: {
@@ -393,6 +521,7 @@ export type Database = {
       [_ in never]: never;
     };
     Enums: {
+      application_status: "new" | "contacted" | "interview" | "hired" | "passed";
       day_key:
         | "monday"
         | "tuesday"
