@@ -15,27 +15,36 @@ export type Database = {
     Tables: {
       employees: {
         Row: {
+          active: boolean;
           created_at: string;
+          hire_date: string | null;
           hourly_pay: number | null;
           id: string;
           login_code: string | null;
           name: string;
+          performance_role: Database["public"]["Enums"]["performance_role"];
           shift_group: Database["public"]["Enums"]["shift_group"];
         };
         Insert: {
+          active?: boolean;
           created_at?: string;
+          hire_date?: string | null;
           hourly_pay?: number | null;
           id?: string;
           login_code?: string | null;
           name: string;
+          performance_role?: Database["public"]["Enums"]["performance_role"];
           shift_group?: Database["public"]["Enums"]["shift_group"];
         };
         Update: {
+          active?: boolean;
           created_at?: string;
+          hire_date?: string | null;
           hourly_pay?: number | null;
           id?: string;
           login_code?: string | null;
           name?: string;
+          performance_role?: Database["public"]["Enums"]["performance_role"];
           shift_group?: Database["public"]["Enums"]["shift_group"];
         };
         Relationships: [];
@@ -513,6 +522,176 @@ export type Database = {
         };
         Relationships: [];
       };
+      employee_stations: {
+        Row: {
+          employee_id: string;
+          station_id: string;
+        };
+        Insert: {
+          employee_id: string;
+          station_id: string;
+        };
+        Update: {
+          employee_id?: string;
+          station_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "employee_stations_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "employee_stations_station_id_fkey";
+            columns: ["station_id"];
+            isOneToOne: false;
+            referencedRelation: "performance_stations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      performance_metric_roles: {
+        Row: {
+          metric_id: string;
+          role: Database["public"]["Enums"]["performance_role"];
+        };
+        Insert: {
+          metric_id: string;
+          role: Database["public"]["Enums"]["performance_role"];
+        };
+        Update: {
+          metric_id?: string;
+          role?: Database["public"]["Enums"]["performance_role"];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "performance_metric_roles_metric_id_fkey";
+            columns: ["metric_id"];
+            isOneToOne: false;
+            referencedRelation: "performance_metrics";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      performance_metric_stations: {
+        Row: {
+          metric_id: string;
+          station_id: string;
+        };
+        Insert: {
+          metric_id: string;
+          station_id: string;
+        };
+        Update: {
+          metric_id?: string;
+          station_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "performance_metric_stations_metric_id_fkey";
+            columns: ["metric_id"];
+            isOneToOne: false;
+            referencedRelation: "performance_metrics";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "performance_metric_stations_station_id_fkey";
+            columns: ["station_id"];
+            isOneToOne: false;
+            referencedRelation: "performance_stations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      performance_metrics: {
+        Row: {
+          amber_at: number | null;
+          archived: boolean;
+          category: string;
+          created_at: string;
+          description: string;
+          direction: Database["public"]["Enums"]["metric_direction"];
+          frequency: Database["public"]["Enums"]["metric_frequency"];
+          green_at: number | null;
+          id: string;
+          lagging: boolean;
+          name: string;
+          scope: Database["public"]["Enums"]["metric_scope"];
+          sort_order: number;
+          target: number | null;
+          target_max: number | null;
+          target_min: number | null;
+          type: Database["public"]["Enums"]["metric_type"];
+          unit: string;
+          weight: number;
+        };
+        Insert: {
+          amber_at?: number | null;
+          archived?: boolean;
+          category?: string;
+          created_at?: string;
+          description?: string;
+          direction?: Database["public"]["Enums"]["metric_direction"];
+          frequency?: Database["public"]["Enums"]["metric_frequency"];
+          green_at?: number | null;
+          id?: string;
+          lagging?: boolean;
+          name: string;
+          scope?: Database["public"]["Enums"]["metric_scope"];
+          sort_order?: number;
+          target?: number | null;
+          target_max?: number | null;
+          target_min?: number | null;
+          type?: Database["public"]["Enums"]["metric_type"];
+          unit?: string;
+          weight?: number;
+        };
+        Update: {
+          amber_at?: number | null;
+          archived?: boolean;
+          category?: string;
+          created_at?: string;
+          description?: string;
+          direction?: Database["public"]["Enums"]["metric_direction"];
+          frequency?: Database["public"]["Enums"]["metric_frequency"];
+          green_at?: number | null;
+          id?: string;
+          lagging?: boolean;
+          name?: string;
+          scope?: Database["public"]["Enums"]["metric_scope"];
+          sort_order?: number;
+          target?: number | null;
+          target_max?: number | null;
+          target_min?: number | null;
+          type?: Database["public"]["Enums"]["metric_type"];
+          unit?: string;
+          weight?: number;
+        };
+        Relationships: [];
+      };
+      performance_stations: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          sort_order: number;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          sort_order?: number;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -530,6 +709,18 @@ export type Database = {
         | "friday"
         | "saturday"
         | "sunday";
+      metric_direction: "higher" | "lower" | "range" | "exact";
+      metric_frequency: "shift" | "daily" | "weekly" | "monthly";
+      metric_scope: "individual" | "station" | "leadership";
+      metric_type:
+        | "number"
+        | "percentage"
+        | "currency"
+        | "count"
+        | "duration"
+        | "pass_fail"
+        | "rating";
+      performance_role: "crew" | "shift_lead" | "manager";
       shift_group: "morning" | "night" | "other";
       time_off_status: "pending" | "approved" | "denied";
       truck_order_status: "draft" | "submitted" | "received";
