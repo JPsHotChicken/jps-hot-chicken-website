@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 import { loadScheduleBase, loadWeek } from "@/lib/schedule-repo";
+import { loadAliases } from "@/lib/pay-stubs-repo";
 import { getPublishState } from "@/lib/staff-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { mondayOf, toISODate } from "@/lib/schedule";
@@ -39,9 +40,12 @@ export default async function AdminPage({
 
   const weekStart = toISODate(mondayOf());
   const base = await loadScheduleBase();
-  const [week, publishState] = await Promise.all([
+  const [week, publishState, payrollNames] = await Promise.all([
     loadWeek(weekStart, base.rowCount),
     getPublishState(weekStart),
+    // How payroll spells each person, shown on the staff tab so a wrong one can
+    // be dropped before it sends somebody the wrong pay stub.
+    loadAliases(),
   ]);
 
   return (
@@ -53,6 +57,7 @@ export default async function AdminPage({
       weekStart={weekStart}
       week={week}
       publishState={publishState}
+      payrollNames={payrollNames}
       initialView={view}
     />
   );

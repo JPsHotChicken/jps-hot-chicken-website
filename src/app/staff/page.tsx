@@ -9,6 +9,7 @@ import {
   listRequestsForEmployee,
   loadPublishedWeek,
 } from "@/lib/staff-repo";
+import { payStubsForEmployee } from "@/lib/pay-stubs-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { MAX_ROW_COUNT, mondayOf, toISODate } from "@/lib/schedule";
 import { StaffDashboard } from "@/components/staff/StaffDashboard";
@@ -34,9 +35,12 @@ export default async function StaffPage() {
   if (!employee) redirect("/staff/login");
 
   const thisWeek = toISODate(mondayOf());
-  const [publishedWeeks, requests] = await Promise.all([
+  const [publishedWeeks, requests, payStubs] = await Promise.all([
     listPublishedWeeks(thisWeek),
     listRequestsForEmployee(employee.id),
+    // Only released stubs come back, and only this person's — a draft pay run
+    // is invisible here the same way it is invisible to the file route.
+    payStubsForEmployee(employee.id),
   ]);
 
   // Show the current week when it's published, otherwise the next one that is.
@@ -56,6 +60,7 @@ export default async function StaffPage() {
       initialWeekStart={initialWeekStart}
       initialWeek={initialWeek}
       initialRequests={requests}
+      payStubs={payStubs}
     />
   );
 }

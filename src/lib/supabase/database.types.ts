@@ -49,6 +49,119 @@ export type Database = {
         };
         Relationships: [];
       };
+      employee_payroll_names: {
+        Row: {
+          created_at: string;
+          employee_id: string;
+          id: string;
+          payroll_name: string;
+        };
+        Insert: {
+          created_at?: string;
+          employee_id: string;
+          id?: string;
+          payroll_name: string;
+        };
+        Update: {
+          created_at?: string;
+          employee_id?: string;
+          id?: string;
+          payroll_name?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "employee_payroll_names_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      pay_stub_batches: {
+        Row: {
+          created_at: string;
+          id: string;
+          page_count: number;
+          pay_date: string | null;
+          period_end: string | null;
+          period_start: string | null;
+          released_at: string | null;
+          source_filename: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          page_count: number;
+          pay_date?: string | null;
+          period_end?: string | null;
+          period_start?: string | null;
+          released_at?: string | null;
+          source_filename: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          page_count?: number;
+          pay_date?: string | null;
+          period_end?: string | null;
+          period_start?: string | null;
+          released_at?: string | null;
+          source_filename?: string;
+        };
+        Relationships: [];
+      };
+      pay_stubs: {
+        Row: {
+          batch_id: string;
+          created_at: string;
+          employee_id: string | null;
+          id: string;
+          match_source: string;
+          page_number: number;
+          payroll_name: string | null;
+          skipped: boolean;
+          storage_path: string;
+        };
+        Insert: {
+          batch_id: string;
+          created_at?: string;
+          employee_id?: string | null;
+          id?: string;
+          match_source?: string;
+          page_number: number;
+          payroll_name?: string | null;
+          skipped?: boolean;
+          storage_path: string;
+        };
+        Update: {
+          batch_id?: string;
+          created_at?: string;
+          employee_id?: string | null;
+          id?: string;
+          match_source?: string;
+          page_number?: number;
+          payroll_name?: string | null;
+          skipped?: boolean;
+          storage_path?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pay_stubs_batch_id_fkey";
+            columns: ["batch_id"];
+            isOneToOne: false;
+            referencedRelation: "pay_stub_batches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "pay_stubs_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       interviews: {
         Row: {
           application_id: string | null;

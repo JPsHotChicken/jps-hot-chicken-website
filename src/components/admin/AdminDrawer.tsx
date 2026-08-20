@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Database,
+  FileText,
   HandCoins,
   Truck,
   Users,
@@ -22,7 +23,8 @@ export type AdminView =
   | "tips"
   | "items"
   | "applications"
-  | "performance";
+  | "performance"
+  | "payStubs";
 
 /** The two halves of `/admin`, which switch in place rather than navigating. */
 export type SchedulerView = Extract<AdminView, "scheduler" | "staff">;
@@ -72,6 +74,13 @@ const TABS: {
     icon: <Database className="size-4" />,
     hint: "Every item, what it costs, what it is made of",
     href: "/admin/items",
+  },
+  {
+    view: "payStubs",
+    label: "Staff pay stubs",
+    icon: <FileText className="size-4" />,
+    hint: "Split the payroll PDF and release it",
+    href: "/admin/pay-stubs",
   },
   {
     view: "performance",

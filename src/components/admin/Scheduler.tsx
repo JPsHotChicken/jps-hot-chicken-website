@@ -65,6 +65,7 @@ import { EmployeePanel } from "./EmployeePanel";
 import { ExportMenu } from "./ExportMenu";
 import { GoLiveButton, type PublishState } from "./GoLiveButton";
 import { StaffManagement } from "./StaffManagement";
+import { forgetPayrollNameAction } from "@/app/admin/pay-stubs/actions";
 import {
   TimeOffPanel,
   type NewRecurringTimeOff,
@@ -76,6 +77,8 @@ type Editing = { day: DayKey; range: CellRange; el: HTMLElement };
 export type SchedulerProps = {
   rowCount: number;
   employees: Employee[];
+  /** How payroll spells each person, learned when a pay stub was assigned. */
+  payrollNames?: { employeeId: string; payrollName: string }[];
   timeOff: TimeOffRequest[];
   recurringTimeOff: RecurringTimeOff[];
   /** Monday of the week the page was opened on. */
@@ -116,10 +119,12 @@ export function Scheduler({
   weekStart: initialWeekStart,
   week: initialWeek,
   publishState: initialPublishState,
+  payrollNames: initialPayrollNames = [],
   initialView = "scheduler",
 }: SchedulerProps) {
   const [rowCount, setRowCount] = useState(initialRowCount);
   const [employees, setEmployees] = useState(initialEmployees);
+  const [payrollNames, setPayrollNames] = useState(initialPayrollNames);
   const [timeOff, setTimeOff] = useState(initialTimeOff);
   const [recurring, setRecurring] = useState(initialRecurring);
   const [weeks, setWeeks] = useState<Record<string, WeekSchedule>>({
@@ -659,8 +664,13 @@ export function Scheduler({
       {view === "staff" ? (
         <StaffManagement
           employees={employees}
+          payrollNames={payrollNames}
           onSaveCode={saveLoginCode}
           onRandomCode={randomLoginCode}
+          onForgetPayrollName={async (payrollName) => {
+            await forgetPayrollNameAction(payrollName);
+            setPayrollNames((names) => names.filter((n) => n.payrollName !== payrollName));
+          }}
         />
       ) : (
       <div className="flex flex-1 flex-col gap-4 p-4 sm:px-6 lg:flex-row-reverse lg:items-start">

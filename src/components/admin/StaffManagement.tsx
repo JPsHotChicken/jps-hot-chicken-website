@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Dices, KeyRound, LoaderCircle, Users } from "lucide-react";
+import { Check, Dices, KeyRound, LoaderCircle, Users, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,9 @@ const GROUP_DOT: Record<ShiftGroup, string> = {
 
 type Props = {
   employees: Employee[];
+  /** How payroll spells each person, learned when a pay stub was assigned. */
+  payrollNames?: { employeeId: string; payrollName: string }[];
+  onForgetPayrollName?: (payrollName: string) => Promise<void>;
   /** Resolves to the saved code, or rejects with a message worth showing. */
   onSaveCode: (id: string, code: string) => Promise<void>;
   onRandomCode: (id: string) => Promise<void>;
@@ -28,12 +31,16 @@ type Props = {
 /** One employee row: their name, and the code they sign in with. */
 function EmployeeRow({
   employee,
+  payrollNames = [],
   onSaveCode,
   onRandomCode,
+  onForgetPayrollName,
 }: {
   employee: Employee;
+  payrollNames?: string[];
   onSaveCode: (id: string, code: string) => Promise<void>;
   onRandomCode: (id: string) => Promise<void>;
+  onForgetPayrollName?: (payrollName: string) => Promise<void>;
 }) {
   const saved = employee.loginCode ?? "";
   const [draft, setDraft] = useState(saved);
@@ -83,6 +90,30 @@ function EmployeeRow({
           <p className="text-xs text-muted-foreground">
             {saved ? "Signs in at /staff with this code" : "No code yet — they can't sign in"}
           </p>
+        )}
+
+        {payrollNames.length > 0 && (
+          <ul className="mt-1 flex flex-wrap gap-1.5">
+            {payrollNames.map((payrollName) => (
+              <li
+                key={payrollName}
+                className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                title="Pay stubs printed with this name go to this person"
+              >
+                <span className="capitalize">{payrollName}</span>
+                {onForgetPayrollName && (
+                  <button
+                    type="button"
+                    onClick={() => void onForgetPayrollName(payrollName)}
+                    aria-label={`Stop matching "${payrollName}" to ${employee.name}`}
+                    className="rounded-full p-0.5 hover:bg-background"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
@@ -149,8 +180,16 @@ function EmployeeRow({
  * Codes live here rather than on the scheduler's employee card, which is for
  * dragging shifts, not admin.
  */
-export function StaffManagement({ employees, onSaveCode, onRandomCode }: Props) {
+export function StaffManagement({
+  employees,
+  payrollNames = [],
+  onSaveCode,
+  onRandomCode,
+  onForgetPayrollName,
+}: Props) {
   const grouped = employeesByGroup(employees);
+  const namesFor = (employeeId: string) =>
+    payrollNames.filter((entry) => entry.employeeId === employeeId).map((e) => e.payrollName);
 
   return (
     <div className="mx-auto w-full max-w-3xl p-4 sm:px-6">
@@ -183,8 +222,10 @@ export function StaffManagement({ employees, onSaveCode, onRandomCode }: Props) 
                     <EmployeeRow
                       key={`${employee.id}-${employee.loginCode ?? "none"}`}
                       employee={employee}
+                      payrollNames={namesFor(employee.id)}
                       onSaveCode={onSaveCode}
                       onRandomCode={onRandomCode}
+                      onForgetPayrollName={onForgetPayrollName}
                     />
                   ))}
                 </ul>
