@@ -6,8 +6,8 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      // Staff-only dashboard — nothing here belongs in search results.
-      disallow: "/admin",
+      // Staff-only areas — nothing here belongs in search results.
+      disallow: ["/admin", "/operations"],
     },
     sitemap: new URL("/sitemap.xml", siteConfig.url).toString(),
     host: siteConfig.url,

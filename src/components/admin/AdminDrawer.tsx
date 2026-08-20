@@ -6,6 +6,7 @@ import {
   CalendarRange,
   ClipboardCheck,
   ClipboardList,
+  Database,
   HandCoins,
   Truck,
   Users,
@@ -19,6 +20,7 @@ export type AdminView =
   | "staff"
   | "truck"
   | "tips"
+  | "items"
   | "applications"
   | "performance";
 
@@ -63,6 +65,13 @@ const TABS: {
     icon: <HandCoins className="size-4" />,
     hint: "Split the week's tips by the hour",
     href: "/admin/tips",
+  },
+  {
+    view: "items",
+    label: "Items database",
+    icon: <Database className="size-4" />,
+    hint: "Every item, what it costs, what it is made of",
+    href: "/admin/items",
   },
   {
     view: "performance",

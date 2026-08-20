@@ -692,6 +692,353 @@ export type Database = {
         };
         Relationships: [];
       };
+      item_components: {
+        Row: {
+          basis: Database["public"]["Enums"]["unit_basis"];
+          component_id: string;
+          id: string;
+          note: string;
+          parent_id: string;
+          quantity: number;
+          sort_order: number;
+        };
+        Insert: {
+          basis?: Database["public"]["Enums"]["unit_basis"];
+          component_id: string;
+          id?: string;
+          note?: string;
+          parent_id: string;
+          quantity: number;
+          sort_order?: number;
+        };
+        Update: {
+          basis?: Database["public"]["Enums"]["unit_basis"];
+          component_id?: string;
+          id?: string;
+          note?: string;
+          parent_id?: string;
+          quantity?: number;
+          sort_order?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_components_component_id_fkey";
+            columns: ["component_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_components_parent_id_fkey";
+            columns: ["parent_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      item_locations: {
+        Row: {
+          id: string;
+          item_id: string;
+          location_id: string;
+        };
+        Insert: {
+          id?: string;
+          item_id: string;
+          location_id: string;
+        };
+        Update: {
+          id?: string;
+          item_id?: string;
+          location_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_locations_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_locations_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      item_revisions: {
+        Row: {
+          changed_at: string;
+          changed_by: string;
+          id: string;
+          item_id: string;
+          snapshot: Json;
+          summary: string;
+          version: number;
+        };
+        Insert: {
+          changed_at?: string;
+          changed_by?: string;
+          id?: string;
+          item_id: string;
+          snapshot: Json;
+          summary?: string;
+          version: number;
+        };
+        Update: {
+          changed_at?: string;
+          changed_by?: string;
+          id?: string;
+          item_id?: string;
+          snapshot?: Json;
+          summary?: string;
+          version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_revisions_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      item_suppliers: {
+        Row: {
+          approved: boolean;
+          cost: number | null;
+          created_at: string;
+          id: string;
+          is_primary: boolean;
+          item_id: string;
+          pack_size: string;
+          purchase_unit: string;
+          supplier_id: string;
+          supplier_part_number: string;
+        };
+        Insert: {
+          approved?: boolean;
+          cost?: number | null;
+          created_at?: string;
+          id?: string;
+          is_primary?: boolean;
+          item_id: string;
+          pack_size?: string;
+          purchase_unit?: string;
+          supplier_id: string;
+          supplier_part_number?: string;
+        };
+        Update: {
+          approved?: boolean;
+          cost?: number | null;
+          created_at?: string;
+          id?: string;
+          is_primary?: boolean;
+          item_id?: string;
+          pack_size?: string;
+          purchase_unit?: string;
+          supplier_id?: string;
+          supplier_part_number?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "item_suppliers_item_id_fkey";
+            columns: ["item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "item_suppliers_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      items: {
+        Row: {
+          aliases: string[];
+          allergens: string[];
+          available_everywhere: boolean;
+          batch_yield_quantity: number;
+          category: string;
+          code: string;
+          created_at: string;
+          customer_name: string;
+          date_label_rule: string;
+          id: string;
+          internal_name: string;
+          menu_price: number | null;
+          notes: string;
+          nutrition: Json;
+          pack_size: string;
+          par_level: number | null;
+          photo_url: string;
+          portion_unit: string;
+          portions_per_stock_unit: number | null;
+          purchase_cost: number | null;
+          purchase_unit: string;
+          recipe_url: string;
+          reorder_point: number | null;
+          scope: Database["public"]["Enums"]["item_scope"];
+          shelf_life_days: number | null;
+          sop_links: Json;
+          status: Database["public"]["Enums"]["item_status"];
+          stock_per_purchase_unit: number | null;
+          stock_unit: string;
+          storage_temp: string;
+          storage_zone: Database["public"]["Enums"]["storage_zone"];
+          subcategory: string;
+          type: Database["public"]["Enums"]["item_type"];
+          updated_at: string;
+          updated_by: string;
+          version: number;
+          yield_factor: number;
+        };
+        Insert: {
+          aliases?: string[];
+          allergens?: string[];
+          available_everywhere?: boolean;
+          batch_yield_quantity?: number;
+          category?: string;
+          code: string;
+          created_at?: string;
+          customer_name?: string;
+          date_label_rule?: string;
+          id?: string;
+          internal_name: string;
+          menu_price?: number | null;
+          notes?: string;
+          nutrition?: Json;
+          pack_size?: string;
+          par_level?: number | null;
+          photo_url?: string;
+          portion_unit?: string;
+          portions_per_stock_unit?: number | null;
+          purchase_cost?: number | null;
+          purchase_unit?: string;
+          recipe_url?: string;
+          reorder_point?: number | null;
+          scope?: Database["public"]["Enums"]["item_scope"];
+          shelf_life_days?: number | null;
+          sop_links?: Json;
+          status?: Database["public"]["Enums"]["item_status"];
+          stock_per_purchase_unit?: number | null;
+          stock_unit?: string;
+          storage_temp?: string;
+          storage_zone?: Database["public"]["Enums"]["storage_zone"];
+          subcategory?: string;
+          type: Database["public"]["Enums"]["item_type"];
+          updated_at?: string;
+          updated_by?: string;
+          version?: number;
+          yield_factor?: number;
+        };
+        Update: {
+          aliases?: string[];
+          allergens?: string[];
+          available_everywhere?: boolean;
+          batch_yield_quantity?: number;
+          category?: string;
+          code?: string;
+          created_at?: string;
+          customer_name?: string;
+          date_label_rule?: string;
+          id?: string;
+          internal_name?: string;
+          menu_price?: number | null;
+          notes?: string;
+          nutrition?: Json;
+          pack_size?: string;
+          par_level?: number | null;
+          photo_url?: string;
+          portion_unit?: string;
+          portions_per_stock_unit?: number | null;
+          purchase_cost?: number | null;
+          purchase_unit?: string;
+          recipe_url?: string;
+          reorder_point?: number | null;
+          scope?: Database["public"]["Enums"]["item_scope"];
+          shelf_life_days?: number | null;
+          sop_links?: Json;
+          status?: Database["public"]["Enums"]["item_status"];
+          stock_per_purchase_unit?: number | null;
+          stock_unit?: string;
+          storage_temp?: string;
+          storage_zone?: Database["public"]["Enums"]["storage_zone"];
+          subcategory?: string;
+          type?: Database["public"]["Enums"]["item_type"];
+          updated_at?: string;
+          updated_by?: string;
+          version?: number;
+          yield_factor?: number;
+        };
+        Relationships: [];
+      };
+      locations: {
+        Row: {
+          active: boolean;
+          code: string;
+          created_at: string;
+          id: string;
+          name: string;
+          region: string;
+        };
+        Insert: {
+          active?: boolean;
+          code: string;
+          created_at?: string;
+          id?: string;
+          name: string;
+          region?: string;
+        };
+        Update: {
+          active?: boolean;
+          code?: string;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          region?: string;
+        };
+        Relationships: [];
+      };
+      suppliers: {
+        Row: {
+          account_number: string;
+          active: boolean;
+          contact: string;
+          created_at: string;
+          id: string;
+          name: string;
+          notes: string;
+        };
+        Insert: {
+          account_number?: string;
+          active?: boolean;
+          contact?: string;
+          created_at?: string;
+          id?: string;
+          name: string;
+          notes?: string;
+        };
+        Update: {
+          account_number?: string;
+          active?: boolean;
+          contact?: string;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          notes?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -709,6 +1056,17 @@ export type Database = {
         | "friday"
         | "saturday"
         | "sunday";
+      item_scope: "core" | "optional" | "regional";
+      item_status: "active" | "seasonal" | "regional" | "test" | "discontinued";
+      item_type:
+        | "raw"
+        | "prepped"
+        | "menu"
+        | "modifier"
+        | "packaging"
+        | "chemical"
+        | "smallware"
+        | "marketing";
       metric_direction: "higher" | "lower" | "range" | "exact";
       metric_frequency: "shift" | "daily" | "weekly" | "monthly";
       metric_scope: "individual" | "station" | "leadership";
@@ -722,8 +1080,10 @@ export type Database = {
         | "rating";
       performance_role: "crew" | "shift_lead" | "manager";
       shift_group: "morning" | "night" | "other";
+      storage_zone: "none" | "dry" | "refrigerated" | "frozen";
       time_off_status: "pending" | "approved" | "denied";
       truck_order_status: "draft" | "submitted" | "received";
+      unit_basis: "stock" | "portion";
     };
     CompositeTypes: {
       [_ in never]: never;

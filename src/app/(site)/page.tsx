@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Clock, Mail, MapPin, Megaphone, Navigation, Phone, Star, Store, Truck } from "lucide-react";
+import { ArrowRight, Clock, Mail, MapPin, Navigation, Phone, Star, Store, Truck } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
 import { formatPhone, telHref } from "@/lib/format";
@@ -9,6 +9,7 @@ import { getWeekRows, getOnlineWeekRows } from "@/lib/hours";
 import { buildHomeJsonLd, serializeJsonLd } from "@/lib/jsonld";
 import { OrderButton } from "@/components/OrderButton";
 import { Marquee } from "@/components/Marquee";
+import { InteriorSlideshow } from "@/components/InteriorSlideshow";
 import { entrees, sides, dippingSauces, drinks } from "@/data/food";
 
 const LOCATION_IMAGES: Record<string, { src: string; alt: string }> = {
@@ -21,6 +22,13 @@ const LOCATION_IMAGES: Record<string, { src: string; alt: string }> = {
     alt: "Illustration of the bridge in Clarksville, TN",
   },
 };
+
+// TEMPORARY — photos of the new Trenton dining room, shown in the slideshow
+// under the order buttons. Delete this list with the section when it comes down.
+const INTERIOR_IMAGES = Array.from({ length: 9 }, (_, i) => ({
+  src: `/images/interior/JPs_Trenton_Interior${i + 1}.jpeg`,
+  alt: `Inside the JP's Hot Chicken Trenton Rd dining room (photo ${i + 1} of 9)`,
+}));
 
 export const metadata: Metadata = {
   title: {
@@ -188,18 +196,28 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* TEMPORARY — Trenton interior slideshow. Delete this section (and the
+          INTERIOR_IMAGES list + InteriorSlideshow import) when it comes down. */}
+      <section
+        aria-labelledby="trenton-interior-title"
+        className="mx-auto w-full max-w-6xl px-4 pt-8 pb-6 sm:px-6 sm:pt-16 sm:pb-10"
+      >
+        <p className="font-heading text-sm font-bold uppercase tracking-[0.25em] text-brand sm:text-base">
+          New
+        </p>
+        <h2
+          id="trenton-interior-title"
+          className="mt-1 mb-4 font-heading text-3xl font-extrabold uppercase tracking-tight sm:mb-5 sm:text-4xl"
+        >
+          Trenton Interior
+        </h2>
+        <InteriorSlideshow images={INTERIOR_IMAGES} className="max-w-3xl" />
+      </section>
+
       {/* The Big Combo */}
       <section aria-labelledby="big-combo-title" className="bg-white">
         {/* Header: BIG COMBO on one line, what's included underneath */}
         <div className="mx-auto w-full max-w-6xl px-4 py-12 text-center sm:px-6 sm:py-16">
-          {/* Small announcement badge — mirrors the sitewide banner. */}
-          <Link
-            href="/order/clarksville"
-            className="mb-8 inline-flex items-center gap-2 rounded-full border-2 border-brand bg-brand/5 px-4 py-1.5 font-heading text-xs font-semibold uppercase tracking-wide text-brand transition-colors hover:bg-brand/10 sm:text-sm"
-          >
-            <Megaphone className="size-4 shrink-0" aria-hidden="true" />
-            Trenton location now open!
-          </Link>
           <p className="font-heading text-sm font-bold uppercase tracking-[0.25em] text-muted-foreground sm:text-base">
             The
           </p>

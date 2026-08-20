@@ -2,16 +2,36 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import {
+  OPERATIONS_SESSION_COOKIE,
+  verifyOperationsSessionToken,
+} from "@/lib/operations-auth";
 import { STAFF_SESSION_COOKIE, readStaffSession } from "@/lib/staff-auth";
 
 /**
- * Gate for the two signed-in areas: the owner's dashboard at `/admin` and the
- * employee schedule at `/staff`. This is the first line of defence for nicer
- * redirects; both pages re-check the session when they render, so a stale or
- * forged cookie can't reach either even if this is bypassed.
+ * Gate for the three signed-in areas: the owner's dashboard at `/admin`, the
+ * shift tools at `/operations`, and the employee schedule at `/staff`. This is
+ * the first line of defence for nicer redirects; every page re-checks its own
+ * session when it renders, so a stale or forged cookie can't reach any of them
+ * even if this is bypassed.
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname === "/operations" || pathname.startsWith("/operations/")) {
+    const isUnlocked = await verifyOperationsSessionToken(
+      request.cookies.get(OPERATIONS_SESSION_COOKIE)?.value,
+    );
+
+    if (pathname === "/operations/login") {
+      return isUnlocked
+        ? NextResponse.redirect(new URL("/operations", request.url))
+        : NextResponse.next();
+    }
+    return isUnlocked
+      ? NextResponse.next()
+      : NextResponse.redirect(new URL("/operations/login", request.url));
+  }
 
   if (pathname === "/staff" || pathname.startsWith("/staff/")) {
     const isSignedIn = Boolean(
@@ -43,5 +63,12 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*", "/staff", "/staff/:path*"],
+  matcher: [
+    "/admin",
+    "/admin/:path*",
+    "/operations",
+    "/operations/:path*",
+    "/staff",
+    "/staff/:path*",
+  ],
 };

@@ -29,9 +29,15 @@ describe("Footer", () => {
     expect(screen.queryByRole("link", { name: "Careers" })).not.toBeInTheDocument();
   });
 
-  it("links to the staff admin dashboard", () => {
+  it("links to the staff-only areas", () => {
     render(<Footer />);
-    expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
+    for (const [label, href] of [
+      ["Admin", "/admin"],
+      ["Operations", "/operations"],
+      ["Staff", "/staff"],
+    ] as const) {
+      expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", href);
+    }
   });
 
   it("renders a phone number for each location that has one plus the email from siteConfig", () => {
