@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -14,17 +14,35 @@ export type InteriorSlide = {
 type InteriorSlideshowProps = {
   images: InteriorSlide[];
   className?: string;
+  /** Seconds each photo is held before the slideshow advances on its own. */
+  intervalSeconds?: number;
 };
 
+/** True for the current photo and the one on either side of it (wrapping). */
+function isNear(i: number, index: number, count: number) {
+  const distance = Math.abs(i - index);
+  return distance <= 1 || distance === count - 1;
+}
+
 /**
- * Manual photo slideshow: one large image with overlay arrows, and a row of
- * thumbnails underneath — every photo at once, the current one highlighted —
- * that jump straight to a photo. The arrows wrap in both directions, so there
- * is no dead end at either end of the strip. Left/right arrow keys move between
- * photos while the slideshow has focus.
+ * Auto-advancing photo slideshow: one large image that crossfades to the next
+ * every few seconds, with overlay arrows and a row of thumbnails underneath —
+ * every photo at once, the current one highlighted — that jump straight to a
+ * photo. The arrows wrap in both directions, so there is no dead end at either
+ * end of the strip, and left/right arrow keys move between photos while the
+ * slideshow has focus.
+ *
+ * Auto-advance pauses while the pointer is over the slideshow or one of its
+ * controls has focus, so it never moves out from under someone mid-look, and it
+ * stays off entirely for visitors who ask for reduced motion.
  */
-export function InteriorSlideshow({ images, className }: InteriorSlideshowProps) {
+export function InteriorSlideshow({
+  images,
+  className,
+  intervalSeconds = 5,
+}: InteriorSlideshowProps) {
   const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
   const count = images.length;
 
   // Wrap in both directions so the arrows and thumbnails never dead-end.
@@ -33,9 +51,21 @@ export function InteriorSlideshow({ images, className }: InteriorSlideshowProps)
     [count],
   );
 
-  if (count === 0) return null;
+  // Advance on a timer. `index` is a dependency so any manual move (arrow,
+  // thumbnail, or key) restarts the clock rather than cutting the new photo
+  // short.
+  useEffect(() => {
+    if (paused || count < 2) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
 
-  const current = images[index];
+    const id = window.setTimeout(
+      () => setIndex((i) => (i + 1) % count),
+      intervalSeconds * 1000,
+    );
+    return () => window.clearTimeout(id);
+  }, [paused, count, index, intervalSeconds]);
+
+  if (count === 0) return null;
 
   return (
     <div
@@ -44,6 +74,10 @@ export function InteriorSlideshow({ images, className }: InteriorSlideshowProps)
       aria-roledescription="carousel"
       aria-label="Trenton interior photos"
       tabIndex={0}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={() => setPaused(false)}
       onKeyDown={(e) => {
         if (e.key === "ArrowLeft") {
           e.preventDefault();
@@ -54,16 +88,27 @@ export function InteriorSlideshow({ images, className }: InteriorSlideshowProps)
         }
       }}
     >
-      {/* Large image */}
+      {/* Large image. The current photo plus its two neighbours are stacked in
+          the same box and the current one is faded in, so advancing crossfades
+          instead of blinking — while only ever loading three of these big files
+          at a time. Only the visible photo is exposed to screen readers. */}
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-muted">
-        <Image
-          key={current.src}
-          src={current.src}
-          alt={current.alt}
-          fill
-          sizes="(max-width: 640px) 100vw, 768px"
-          className="object-cover"
-        />
+        {images.map((slide, i) =>
+          isNear(i, index, count) ? (
+            <Image
+              key={slide.src}
+              src={slide.src}
+              alt={slide.alt}
+              aria-hidden={i === index ? undefined : true}
+              fill
+              sizes="(max-width: 640px) 100vw, 768px"
+              className={cn(
+                "object-cover transition-opacity duration-700 ease-out motion-reduce:transition-none",
+                i === index ? "opacity-100" : "opacity-0",
+              )}
+            />
+          ) : null,
+        )}
         <button
           type="button"
           onClick={() => step(-1)}
@@ -110,7 +155,9 @@ export function InteriorSlideshow({ images, className }: InteriorSlideshowProps)
           </button>
         ))}
       </div>
-      <p className="sr-only" aria-live="polite">
+      {/* Announced only when the slideshow is paused — i.e. when the visitor is
+          the one moving through it — so auto-advance stays quiet. */}
+      <p className="sr-only" aria-live={paused ? "polite" : "off"}>
         Photo {index + 1} of {count}
       </p>
     </div>

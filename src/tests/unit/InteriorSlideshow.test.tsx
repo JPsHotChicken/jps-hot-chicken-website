@@ -1,10 +1,20 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/image", () => ({
-  default: ({ src, alt }: { src: string; alt: string }) => (
+  default: ({
+    src,
+    alt,
+    className,
+    "aria-hidden": ariaHidden,
+  }: {
+    src: string;
+    alt: string;
+    className?: string;
+    "aria-hidden"?: boolean;
+  }) => (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={alt} />
+    <img src={src} alt={alt} className={className} aria-hidden={ariaHidden} />
   ),
 }));
 
@@ -15,10 +25,15 @@ const IMAGES = Array.from({ length: 3 }, (_, i) => ({
   alt: `Interior photo ${i + 1}`,
 }));
 
-/** The large image is the only one with alt text; the thumbnails are decorative. */
+/**
+ * Every photo is stacked in the large image box, but only the visible one is
+ * exposed to the accessibility tree — so this finds exactly the current photo.
+ * (The thumbnails are decorative and carry no alt text.)
+ */
 const currentPhoto = () =>
   screen.getByRole("img", { name: /interior photo/i }).getAttribute("src");
 
+const carousel = () => screen.getByRole("group", { name: /trenton interior photos/i });
 const arrow = (name: "Previous photo" | "Next photo") =>
   screen.getByRole("button", { name });
 const thumbnail = (n: number) =>
@@ -69,14 +84,76 @@ describe("InteriorSlideshow", () => {
 
   it("moves with the left/right arrow keys", () => {
     render(<InteriorSlideshow images={IMAGES} />);
-    const carousel = screen.getByRole("group", { name: /trenton interior photos/i });
 
-    fireEvent.keyDown(carousel, { key: "ArrowRight" });
-    fireEvent.keyDown(carousel, { key: "ArrowRight" });
+    fireEvent.keyDown(carousel(), { key: "ArrowRight" });
+    fireEvent.keyDown(carousel(), { key: "ArrowRight" });
     expect(currentPhoto()).toBe(IMAGES[2].src);
 
-    fireEvent.keyDown(carousel, { key: "ArrowLeft" });
+    fireEvent.keyDown(carousel(), { key: "ArrowLeft" });
     expect(currentPhoto()).toBe(IMAGES[1].src);
+  });
+
+  describe("auto-advance", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    });
+
+    /** Runs the slideshow forward by whole intervals of `intervalSeconds`. */
+    const tick = (seconds: number) => act(() => vi.advanceTimersByTime(seconds * 1000));
+
+    it("moves to the next photo on its own and wraps at the end", () => {
+      vi.useFakeTimers();
+      render(<InteriorSlideshow images={IMAGES} intervalSeconds={4} />);
+
+      expect(currentPhoto()).toBe(IMAGES[0].src);
+      tick(4);
+      expect(currentPhoto()).toBe(IMAGES[1].src);
+      tick(4);
+      expect(currentPhoto()).toBe(IMAGES[2].src);
+      tick(4);
+      expect(currentPhoto()).toBe(IMAGES[0].src);
+    });
+
+    it("holds while the pointer is over it, then resumes", () => {
+      vi.useFakeTimers();
+      render(<InteriorSlideshow images={IMAGES} intervalSeconds={4} />);
+
+      fireEvent.mouseEnter(carousel());
+      tick(20);
+      expect(currentPhoto()).toBe(IMAGES[0].src);
+
+      fireEvent.mouseLeave(carousel());
+      tick(4);
+      expect(currentPhoto()).toBe(IMAGES[1].src);
+    });
+
+    it("restarts the clock after a manual move", () => {
+      vi.useFakeTimers();
+      render(<InteriorSlideshow images={IMAGES} intervalSeconds={4} />);
+
+      tick(3);
+      fireEvent.click(arrow("Next photo"));
+      expect(currentPhoto()).toBe(IMAGES[1].src);
+
+      // The second left on the old clock must not cut this photo short.
+      tick(3);
+      expect(currentPhoto()).toBe(IMAGES[1].src);
+      tick(1);
+      expect(currentPhoto()).toBe(IMAGES[2].src);
+    });
+
+    it("stays put for visitors who ask for reduced motion", () => {
+      vi.useFakeTimers();
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn().mockReturnValue({ matches: true } as MediaQueryList),
+      );
+      render(<InteriorSlideshow images={IMAGES} intervalSeconds={4} />);
+
+      tick(20);
+      expect(currentPhoto()).toBe(IMAGES[0].src);
+    });
   });
 
   it("renders nothing without photos", () => {
