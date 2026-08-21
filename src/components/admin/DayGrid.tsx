@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Copy } from "lucide-react";
+import { Copy, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
   DAY_KEYS,
   DAY_LABELS,
   HOURS,
+  coverageByHour,
   formatHourBlock,
   formatShortDate,
   isClosedDay,
@@ -24,12 +25,38 @@ const GROUP_CELL_STYLES: Record<ShiftGroup, string> = {
   other: "bg-emerald-100 text-emerald-950 hover:bg-emerald-200",
 };
 
+/**
+ * The heat map's five filled shades, coldest first, with the empty look at
+ * index 0. Kept apart from the shift-group tints above so a busy hour never
+ * reads as a shift group.
+ */
+const HEAT_STYLES = [
+  "border-dashed border-border bg-muted/40 text-muted-foreground",
+  "border-transparent bg-orange-100 text-orange-900",
+  "border-transparent bg-orange-200 text-orange-950",
+  "border-transparent bg-orange-300 text-orange-950",
+  "border-transparent bg-orange-400 text-orange-950",
+  "border-transparent bg-red-500 text-white",
+];
+
+/**
+ * Which shade an hour gets, scaled against the busiest hour of the week so the
+ * days can be compared with each other. An hour nobody is on is always 0.
+ */
+function heatLevel(count: number, peak: number): number {
+  if (count <= 0) return 0;
+  if (peak <= 0) return HEAT_STYLES.length - 1;
+  return Math.min(HEAT_STYLES.length - 1, Math.max(1, Math.ceil((count / peak) * 5)));
+}
+
 type Props = {
   day: DayKey;
   date: Date;
   schedule: DaySchedule;
   rowCount: number;
   employees: Employee[];
+  /** Busiest hour of the whole week — the top of the heat map's scale. */
+  peak: number;
   /** The block currently being edited, when it belongs to this day. */
   selection: CellRange | null;
   onEditRange: (range: CellRange, anchor: HTMLElement) => void;
@@ -76,6 +103,7 @@ export function DayGrid({
   schedule,
   rowCount,
   employees,
+  peak,
   selection,
   onEditRange,
   onCopyToDays,
@@ -85,6 +113,7 @@ export function DayGrid({
   const [drag, setDrag] = useState<Drag | null>(null);
   const closed = isClosedDay(day);
   const employeeById = new Map(employees.map((e) => [e.id, e]));
+  const coverage = coverageByHour(schedule);
 
   // Finish the drag wherever the pointer is released — including outside the
   // grid, so a stray release can't leave the day stuck in selection mode.
@@ -165,6 +194,32 @@ export function DayGrid({
                   {formatHourBlock(hour)}
                 </div>
               ))}
+            </div>
+
+            {/* Heat map: how many people are on in each hour. */}
+            <div
+              aria-label={`People on each hour on ${DAY_LABELS[day]}`}
+              className="mb-1.5 grid gap-px border-b border-border pb-1.5"
+              style={{ gridTemplateColumns: `36px repeat(${HOURS.length}, minmax(68px, 1fr))` }}
+            >
+              <div
+                className="flex items-center justify-center text-muted-foreground"
+                title="How many people are on in each hour"
+              >
+                <Users className="size-3.5" />
+              </div>
+              {HOURS.map((hour, hourIndex) => {
+                const count = coverage[hourIndex] ?? 0;
+                return (
+                  <div
+                    key={hour}
+                    title={`${count === 1 ? "1 person" : `${count} people`} on ${formatHourBlock(hour)}`}
+                    className={`flex h-5 items-center justify-center rounded border text-[0.65rem] font-bold tabular-nums ${HEAT_STYLES[heatLevel(count, peak)]}`}
+                  >
+                    {count}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Rows */}

@@ -48,6 +48,7 @@ import {
   makeEmptyDay,
   makeEmptyWeek,
   mondayOf,
+  peakCoverage,
   resizeWeek,
   toISODate,
   type DayKey,
@@ -145,6 +146,9 @@ export function Scheduler({
 
   const week = weeks[weekStart] ?? makeEmptyWeek(rowCount);
   const dates = useMemo(() => datesForWeek(weekStart), [weekStart]);
+  // One scale for every day's heat map, so Friday lunch and Monday lunch shade
+  // the same way when they are staffed the same.
+  const peak = useMemo(() => peakCoverage(week), [week]);
 
   /** Pull the database's version of everything back into state. */
   const reload = useCallback(async (forWeek: string) => {
@@ -705,6 +709,7 @@ export function Scheduler({
               schedule={week[day] ?? makeEmptyDay(rowCount)}
               rowCount={rowCount}
               employees={employees}
+              peak={peak}
               selection={editing?.day === day ? editing.range : null}
               onEditRange={(range, el) => setEditing({ day, range, el })}
               onCopyToDays={copyDay}

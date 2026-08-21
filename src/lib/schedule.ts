@@ -185,6 +185,36 @@ export function resizeWeek(week: WeekSchedule, rowCount: number): WeekSchedule {
 }
 
 
+/* ----------------------------------------------------------------- coverage */
+
+/**
+ * How many people are on for each hour of a day, by column. Someone filling two
+ * rows in the same hour counts once, the same way `shiftsForDay` merges rows —
+ * the number answers "how many people are here", not "how many cells are full".
+ */
+export function coverageByHour(day: DaySchedule): number[] {
+  return HOURS.map((_, hourIndex) => {
+    const people = new Set<string>();
+    for (const row of day) {
+      const employeeId = row?.[hourIndex];
+      if (employeeId) people.add(employeeId);
+    }
+    return people.size;
+  });
+}
+
+/**
+ * The busiest hour anywhere in the week. The heat map scales against this so a
+ * shade means the same thing on every day, rather than each day being read
+ * against its own quietest and busiest hour.
+ */
+export function peakCoverage(week: WeekSchedule): number {
+  return DAY_KEYS.reduce((peak, day) => {
+    if (isClosedDay(day)) return peak;
+    return Math.max(peak, ...coverageByHour(week[day] ?? []));
+  }, 0);
+}
+
 /* -------------------------------------------------------------------- dates */
 
 /** Local-time ISO date (`YYYY-MM-DD`) — avoids the UTC shift `toISOString` causes. */
