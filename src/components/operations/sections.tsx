@@ -21,9 +21,9 @@ export const OPERATIONS_SECTIONS: OperationsSection[] = [
   {
     slug: "cash-drawer",
     label: "Cash drawer counting",
-    hint: "Count the drawer at open and close",
+    hint: "Count the drawer down, set the till, work out the drop",
     icon: <Banknote className="size-5" />,
-    ready: false,
+    ready: true,
   },
   {
     slug: "items",

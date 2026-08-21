@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Banknote } from "lucide-react";
 
 import {
   OPERATIONS_SESSION_COOKIE,
   verifyOperationsSessionToken,
 } from "@/lib/operations-auth";
 import { OperationsShell } from "@/components/operations/OperationsShell";
+import { CashCount } from "@/components/operations/CashCount";
 import { findSection } from "@/components/operations/sections";
 
 const SECTION = findSection("cash-drawer");
@@ -18,10 +18,12 @@ export const metadata: Metadata = {
 };
 
 /**
- * Cash drawer counting — the first operations section.
+ * Counting the drawer down at close.
  *
- * The page and its route exist; what it counts and how it adds up is still to
- * be decided, so it says so rather than pretending to be a tool.
+ * Nothing is stored: a count is a conversation with the money in front of you,
+ * and once the till is set and the drop is banded there is nothing left worth
+ * keeping. That also means no drawer figures ever leave the iPad. The page is
+ * only here to check the door is locked and hand over to the counting screen.
  */
 export default async function CashDrawerPage() {
   const cookieStore = await cookies();
@@ -32,17 +34,11 @@ export default async function CashDrawerPage() {
   return (
     <OperationsShell
       title={SECTION?.label ?? "Cash drawer counting"}
-      description={SECTION?.hint}
+      description="Count down, set the till to $200, drop the rest"
       back={{ href: "/operations", label: "Back to operations" }}
+      wide
     >
-      <section className="rounded-xl border border-border bg-background p-10 text-center shadow-sm">
-        <Banknote className="mx-auto size-8 text-muted-foreground" />
-        <h2 className="mt-3 font-heading text-base font-bold">Nothing here yet</h2>
-        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-          This is where the drawer count will live. The page is ready — the
-          counting itself is still to be built.
-        </p>
-      </section>
+      <CashCount />
     </OperationsShell>
   );
 }

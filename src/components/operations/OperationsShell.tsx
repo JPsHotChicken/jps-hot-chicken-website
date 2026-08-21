@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, LogOut } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { operationsLogout } from "@/app/operations/actions";
 
@@ -10,22 +11,28 @@ type Props = {
   description?: string;
   /** Where the back arrow goes — the hub goes home, a section goes to the hub. */
   back: { href: string; label: string };
+  /**
+   * Room for a section that works in two columns rather than one — the drawer
+   * count puts its keypad beside the figures on a landscape iPad.
+   */
+  wide?: boolean;
   children: React.ReactNode;
 };
 
 /**
  * The page chrome every operations page sits in.
  *
- * Sized for a phone held at the register rather than a desk: one column, a
- * sticky header so the way back is always in reach, and nothing else competing
- * for the screen. The lock button is there because the device this runs on is
- * usually a shared one — whoever finishes can lock it behind them.
+ * Sized for a device at the register rather than a desk: one column by
+ * default, a sticky header so the way back is always in reach, and nothing else
+ * competing for the screen. `wide` opens it up for a section that needs the
+ * width of a landscape tablet. The lock button is there because the device this
+ * runs on is usually a shared one — whoever finishes can lock it behind them.
  */
-export function OperationsShell({ title, description, back, children }: Props) {
+export function OperationsShell({ title, description, back, wide, children }: Props) {
   return (
     <div className="min-h-screen bg-muted">
       <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-3 sm:px-6">
+        <div className={cn("mx-auto flex w-full items-center gap-3 px-4 py-3 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl")}>
           <Link
             href={back.href}
             aria-label={back.label}
@@ -48,7 +55,9 @@ export function OperationsShell({ title, description, back, children }: Props) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:px-6">{children}</main>
+      <main className={cn("mx-auto w-full space-y-4 p-4 sm:px-6", wide ? "max-w-6xl" : "max-w-3xl")}>
+        {children}
+      </main>
     </div>
   );
 }
