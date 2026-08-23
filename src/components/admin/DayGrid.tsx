@@ -8,9 +8,14 @@ import {
   DAY_KEYS,
   DAY_LABELS,
   HOURS,
-  coverageByHour,
+  POSITION_ROWS,
+  SLOTS,
+  SLOTS_PER_HOUR,
+  SLOT_COUNT,
+  coverageBySlot,
   formatHourBlock,
   formatShortDate,
+  formatSlotBlock,
   isClosedDay,
   type DayKey,
   type DaySchedule,
@@ -27,8 +32,8 @@ const GROUP_CELL_STYLES: Record<ShiftGroup, string> = {
 
 /**
  * The heat map's five filled shades, coldest first, with the empty look at
- * index 0. Kept apart from the shift-group tints above so a busy hour never
- * reads as a shift group.
+ * index 0. Kept apart from the shift-group tints above so a busy half hour
+ * never reads as a shift group.
  */
 const HEAT_STYLES = [
   "border-dashed border-border bg-muted/40 text-muted-foreground",
@@ -40,8 +45,8 @@ const HEAT_STYLES = [
 ];
 
 /**
- * Which shade an hour gets, scaled against the busiest hour of the week so the
- * days can be compared with each other. An hour nobody is on is always 0.
+ * Which shade a half hour gets, scaled against the busiest one of the week so
+ * the days can be compared with each other. A stretch nobody is on is always 0.
  */
 function heatLevel(count: number, peak: number): number {
   if (count <= 0) return 0;
@@ -49,13 +54,31 @@ function heatLevel(count: number, peak: number): number {
   return Math.min(HEAT_STYLES.length - 1, Math.max(1, Math.ceil((count / peak) * 5)));
 }
 
+/** Position names on the left, then two half columns per hour. */
+const COLUMNS = `112px repeat(${SLOT_COUNT}, minmax(38px, 1fr))`;
+
+/**
+ * The day still reads as a row of hour cells. Whole hours are set apart by a
+ * wider gutter than the hairline between the two halves inside one, so filling
+ * a single half is clearly "half of the 10–11 hour" — a 10:30 start.
+ */
+function hourGutter(slotIndex: number): string {
+  return slotIndex % SLOTS_PER_HOUR === 0 && slotIndex > 0 ? "ml-px" : "";
+}
+
+/** The two halves of an empty hour round into one box, parted down the middle. */
+function halfShape(slotIndex: number): string {
+  return slotIndex % SLOTS_PER_HOUR === 0
+    ? "rounded-l-sm rounded-r-none"
+    : "rounded-r-sm rounded-l-none";
+}
+
 type Props = {
   day: DayKey;
   date: Date;
   schedule: DaySchedule;
-  rowCount: number;
   employees: Employee[];
-  /** Busiest hour of the whole week — the top of the heat map's scale. */
+  /** Busiest half hour of the whole week — the top of the heat map's scale. */
   peak: number;
   /** The block currently being edited, when it belongs to this day. */
   selection: CellRange | null;
@@ -64,36 +87,54 @@ type Props = {
 };
 
 /** Inclusive rectangle of cells, always stored lowest-first. */
-export type CellRange = { rowStart: number; rowEnd: number; hourStart: number; hourEnd: number };
+export type CellRange = { rowStart: number; rowEnd: number; slotStart: number; slotEnd: number };
 
 function within(value: number, start: number, end: number): boolean {
   return value >= start && value <= end;
 }
 
-function inRange(range: CellRange | null, row: number, hour: number): boolean {
+function inRange(range: CellRange | null, row: number, slot: number): boolean {
   return (
     range !== null &&
     within(row, range.rowStart, range.rowEnd) &&
-    within(hour, range.hourStart, range.hourEnd)
+    within(slot, range.slotStart, range.slotEnd)
   );
 }
 
 /** Build a normalised range from the two corners the user dragged between. */
 function rangeBetween(
-  a: { row: number; hour: number },
-  b: { row: number; hour: number },
+  a: { row: number; slot: number },
+  b: { row: number; slot: number },
 ): CellRange {
   return {
     rowStart: Math.min(a.row, b.row),
     rowEnd: Math.max(a.row, b.row),
-    hourStart: Math.min(a.hour, b.hour),
-    hourEnd: Math.max(a.hour, b.hour),
+    slotStart: Math.min(a.slot, b.slot),
+    slotEnd: Math.max(a.slot, b.slot),
   };
 }
 
+/** How many cells forward the same person keeps going, counting this one. */
+function runLength(cells: (string | null)[], from: number): number {
+  const id = cells[from];
+  let length = 1;
+  while (from + length < SLOT_COUNT && cells[from + length] === id) length++;
+  return length;
+}
+
+/**
+ * How far a name written at `from` may spill: to the end of its hour, or the end
+ * of the shift. A half-hour cell has no room for a name, so each one is written
+ * across the hour it starts in — and written again at the top of the next hour,
+ * so scrolling into the middle of a long shift never shows a nameless bar.
+ */
+function labelSpan(cells: (string | null)[], from: number): number {
+  return Math.min(SLOTS_PER_HOUR - (from % SLOTS_PER_HOUR), runLength(cells, from));
+}
+
 type Drag = {
-  anchor: { row: number; hour: number };
-  head: { row: number; hour: number };
+  anchor: { row: number; slot: number };
+  head: { row: number; slot: number };
   headEl: HTMLElement;
 };
 
@@ -101,7 +142,6 @@ export function DayGrid({
   day,
   date,
   schedule,
-  rowCount,
   employees,
   peak,
   selection,
@@ -113,7 +153,7 @@ export function DayGrid({
   const [drag, setDrag] = useState<Drag | null>(null);
   const closed = isClosedDay(day);
   const employeeById = new Map(employees.map((e) => [e.id, e]));
-  const coverage = coverageByHour(schedule);
+  const coverage = coverageBySlot(schedule);
 
   // Finish the drag wherever the pointer is released — including outside the
   // grid, so a stray release can't leave the day stuck in selection mode.
@@ -125,7 +165,7 @@ export function DayGrid({
       setDrag(null);
       // A press and release on one cell is a plain click, not a drag — leave
       // single cells to double-click so clicking around doesn't open the menu.
-      if (anchor.row !== head.row || anchor.hour !== head.hour) {
+      if (anchor.row !== head.row || anchor.slot !== head.slot) {
         onEditRange(rangeBetween(anchor, head), headEl);
       }
     };
@@ -180,15 +220,13 @@ export function DayGrid({
         <div className="overflow-x-auto">
           {/* select-none so dragging across cells doesn't smear a text selection. */}
           <div className="min-w-max p-2 select-none">
-            {/* Hour header */}
-            <div
-              className="grid gap-px"
-              style={{ gridTemplateColumns: `36px repeat(${HOURS.length}, minmax(68px, 1fr))` }}
-            >
+            {/* Hour header — each label sits over the two halves of its hour. */}
+            <div className="grid gap-px" style={{ gridTemplateColumns: COLUMNS }}>
               <div aria-hidden />
               {HOURS.map((hour) => (
                 <div
                   key={hour}
+                  style={{ gridColumn: `span ${SLOTS_PER_HOUR}` }}
                   className="px-1 pb-1 text-center text-[0.65rem] font-bold tracking-wide text-muted-foreground uppercase"
                 >
                   {formatHourBlock(hour)}
@@ -196,25 +234,25 @@ export function DayGrid({
               ))}
             </div>
 
-            {/* Heat map: how many people are on in each hour. */}
+            {/* Heat map: how many people are on in each half hour. */}
             <div
-              aria-label={`People on each hour on ${DAY_LABELS[day]}`}
+              aria-label={`People on each half hour on ${DAY_LABELS[day]}`}
               className="mb-1.5 grid gap-px border-b border-border pb-1.5"
-              style={{ gridTemplateColumns: `36px repeat(${HOURS.length}, minmax(68px, 1fr))` }}
+              style={{ gridTemplateColumns: COLUMNS }}
             >
               <div
                 className="flex items-center justify-center text-muted-foreground"
-                title="How many people are on in each hour"
+                title="How many people are on in each half hour"
               >
                 <Users className="size-3.5" />
               </div>
-              {HOURS.map((hour, hourIndex) => {
-                const count = coverage[hourIndex] ?? 0;
+              {SLOTS.map((minute, slotIndex) => {
+                const count = coverage[slotIndex] ?? 0;
                 return (
                   <div
-                    key={hour}
-                    title={`${count === 1 ? "1 person" : `${count} people`} on ${formatHourBlock(hour)}`}
-                    className={`flex h-5 items-center justify-center rounded border text-[0.65rem] font-bold tabular-nums ${HEAT_STYLES[heatLevel(count, peak)]}`}
+                    key={minute}
+                    title={`${count === 1 ? "1 person" : `${count} people`} on ${formatSlotBlock(slotIndex)}`}
+                    className={`flex h-5 items-center justify-center border text-[0.65rem] font-bold tabular-nums ${hourGutter(slotIndex)} ${halfShape(slotIndex)} ${HEAT_STYLES[heatLevel(count, peak)]}`}
                   >
                     {count}
                   </div>
@@ -222,27 +260,40 @@ export function DayGrid({
               })}
             </div>
 
-            {/* Rows */}
-            {Array.from({ length: rowCount }, (_, rowIndex) => (
+            {/* One row per position. */}
+            {POSITION_ROWS.map((position, rowIndex) => (
               <div
-                key={rowIndex}
-                className="grid gap-px"
-                style={{ gridTemplateColumns: `36px repeat(${HOURS.length}, minmax(68px, 1fr))` }}
+                key={position.label}
+                className={`grid gap-px ${
+                  // A hairline between stations, so the five line spots read as
+                  // one block rather than running into the fryers below them.
+                  position.firstOfGroup && rowIndex > 0 ? "mt-1 border-t border-border pt-1" : ""
+                }`}
+                style={{ gridTemplateColumns: COLUMNS }}
               >
-                <div className="flex items-center justify-center text-xs font-semibold text-muted-foreground">
-                  {rowIndex + 1}
+                <div className="flex items-center truncate pr-2 text-[0.7rem] font-semibold text-muted-foreground">
+                  {position.label}
                 </div>
-                {HOURS.map((hour, hourIndex) => {
-                  const employeeId = schedule[rowIndex]?.[hourIndex] ?? null;
+                {SLOTS.map((minute, slotIndex) => {
+                  const cells = schedule[rowIndex] ?? [];
+                  const employeeId = cells[slotIndex] ?? null;
                   const employee = employeeId ? employeeById.get(employeeId) : undefined;
-                  const selected = inRange(highlight, rowIndex, hourIndex);
-                  const cell = { row: rowIndex, hour: hourIndex };
+                  const selected = inRange(highlight, rowIndex, slotIndex);
+                  const cell = { row: rowIndex, slot: slotIndex };
+
+                  // A shift is drawn as one bar: square off the joins between
+                  // its cells, and name it at its start and each hour after.
+                  const startsRun = employeeId !== null && cells[slotIndex - 1] !== employeeId;
+                  const endsRun = employeeId !== null && cells[slotIndex + 1] !== employeeId;
+                  const named =
+                    employeeId !== null && (startsRun || slotIndex % SLOTS_PER_HOUR === 0);
+                  const span = named ? labelSpan(cells, slotIndex) : 1;
 
                   return (
                     <button
-                      key={hour}
+                      key={minute}
                       type="button"
-                      title={`${DAY_LABELS[day]} ${formatHourBlock(hour)} — double-click to assign, or drag across cells`}
+                      title={`${DAY_LABELS[day]} ${formatSlotBlock(slotIndex)} · ${position.label} — double-click to assign, or drag across cells`}
                       onPointerDown={(event) => {
                         // Left button only; ignore right-click and middle-click.
                         if (event.button !== 0) return;
@@ -259,7 +310,7 @@ export function DayGrid({
                           if (!current) return null;
                           // Same cell as last time — return the identical object
                           // so React skips the re-render.
-                          if (current.head.row === cell.row && current.head.hour === cell.hour) {
+                          if (current.head.row === cell.row && current.head.slot === cell.slot) {
                             return current;
                           }
                           return { ...current, head: cell, headEl: target };
@@ -274,13 +325,27 @@ export function DayGrid({
                           onEditRange(rangeBetween(cell, cell), event.currentTarget);
                         }
                       }}
-                      className={`h-8 truncate rounded border px-1 text-xs font-semibold transition-colors ${
+                      className={`relative h-8 border px-1 text-left text-xs font-semibold transition-colors ${
+                        hourGutter(slotIndex)
+                      } ${
                         employee
-                          ? `border-transparent ${GROUP_CELL_STYLES[employee.group]}`
-                          : "border-dashed border-border bg-muted/40 hover:bg-muted"
-                      } ${selected ? "ring-2 ring-brand ring-inset" : ""}`}
+                          ? `border-transparent ${GROUP_CELL_STYLES[employee.group]} ${
+                              // A shift is one bar: only its two ends are rounded.
+                              startsRun ? "rounded-l-md" : "rounded-l-none"
+                            } ${endsRun ? "rounded-r-md" : "rounded-r-none"}`
+                          : `border-dashed border-border bg-muted/40 hover:bg-muted ${halfShape(slotIndex)}`
+                      } ${selected ? "z-20 ring-2 ring-brand ring-inset" : ""}`}
                     >
-                      {employee?.name ?? ""}
+                      {named && employee && (
+                        // Positioned so a name can spill over the other half of
+                        // its hour; the 1px grid gap is added back in.
+                        <span
+                          style={{ width: `calc(${span * 100}% + ${span - 1}px - 0.5rem)` }}
+                          className="pointer-events-none absolute inset-y-0 left-1 z-10 truncate leading-8"
+                        >
+                          {employee.name}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

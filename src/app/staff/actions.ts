@@ -13,7 +13,7 @@ import {
 } from "@/lib/staff-auth";
 import * as staff from "@/lib/staff-repo";
 import { insertTimeOff } from "@/lib/schedule-repo";
-import { MAX_ROW_COUNT, type TimeOffRequest, type WeekSchedule } from "@/lib/schedule";
+import { type TimeOffRequest, type WeekSchedule } from "@/lib/schedule";
 
 export type StaffLoginState = { error?: string };
 
@@ -78,14 +78,13 @@ export async function staffLogout(): Promise<void> {
 }
 
 /**
- * One published week's grid. Read at `MAX_ROW_COUNT` so no published shift is
- * ever dropped — the staff view merges rows anyway, so the height is irrelevant
- * to what it displays.
+ * One published week's grid. The staff view merges the position rows anyway, so
+ * all it takes from the grid is the hours each person is on.
  */
 export async function loadPublishedWeekAction(weekStart: string): Promise<WeekSchedule> {
   await requireStaff();
   if (!ISO_DATE.test(weekStart)) throw new Error("Bad week.");
-  return staff.loadPublishedWeek(weekStart, MAX_ROW_COUNT);
+  return staff.loadPublishedWeek(weekStart);
 }
 
 /** The signed-in employee's requests, re-read after filing a new one. */

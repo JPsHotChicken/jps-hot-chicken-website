@@ -266,23 +266,24 @@ export type Database = {
       published_shifts: {
         Row: {
           employee_id: string;
-          hour: number;
+          hour: number | null;
           row_index: number;
           shift_date: string;
+          start_minute: number;
           week_start: string;
         };
         Insert: {
           employee_id: string;
-          hour: number;
           row_index: number;
           shift_date: string;
+          start_minute: number;
           week_start: string;
         };
         Update: {
           employee_id?: string;
-          hour?: number;
           row_index?: number;
           shift_date?: string;
+          start_minute?: number;
           week_start?: string;
         };
         Relationships: [
@@ -392,23 +393,24 @@ export type Database = {
         Row: {
           created_at: string;
           employee_id: string;
-          hour: number;
+          hour: number | null;
           row_index: number;
           shift_date: string;
+          start_minute: number;
         };
         Insert: {
           created_at?: string;
           employee_id: string;
-          hour: number;
           row_index: number;
           shift_date: string;
+          start_minute: number;
         };
         Update: {
           created_at?: string;
           employee_id?: string;
-          hour?: number;
           row_index?: number;
           shift_date?: string;
+          start_minute?: number;
         };
         Relationships: [
           {

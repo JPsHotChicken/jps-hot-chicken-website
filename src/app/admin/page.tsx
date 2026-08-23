@@ -41,7 +41,7 @@ export default async function AdminPage({
   const weekStart = toISODate(mondayOf());
   const base = await loadScheduleBase();
   const [week, publishState, payrollNames] = await Promise.all([
-    loadWeek(weekStart, base.rowCount),
+    loadWeek(weekStart),
     getPublishState(weekStart),
     // How payroll spells each person, shown on the staff tab so a wrong one can
     // be dropped before it sends somebody the wrong pay stub.
@@ -50,7 +50,6 @@ export default async function AdminPage({
 
   return (
     <Scheduler
-      rowCount={base.rowCount}
       employees={base.employees}
       timeOff={base.timeOff}
       recurringTimeOff={base.recurringTimeOff}

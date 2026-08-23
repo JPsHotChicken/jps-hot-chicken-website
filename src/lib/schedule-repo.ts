@@ -3,12 +3,14 @@ import "server-only";
 import { getDb } from "@/lib/supabase/server";
 import {
   DAY_KEYS,
-  HOURS,
-  START_HOUR,
+  ROW_COUNT,
+  SLOT_COUNT,
   addDays,
   datesForWeek,
   fromISODate,
   makeEmptyWeek,
+  minuteSlot,
+  slotMinute,
   toISODate,
   type DayKey,
   type Employee,
@@ -22,18 +24,15 @@ import {
 /**
  * Every read and write the scheduler performs, in one place.
  *
- * The grid is stored one row per filled cell keyed by real calendar date, while
- * the UI thinks in (week, weekday, rowIndex, hourIndex). Translating between the
- * two is this module's job — nothing above it needs to know the table shape.
+ * The grid is stored one row per filled half-hour cell keyed by real calendar
+ * date, while the UI thinks in (week, weekday, rowIndex, slotIndex). Translating
+ * between the two is this module's job — nothing above it needs to know the
+ * table shape. `start_minute` is minutes past midnight, so 480 is 8:00 AM and
+ * 510 is the 8:30 half.
  */
 
 /** Inclusive rectangle of grid cells, mirroring `CellRange` in the UI. */
-export type CellBlock = { rowStart: number; rowEnd: number; hourStart: number; hourEnd: number };
-
-/** Grid column index (0-based) to the absolute hour stored in the database. */
-const toHour = (hourIndex: number) => START_HOUR + hourIndex;
-/** And back again. */
-const toHourIndex = (hour: number) => hour - START_HOUR;
+export type CellBlock = { rowStart: number; rowEnd: number; slotStart: number; slotEnd: number };
 
 /** The ISO date each weekday of `weekStartISO` falls on. */
 function dateFor(weekStartISO: string, day: DayKey): string {
@@ -55,7 +54,6 @@ function fail(context: string, error: { message: string } | null): never {
 /* --------------------------------------------------------------------- read */
 
 export type ScheduleBase = {
-  rowCount: number;
   employees: Employee[];
   timeOff: TimeOffRequest[];
   recurringTimeOff: RecurringTimeOff[];
@@ -65,8 +63,7 @@ export type ScheduleBase = {
 export async function loadScheduleBase(): Promise<ScheduleBase> {
   const db = getDb();
 
-  const [settings, employees, timeOff, recurring] = await Promise.all([
-    db.from("schedule_settings").select("row_count").eq("id", true).single(),
+  const [employees, timeOff, recurring] = await Promise.all([
     db.from("employees").select("id, name, shift_group, login_code").order("name"),
     db
       .from("time_off_requests")
@@ -75,13 +72,11 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
     db.from("recurring_time_off").select("id, employee_id, day, reason"),
   ]);
 
-  if (settings.error) fail("loading settings", settings.error);
   if (employees.error) fail("loading employees", employees.error);
   if (timeOff.error) fail("loading time off", timeOff.error);
   if (recurring.error) fail("loading recurring time off", recurring.error);
 
   return {
-    rowCount: settings.data.row_count,
     employees: employees.data.map((row) => ({
       id: row.id,
       name: row.name,
@@ -106,27 +101,27 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
   };
 }
 
-/** One week's grid, shaped exactly like the localStorage doc used to be. */
-export async function loadWeek(weekStartISO: string, rowCount: number): Promise<WeekSchedule> {
+/** One week's grid, one entry per position row and half-hour cell. */
+export async function loadWeek(weekStartISO: string): Promise<WeekSchedule> {
   const db = getDb();
   const weekEndISO = toISODate(addDays(fromISODate(weekStartISO), 6));
 
   const { data, error } = await db
     .from("shift_assignments")
-    .select("shift_date, row_index, hour, employee_id")
+    .select("shift_date, row_index, start_minute, employee_id")
     .gte("shift_date", weekStartISO)
     .lte("shift_date", weekEndISO);
 
   if (error) fail(`loading week ${weekStartISO}`, error);
 
-  const week = makeEmptyWeek(rowCount);
+  const week = makeEmptyWeek();
   for (const row of data) {
     const day = dayOf(weekStartISO, row.shift_date);
-    const hourIndex = toHourIndex(row.hour);
-    // Rows beyond the current row count (left over from a taller grid) and
-    // hours outside the open range are simply not shown.
-    if (!day || row.row_index >= rowCount || hourIndex < 0 || hourIndex >= HOURS.length) continue;
-    week[day][row.row_index][hourIndex] = row.employee_id;
+    const slotIndex = minuteSlot(row.start_minute);
+    // Rows past the last position (left over from an older, taller grid) and
+    // times outside the open hours are simply not shown.
+    if (!day || row.row_index >= ROW_COUNT || slotIndex < 0 || slotIndex >= SLOT_COUNT) continue;
+    week[day][row.row_index][slotIndex] = row.employee_id;
   }
   return week;
 }
@@ -162,25 +157,6 @@ export async function deleteEmployee(id: string): Promise<void> {
   if (error) fail("removing an employee", error);
 }
 
-/* ----------------------------------------------------------------- settings */
-
-export async function setRowCount(rowCount: number): Promise<void> {
-  const db = getDb();
-  const { error } = await db
-    .from("schedule_settings")
-    .update({ row_count: rowCount, updated_at: new Date().toISOString() })
-    .eq("id", true);
-  if (error) fail("changing the row count", error);
-
-  // Shrinking drops the rows that fall off the bottom, matching what the grid
-  // shows. Without this they would reappear if the count were raised again.
-  const { error: pruneError } = await db
-    .from("shift_assignments")
-    .delete()
-    .gte("row_index", rowCount);
-  if (pruneError) fail("pruning shifts past the new row count", pruneError);
-}
-
 /* -------------------------------------------------------------------- grid */
 
 /** Assign every cell in a dragged block, or clear it when `employeeId` is null. */
@@ -200,19 +176,19 @@ export async function assignBlock(
     .eq("shift_date", date)
     .gte("row_index", block.rowStart)
     .lte("row_index", block.rowEnd)
-    .gte("hour", toHour(block.hourStart))
-    .lte("hour", toHour(block.hourEnd));
+    .gte("start_minute", slotMinute(block.slotStart))
+    .lte("start_minute", slotMinute(block.slotEnd));
   if (error) fail("clearing a block of shifts", error);
 
   if (!employeeId) return;
 
   const rows = [];
   for (let rowIndex = block.rowStart; rowIndex <= block.rowEnd; rowIndex++) {
-    for (let hourIndex = block.hourStart; hourIndex <= block.hourEnd; hourIndex++) {
+    for (let slotIndex = block.slotStart; slotIndex <= block.slotEnd; slotIndex++) {
       rows.push({
         shift_date: date,
         row_index: rowIndex,
-        hour: toHour(hourIndex),
+        start_minute: slotMinute(slotIndex),
         employee_id: employeeId,
       });
     }
@@ -235,7 +211,7 @@ export async function copyDayToDays(
 
   const { data, error } = await db
     .from("shift_assignments")
-    .select("row_index, hour, employee_id")
+    .select("row_index, start_minute, employee_id")
     .eq("shift_date", sourceDate);
   if (error) fail("reading the day being copied", error);
 
@@ -263,7 +239,7 @@ export async function copyWeek(fromWeekISO: string, toWeekISO: string): Promise<
 
   const { data, error } = await db
     .from("shift_assignments")
-    .select("shift_date, row_index, hour, employee_id")
+    .select("shift_date, row_index, start_minute, employee_id")
     .gte("shift_date", fromWeekISO)
     .lte("shift_date", toISODate(addDays(fromISODate(fromWeekISO), 6)));
   if (error) fail("reading the week being copied", error);
@@ -280,7 +256,7 @@ export async function copyWeek(fromWeekISO: string, toWeekISO: string): Promise<
   const rows = data.map((row) => ({
     shift_date: toISODate(addDays(fromISODate(row.shift_date), offsetDays)),
     row_index: row.row_index,
-    hour: row.hour,
+    start_minute: row.start_minute,
     employee_id: row.employee_id,
   }));
   const { error: insertError } = await db.from("shift_assignments").insert(rows);

@@ -4,15 +4,22 @@ import {
   DAY_KEYS,
   DAY_LABELS,
   HOURS,
+  POSITION_ROWS,
+  ROW_COUNT,
+  SLOTS,
+  SLOTS_PER_HOUR,
+  SLOT_COUNT,
   employeeWeek,
   compareEmployees,
   datesForWeek,
   formatHourBlock,
+  formatHours,
   formatRange,
   formatShortDate,
   formatWeekRange,
   isClosedDay,
   isClosingShift,
+  rangeHours,
   SHIFT_GROUP_LABELS,
   type Employee,
   type WeekSchedule,
@@ -47,11 +54,26 @@ function fitText(doc: jsPDF, text: string, maxWidth: number): string {
 
 /* ------------------------------------------------------- page 1: whole week */
 
+/** A stretch of the same person on one position: `[startSlot, endSlot)`. */
+type Run = { employeeId: string; start: number; end: number };
+
+/** Collapse a position's half-hour cells into the shifts they add up to. */
+function runsInRow(cells: (string | null)[]): Run[] {
+  const runs: Run[] = [];
+  for (let slot = 0; slot < SLOT_COUNT; slot++) {
+    const employeeId = cells[slot];
+    if (!employeeId) continue;
+    const last = runs[runs.length - 1];
+    if (last && last.employeeId === employeeId && last.end === slot) last.end = slot + 1;
+    else runs.push({ employeeId, start: slot, end: slot + 1 });
+  }
+  return runs;
+}
+
 function drawWeekOverview(
   doc: jsPDF,
   week: WeekSchedule,
   employees: Employee[],
-  rowCount: number,
   weekStartISO: string,
 ): void {
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -71,18 +93,20 @@ function drawWeekOverview(
   doc.text(formatWeekRange(weekStartISO), MARGIN, MARGIN + 24);
 
   const tableTop = MARGIN + 36;
-  const dayColWidth = 66;
-  const numColWidth = 20;
-  const hourColWidth = (pageWidth - MARGIN * 2 - dayColWidth - numColWidth) / HOURS.length;
+  const dayColWidth = 58;
+  const posColWidth = 62;
+  const gridLeft = MARGIN + dayColWidth + posColWidth;
+  const slotWidth = (pageWidth - MARGIN - gridLeft) / SLOT_COUNT;
+  const hourColWidth = slotWidth * SLOTS_PER_HOUR;
   const headerHeight = 16;
 
   // Closed days collapse to a single band instead of a block of empty rows.
   const totalBodyRows = DAY_KEYS.reduce(
-    (total, day) => total + (isClosedDay(day) ? 1 : rowCount),
+    (total, day) => total + (isClosedDay(day) ? 1 : ROW_COUNT),
     0,
   );
-  // A few points of slack so rounding can't push the last day onto page 2 —
-  // the whole week is meant to fit on page one.
+  // A day is one block of positions and is never split across a page, so the
+  // sheet runs to two pages rather than squeezing 85 rows onto one.
   const available = pageHeight - tableTop - MARGIN - headerHeight - 6;
   const rowHeight = Math.max(9, Math.min(18, available / totalBodyRows));
 
@@ -96,11 +120,9 @@ function drawWeekOverview(
     doc.setFontSize(7);
 
     doc.text("Day", MARGIN + 4, y + headerHeight / 2 + 2.5);
-    doc.text("#", MARGIN + dayColWidth + numColWidth / 2, y + headerHeight / 2 + 2.5, {
-      align: "center",
-    });
+    doc.text("Position", MARGIN + dayColWidth + 4, y + headerHeight / 2 + 2.5);
     HOURS.forEach((hour, index) => {
-      const x = MARGIN + dayColWidth + numColWidth + index * hourColWidth + hourColWidth / 2;
+      const x = gridLeft + index * hourColWidth + hourColWidth / 2;
       doc.text(formatHourBlock(hour), x, y + headerHeight / 2 + 2.5, { align: "center" });
     });
     y += headerHeight;
@@ -110,8 +132,10 @@ function drawWeekOverview(
 
   DAY_KEYS.forEach((day) => {
     const closed = isClosedDay(day);
-    const blockRows = closed ? 1 : rowCount;
-    const blockHeight = blockRows * rowHeight;
+    const blockRows = closed ? 1 : ROW_COUNT;
+    // A closed day is one band, but never shorter than its own label — position
+    // rows are only ~9pt tall, and the day name would sit below the band.
+    const blockHeight = closed ? Math.max(rowHeight, 20) : blockRows * rowHeight;
 
     // Start a new page if this day's block would run off the bottom.
     if (y + blockHeight > pageHeight - MARGIN) {
@@ -121,6 +145,7 @@ function drawWeekOverview(
     }
 
     const blockTop = y;
+    const blockBottom = blockTop + blockHeight;
 
     // Day label cell, spanning the whole block.
     doc.setFillColor(250, 250, 250);
@@ -128,10 +153,15 @@ function drawWeekOverview(
     doc.setTextColor(...INK);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.text(DAY_LABELS[day], MARGIN + 4, blockTop + 10);
     // The date goes on a second line, but only when the block is tall enough
-    // for it (a one-row closed day isn't).
-    if (blockHeight >= 22) {
+    // for it (a closed day's band isn't) — otherwise the name is centred alone.
+    const roomForDate = blockHeight >= 22;
+    doc.text(
+      DAY_LABELS[day],
+      MARGIN + 4,
+      roomForDate ? blockTop + 10 : blockTop + blockHeight / 2 + 3,
+    );
+    if (roomForDate) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       doc.setTextColor(...MUTED);
@@ -140,62 +170,83 @@ function drawWeekOverview(
 
     if (closed) {
       doc.setFillColor(...CLOSED_FILL);
-      doc.rect(MARGIN + dayColWidth, blockTop, pageWidth - MARGIN * 2 - dayColWidth, rowHeight, "F");
+      doc.rect(
+        MARGIN + dayColWidth,
+        blockTop,
+        pageWidth - MARGIN * 2 - dayColWidth,
+        blockHeight,
+        "F",
+      );
       doc.setTextColor(...MUTED);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.text(
         "CLOSED — everyone off",
         MARGIN + dayColWidth + (pageWidth - MARGIN * 2 - dayColWidth) / 2,
-        blockTop + rowHeight / 2 + 3,
+        blockTop + blockHeight / 2 + 3,
         { align: "center" },
       );
-      y += rowHeight;
     } else {
-      for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-        const rowY = blockTop + rowIndex * rowHeight;
+      // Ruled first, so a shift laid over the top reads as one unbroken bar
+      // instead of being struck through by the hour lines.
+      doc.setDrawColor(228, 228, 228);
+      doc.setLineWidth(0.3);
+      SLOTS.forEach((_, slotIndex) => {
+        if (slotIndex % SLOTS_PER_HOUR === 0) return;
+        const x = gridLeft + slotIndex * slotWidth;
+        doc.line(x, blockTop, x, blockBottom);
+      });
 
-        doc.setTextColor(...MUTED);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7);
-        doc.text(String(rowIndex + 1), MARGIN + dayColWidth + numColWidth / 2, rowY + rowHeight / 2 + 2, {
-          align: "center",
-        });
-
-        HOURS.forEach((_, hourIndex) => {
-          const employeeId = week[day]?.[rowIndex]?.[hourIndex] ?? null;
-          if (!employeeId) return;
-          const name = nameById.get(employeeId);
-          if (!name) return;
-
-          const x = MARGIN + dayColWidth + numColWidth + hourIndex * hourColWidth;
-          doc.setFillColor(...FILL);
-          doc.rect(x, rowY, hourColWidth, rowHeight, "F");
-          doc.setTextColor(...INK);
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(6.5);
-          doc.text(fitText(doc, name, hourColWidth - 4), x + hourColWidth / 2, rowY + rowHeight / 2 + 2, {
-            align: "center",
-          });
-        });
-      }
-      y += blockHeight;
-    }
-
-    // Grid lines for the block. Closed days get no internal hour lines — they
-    // would slice through the "CLOSED" label.
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.4);
-    if (!closed) {
+      doc.setDrawColor(...LINE);
+      doc.setLineWidth(0.4);
       for (let i = 0; i <= HOURS.length; i++) {
-        const x = MARGIN + dayColWidth + numColWidth + i * hourColWidth;
-        doc.line(x, blockTop, x, y);
+        const x = gridLeft + i * hourColWidth;
+        doc.line(x, blockTop, x, blockBottom);
       }
       for (let i = 1; i < blockRows; i++) {
         const lineY = blockTop + i * rowHeight;
         doc.line(MARGIN + dayColWidth, lineY, pageWidth - MARGIN, lineY);
       }
+
+      POSITION_ROWS.forEach((position, rowIndex) => {
+        const rowY = blockTop + rowIndex * rowHeight;
+
+        doc.setTextColor(...MUTED);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(5.8);
+        doc.text(
+          fitText(doc, position.label, posColWidth - 8),
+          MARGIN + dayColWidth + 4,
+          rowY + rowHeight / 2 + 2,
+        );
+
+        // A shift is drawn as one bar across the half hours it covers, so a
+        // 10:30 start shows as a bar that begins halfway through the 10–11 column.
+        runsInRow(week[day]?.[rowIndex] ?? []).forEach((run) => {
+          const name = nameById.get(run.employeeId);
+          if (!name) return;
+          const x = gridLeft + run.start * slotWidth;
+          const width = (run.end - run.start) * slotWidth;
+
+          doc.setFillColor(...FILL);
+          doc.rect(x, rowY, width, rowHeight, "F");
+          doc.setDrawColor(...BRAND);
+          doc.setLineWidth(0.5);
+          doc.rect(x, rowY, width, rowHeight, "S");
+          doc.setTextColor(...INK);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(6);
+          doc.text(fitText(doc, name, width - 4), x + width / 2, rowY + rowHeight / 2 + 2, {
+            align: "center",
+          });
+        });
+      });
     }
+
+    y = blockBottom;
+
+    doc.setDrawColor(...LINE);
+    doc.setLineWidth(0.4);
     doc.line(MARGIN + dayColWidth, blockTop, MARGIN + dayColWidth, y);
     doc.setLineWidth(0.8);
     doc.setDrawColor(...INK);
@@ -306,7 +357,7 @@ function drawEmployeePage(
   // Total hours badge — sized to its text so the number is never clipped.
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  const badgeLabel = `Total hours this week: ${totalHours}`;
+  const badgeLabel = `Total hours this week: ${formatHours(totalHours)}`;
   const badgeWidth = doc.getTextWidth(badgeLabel) + 20;
   doc.setFillColor(...BRAND);
   doc.roundedRect(MARGIN, MARGIN + 48, badgeWidth, 26, 4, 4, "F");
@@ -331,7 +382,7 @@ function drawEmployeePage(
   doc.line(MARGIN, y - 14, pageWidth - MARGIN, y - 14);
 
   days.forEach(({ label, day, closed, ranges }) => {
-    const dayHours = ranges.reduce((total, range) => total + (range.end - range.start), 0);
+    const dayHours = rangeHours(ranges);
 
     doc.setTextColor(...INK);
     doc.setFont("helvetica", "bold");
@@ -364,7 +415,7 @@ function drawEmployeePage(
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
       doc.setTextColor(...MUTED);
-      doc.text(`${dayHours} h`, pageWidth - MARGIN, y, { align: "right" });
+      doc.text(`${formatHours(dayHours)} h`, pageWidth - MARGIN, y, { align: "right" });
     }
 
     // Advance past the tallest column in this row.
@@ -424,7 +475,6 @@ type FileScope = Exclude<ExportScope, { kind: "all" }>;
 export type SchedulePdfOptions = {
   week: WeekSchedule;
   employees: Employee[];
-  rowCount: number;
   weekStartISO: string;
   scope?: ExportScope;
 };
@@ -442,7 +492,7 @@ function slugify(name: string): string {
 
 /** Build the single document a file scope describes. */
 export async function buildSchedulePdf(options: FilePdfOptions): Promise<jsPDF> {
-  const { week, employees, rowCount, weekStartISO, scope } = options;
+  const { week, employees, weekStartISO, scope } = options;
   // Loaded on demand so jsPDF never ships with the initial dashboard bundle.
   const { jsPDF: JsPdf } = await import("jspdf");
 
@@ -457,7 +507,7 @@ export async function buildSchedulePdf(options: FilePdfOptions): Promise<jsPDF> 
   }
 
   const doc = new JsPdf({ orientation: "landscape", unit: "pt", format: "letter" });
-  drawWeekOverview(doc, week, employees, rowCount, weekStartISO);
+  drawWeekOverview(doc, week, employees, weekStartISO);
   return doc;
 }
 

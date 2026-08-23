@@ -11,7 +11,7 @@ import {
 } from "@/lib/staff-repo";
 import { payStubsForEmployee } from "@/lib/pay-stubs-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
-import { MAX_ROW_COUNT, mondayOf, toISODate } from "@/lib/schedule";
+import { mondayOf, toISODate } from "@/lib/schedule";
 import { StaffDashboard } from "@/components/staff/StaffDashboard";
 import { SetupNotice } from "@/components/admin/SetupNotice";
 
@@ -50,7 +50,7 @@ export default async function StaffPage() {
     null;
 
   const initialWeek = initialWeekStart
-    ? await loadPublishedWeek(initialWeekStart, MAX_ROW_COUNT)
+    ? await loadPublishedWeek(initialWeekStart)
     : null;
 
   return (

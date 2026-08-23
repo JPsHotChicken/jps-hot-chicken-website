@@ -9,6 +9,7 @@ import {
   SHIFT_GROUP_LABELS,
   employeeWeek,
   employeesByGroup,
+  formatHours,
   type Employee,
   type ShiftGroup,
   type WeekSchedule,
@@ -116,12 +117,12 @@ export function EmployeePanel({ employees, week, onAdd, onRemove }: Props) {
                     >
                       <span className="min-w-0 flex-1 truncate">{employee.name}</span>
                       <span
-                        title={`${hours} scheduled ${hours === 1 ? "hour" : "hours"} this week`}
+                        title={`${formatHours(hours)} scheduled ${hours === 1 ? "hour" : "hours"} this week`}
                         className={`shrink-0 text-xs font-semibold tabular-nums ${
                           hours > 0 ? "text-muted-foreground" : "text-muted-foreground/50"
                         }`}
                       >
-                        {hours}h
+                        {formatHours(hours)}h
                       </span>
                       <Button
                         variant="ghost"

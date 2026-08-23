@@ -6,7 +6,9 @@ import { Check, X } from "lucide-react";
 import {
   SHIFT_GROUPS,
   SHIFT_GROUP_LABELS,
+  SLOT_MINUTES,
   employeesByGroup,
+  formatHours,
   type Employee,
 } from "@/lib/schedule";
 
@@ -14,7 +16,10 @@ type Props = {
   /** The cell being edited — the popup is anchored to this element. */
   anchorEl: HTMLElement;
   employees: Employee[];
-  /** How many cells the choice applies to — 1 for a double-click, more for a drag. */
+  /**
+   * How many half-hour cells the choice applies to — 1 for a double-click, more
+   * for a drag.
+   */
   cellCount: number;
   /**
    * The person filling every selected cell, `null` if all are empty, or
@@ -93,7 +98,7 @@ export function CellEditor({
     >
       {cellCount > 1 && (
         <p className="border-b border-border px-2 py-1.5 text-[0.65rem] font-bold tracking-widest text-muted-foreground uppercase">
-          {cellCount} hours selected
+          {formatHours((cellCount * SLOT_MINUTES) / 60)} hours selected
         </p>
       )}
 
@@ -103,7 +108,7 @@ export function CellEditor({
         className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-muted"
       >
         <X className="size-3.5" />
-        {cellCount > 1 ? "Clear these hours" : "Clear this hour"}
+        {cellCount > 1 ? "Clear these hours" : "Clear this half hour"}
         {selectedId === null && <Check className="ml-auto size-3.5" />}
       </button>
 

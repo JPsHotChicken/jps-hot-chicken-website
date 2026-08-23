@@ -107,11 +107,41 @@ export const START_HOUR = 8;
 /** Closing time (10 PM) — the last block is 9–10 PM, so it is exclusive. */
 export const END_HOUR = 22;
 
-/** The hour each column represents: [8, 9, … 21]. */
+/** The hour each header column represents: [8, 9, … 21]. */
 export const HOURS: number[] = Array.from(
   { length: END_HOUR - START_HOUR },
   (_, i) => START_HOUR + i,
 );
+
+/** Minutes past midnight the grid opens and closes at. */
+export const OPEN_MINUTE = START_HOUR * 60;
+export const CLOSE_MINUTE = END_HOUR * 60;
+
+/**
+ * How long one grid cell is. Shifts start on the hour or the half hour, so each
+ * hour on the grid is split into two cells and somebody coming in at 10:30 gets
+ * the right-hand half of the 10–11 column.
+ */
+export const SLOT_MINUTES = 30;
+export const SLOTS_PER_HOUR = 60 / SLOT_MINUTES;
+
+/** Minutes past midnight for each half-hour cell: [480, 510, … 1290]. */
+export const SLOTS: number[] = Array.from(
+  { length: HOURS.length * SLOTS_PER_HOUR },
+  (_, i) => OPEN_MINUTE + i * SLOT_MINUTES,
+);
+
+export const SLOT_COUNT = SLOTS.length;
+
+/** Minutes past midnight a cell starts at. */
+export function slotMinute(slotIndex: number): number {
+  return OPEN_MINUTE + slotIndex * SLOT_MINUTES;
+}
+
+/** And back again — may be outside `0 … SLOT_COUNT`, so callers check. */
+export function minuteSlot(minute: number): number {
+  return (minute - OPEN_MINUTE) / SLOT_MINUTES;
+}
 
 /** Days the store is closed — everyone is automatically off. */
 export const CLOSED_DAYS: readonly DayKey[] = ["sunday"];
@@ -124,8 +154,35 @@ function to12Hour(hour: number): number {
   return hour % 12 === 0 ? 12 : hour % 12;
 }
 
+function periodOf(minute: number): "AM" | "PM" {
+  return Math.floor(minute / 60) >= 12 ? "PM" : "AM";
+}
+
+/** "8:30" — the clock face, without the period. */
+function clockOf(minute: number): string {
+  const hour = to12Hour(Math.floor(minute / 60));
+  return `${hour}:${String(minute % 60).padStart(2, "0")}`;
+}
+
+/** "8:30 AM" — used in the per-employee shift lists. */
+export function formatMinute(minute: number): string {
+  return `${clockOf(minute)} ${periodOf(minute)}`;
+}
+
 /**
- * "10–11 AM" — the whole hour a column covers, so the last cell you fill
+ * "10:00–10:30 AM" — a span within one half of the day drops the repeated
+ * period, and one that straddles noon spells both out: "11:30 AM–12:00 PM".
+ */
+export function formatMinuteRange(start: number, end: number): string {
+  const startPeriod = periodOf(start);
+  const endPeriod = periodOf(end);
+  return startPeriod === endPeriod
+    ? `${clockOf(start)}–${clockOf(end)} ${startPeriod}`
+    : `${clockOf(start)} ${startPeriod}–${clockOf(end)} ${endPeriod}`;
+}
+
+/**
+ * "10–11 AM" — the whole hour a header column covers, so the last cell you fill
  * clearly includes that hour rather than reading like an end time.
  */
 export function formatHourBlock(hour: number): string {
@@ -139,64 +196,94 @@ export function formatHourBlock(hour: number): string {
     : `${to12Hour(hour)}–${to12Hour(end)}`;
 }
 
-/** "8:00 AM" — used in the per-employee shift lists. */
-export function formatHourLong(hour: number): string {
-  const period = hour >= 12 ? "PM" : "AM";
-  return `${to12Hour(hour)}:00 ${period}`;
+/** "10:00–10:30 AM" — the half hour one cell covers. */
+export function formatSlotBlock(slotIndex: number): string {
+  const start = slotMinute(slotIndex);
+  return formatMinuteRange(start, start + SLOT_MINUTES);
+}
+
+/** "6" or "6.5" — hours read better without a trailing `.0`. */
+export function formatHours(hours: number): string {
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+}
+
+/* ---------------------------------------------------------------- positions */
+
+/**
+ * The stations a day is divided into, and how many people can be on each one at
+ * the same time. Every day has the same shape, so a row means the same job on
+ * Monday as it does on Saturday.
+ */
+export const POSITION_GROUPS = [
+  { key: "front", label: "Front of house", seats: 2 },
+  { key: "expo", label: "Expo", seats: 1 },
+  { key: "sides", label: "Sides fryer", seats: 1 },
+  { key: "line", label: "Line", seats: 5 },
+  { key: "fryer", label: "Fryer", seats: 2 },
+  { key: "prep", label: "Back prep", seats: 2 },
+  { key: "cleaning", label: "Cleaning", seats: 1 },
+] as const;
+
+export type PositionKey = (typeof POSITION_GROUPS)[number]["key"];
+
+export type PositionRow = {
+  key: PositionKey;
+  /** The station this row belongs to — "Line". */
+  group: string;
+  /** "Line 3" where a station has several spots, plain "Expo" where it has one. */
+  label: string;
+  /** 1-based spot within the station. */
+  seat: number;
+  /** True for the first spot on a station, which is where its heading goes. */
+  firstOfGroup: boolean;
+};
+
+/** One entry per grid row, in the order the rows are drawn. */
+export const POSITION_ROWS: PositionRow[] = POSITION_GROUPS.flatMap((group) =>
+  Array.from({ length: group.seats }, (_, index) => ({
+    key: group.key,
+    group: group.label,
+    label: group.seats === 1 ? group.label : `${group.label} ${index + 1}`,
+    seat: index + 1,
+    firstOfGroup: index === 0,
+  })),
+);
+
+/** The grid is exactly as tall as the stations need — no more, no fewer. */
+export const ROW_COUNT = POSITION_ROWS.length;
+
+/** "Line 3", or "Row 15" for a stray row left over from an older layout. */
+export function positionLabel(rowIndex: number): string {
+  return POSITION_ROWS[rowIndex]?.label ?? `Row ${rowIndex + 1}`;
 }
 
 /* ------------------------------------------------------------------ the grid */
 
-/** A day's assignments: `day[rowIndex][hourIndex]` is an employee id or null. */
+/** A day's assignments: `day[rowIndex][slotIndex]` is an employee id or null. */
 export type DaySchedule = (string | null)[][];
 export type WeekSchedule = Record<DayKey, DaySchedule>;
 
-/**
- * Rows (concurrent positions) shown per day. The starting value lives in the
- * database as the default on `schedule_settings.row_count`; these bounds are
- * enforced both here and by a check constraint on that column.
- */
-export const MIN_ROW_COUNT = 1;
-export const MAX_ROW_COUNT = 20;
-
-export function makeEmptyDay(rowCount: number): DaySchedule {
-  return Array.from({ length: rowCount }, () => Array.from({ length: HOURS.length }, () => null));
+export function makeEmptyDay(): DaySchedule {
+  return POSITION_ROWS.map(() => SLOTS.map(() => null));
 }
 
-export function makeEmptyWeek(rowCount: number): WeekSchedule {
-  return Object.fromEntries(DAY_KEYS.map((day) => [day, makeEmptyDay(rowCount)])) as WeekSchedule;
+export function makeEmptyWeek(): WeekSchedule {
+  return Object.fromEntries(DAY_KEYS.map((day) => [day, makeEmptyDay()])) as WeekSchedule;
 }
-
-/**
- * Grow or shrink a week to `rowCount` rows, keeping existing assignments.
- * Rows past the new count fall off, matching what the database prunes.
- */
-export function resizeWeek(week: WeekSchedule, rowCount: number): WeekSchedule {
-  return Object.fromEntries(
-    DAY_KEYS.map((day) => {
-      const existing = week[day] ?? [];
-      const rows = Array.from({ length: rowCount }, (_, rowIndex) => {
-        const row = existing[rowIndex] ?? [];
-        return Array.from({ length: HOURS.length }, (_, hourIndex) => row[hourIndex] ?? null);
-      });
-      return [day, rows];
-    }),
-  ) as WeekSchedule;
-}
-
 
 /* ----------------------------------------------------------------- coverage */
 
 /**
- * How many people are on for each hour of a day, by column. Someone filling two
- * rows in the same hour counts once, the same way `shiftsForDay` merges rows —
- * the number answers "how many people are here", not "how many cells are full".
+ * How many people are on for each half hour of a day, by column. Someone
+ * filling two positions in the same half hour counts once, the same way
+ * `shiftsForDay` merges rows — the number answers "how many people are here",
+ * not "how many cells are full".
  */
-export function coverageByHour(day: DaySchedule): number[] {
-  return HOURS.map((_, hourIndex) => {
+export function coverageBySlot(day: DaySchedule): number[] {
+  return SLOTS.map((_, slotIndex) => {
     const people = new Set<string>();
     for (const row of day) {
-      const employeeId = row?.[hourIndex];
+      const employeeId = row?.[slotIndex];
       if (employeeId) people.add(employeeId);
     }
     return people.size;
@@ -204,14 +291,14 @@ export function coverageByHour(day: DaySchedule): number[] {
 }
 
 /**
- * The busiest hour anywhere in the week. The heat map scales against this so a
- * shade means the same thing on every day, rather than each day being read
- * against its own quietest and busiest hour.
+ * The busiest half hour anywhere in the week. The heat map scales against this
+ * so a shade means the same thing on every day, rather than each day being read
+ * against its own quietest and busiest stretch.
  */
 export function peakCoverage(week: WeekSchedule): number {
   return DAY_KEYS.reduce((peak, day) => {
     if (isClosedDay(day)) return peak;
-    return Math.max(peak, ...coverageByHour(week[day] ?? []));
+    return Math.max(peak, ...coverageBySlot(week[day] ?? []));
   }, 0);
 }
 
@@ -280,54 +367,59 @@ export function formatDateRange(startISO: string, endISO: string): string {
         `${formatShortDate(end)}, ${end.getFullYear()}`;
 }
 
+
 /* ------------------------------------------------------------------- shifts */
 
-/** A run of consecutive hours an employee is on. `end` is exclusive. */
+/**
+ * A run of consecutive time an employee is on, in minutes past midnight.
+ * `end` is exclusive, and both ends land on an hour or a half hour.
+ */
 export type ShiftRange = { start: number; end: number };
 
 /**
- * The hours an employee works on a day, collapsed into contiguous ranges.
- * Someone scheduled 8–11 and again 14–16 gets two ranges. Rows are merged, so
- * the same person in two rows for one hour still counts as that single hour.
+ * The time an employee works on a day, collapsed into contiguous ranges.
+ * Someone scheduled 8–11 and again 2–4 gets two ranges. Positions are merged,
+ * so the same person on two stations for one half hour still counts once.
  */
 export function shiftsForDay(day: DaySchedule, employeeId: string): ShiftRange[] {
-  const worked = HOURS.map((_, hourIndex) =>
-    day.some((row) => row[hourIndex] === employeeId),
+  const worked = SLOTS.map((_, slotIndex) =>
+    day.some((row) => row[slotIndex] === employeeId),
   );
 
   const ranges: ShiftRange[] = [];
   let runStart: number | null = null;
 
-  worked.forEach((isWorking, hourIndex) => {
-    if (isWorking && runStart === null) runStart = hourIndex;
+  worked.forEach((isWorking, slotIndex) => {
+    if (isWorking && runStart === null) runStart = slotIndex;
     if (!isWorking && runStart !== null) {
-      ranges.push({ start: HOURS[runStart], end: HOURS[hourIndex] });
+      ranges.push({ start: SLOTS[runStart], end: SLOTS[slotIndex] });
       runStart = null;
     }
   });
-  if (runStart !== null) ranges.push({ start: HOURS[runStart], end: END_HOUR });
+  if (runStart !== null) ranges.push({ start: SLOTS[runStart], end: CLOSE_MINUTE });
 
   return ranges;
 }
 
+/** Total time covered by a set of ranges, in hours — 6.5 for a half-hour start. */
 export function rangeHours(ranges: ShiftRange[]): number {
-  return ranges.reduce((total, range) => total + (range.end - range.start), 0);
+  return ranges.reduce((total, range) => total + (range.end - range.start), 0) / 60;
 }
 
 /**
- * Working the 8–9 PM hour means closing: the grid stops at a clean hour, but
- * shutting down runs past it, so these shifts are flagged on the printed sheet.
+ * Anybody still on after 8 PM is closing: the grid stops at 10, but shutting
+ * down runs past it, so these shifts are flagged on the printed sheet.
  */
-export const CLOSING_HOUR = 20;
+export const CLOSING_MINUTE = 20 * 60;
 
-/** True when the person is on for the 8–9 PM hour, i.e. they close that day. */
+/** True when any part of the shift falls after 8 PM, i.e. they close that day. */
 export function isClosingShift(ranges: ShiftRange[]): boolean {
-  return ranges.some((range) => range.start <= CLOSING_HOUR && range.end > CLOSING_HOUR);
+  return ranges.some((range) => range.start < CLOSE_MINUTE && range.end > CLOSING_MINUTE);
 }
 
-/** "8:00 AM – 2:00 PM" */
+/** "8:00 AM – 2:30 PM" */
 export function formatRange(range: ShiftRange): string {
-  return `${formatHourLong(range.start)} – ${formatHourLong(range.end)}`;
+  return `${formatMinute(range.start)} – ${formatMinute(range.end)}`;
 }
 
 /** Every day's shifts for one employee, plus the week total. */

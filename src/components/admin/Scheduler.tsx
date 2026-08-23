@@ -9,8 +9,6 @@ import {
   LoaderCircle,
   LogOut,
   Menu,
-  Minus,
-  Plus,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -33,14 +31,11 @@ import {
   removeRecurringTimeOffAction,
   removeTimeOffAction,
   setLoginCodeAction,
-  setRowCountAction,
   setTimeOffStatusAction,
 } from "@/app/admin/schedule-actions";
 import { exportSchedulePdf, type ExportScope } from "@/lib/schedule-pdf";
 import {
   DAY_KEYS,
-  MAX_ROW_COUNT,
-  MIN_ROW_COUNT,
   addDays,
   datesForWeek,
   formatWeekRange,
@@ -49,7 +44,6 @@ import {
   makeEmptyWeek,
   mondayOf,
   peakCoverage,
-  resizeWeek,
   toISODate,
   type DayKey,
   type Employee,
@@ -76,7 +70,6 @@ import {
 type Editing = { day: DayKey; range: CellRange; el: HTMLElement };
 
 export type SchedulerProps = {
-  rowCount: number;
   employees: Employee[];
   /** How payroll spells each person, learned when a pay stub was assigned. */
   payrollNames?: { employeeId: string; payrollName: string }[];
@@ -95,8 +88,8 @@ export type SchedulerProps = {
 function cellsIn(week: WeekSchedule, day: DayKey, range: CellRange): (string | null)[] {
   const cells: (string | null)[] = [];
   for (let row = range.rowStart; row <= range.rowEnd; row++) {
-    for (let hour = range.hourStart; hour <= range.hourEnd; hour++) {
-      cells.push(week[day]?.[row]?.[hour] ?? null);
+    for (let slot = range.slotStart; slot <= range.slotEnd; slot++) {
+      cells.push(week[day]?.[row]?.[slot] ?? null);
     }
   }
   return cells;
@@ -113,7 +106,6 @@ function cellsIn(week: WeekSchedule, day: DayKey, range: CellRange): (string | n
  * quietly out of step with what's stored.
  */
 export function Scheduler({
-  rowCount: initialRowCount,
   employees: initialEmployees,
   timeOff: initialTimeOff,
   recurringTimeOff: initialRecurring,
@@ -123,7 +115,6 @@ export function Scheduler({
   payrollNames: initialPayrollNames = [],
   initialView = "scheduler",
 }: SchedulerProps) {
-  const [rowCount, setRowCount] = useState(initialRowCount);
   const [employees, setEmployees] = useState(initialEmployees);
   const [payrollNames, setPayrollNames] = useState(initialPayrollNames);
   const [timeOff, setTimeOff] = useState(initialTimeOff);
@@ -144,7 +135,7 @@ export function Scheduler({
   const weekPickerRef = useRef<HTMLInputElement>(null);
   const pendingWeek = useRef(initialWeekStart);
 
-  const week = weeks[weekStart] ?? makeEmptyWeek(rowCount);
+  const week = weeks[weekStart] ?? makeEmptyWeek();
   const dates = useMemo(() => datesForWeek(weekStart), [weekStart]);
   // One scale for every day's heat map, so Friday lunch and Monday lunch shade
   // the same way when they are staffed the same.
@@ -153,7 +144,6 @@ export function Scheduler({
   /** Pull the database's version of everything back into state. */
   const reload = useCallback(async (forWeek: string) => {
     const fresh = await reloadAction(forWeek);
-    setRowCount(fresh.rowCount);
     setEmployees(fresh.employees);
     setTimeOff(fresh.timeOff);
     setRecurring(fresh.recurringTimeOff);
@@ -225,7 +215,7 @@ export function Scheduler({
       pendingWeek.current = target;
       setLoadingWeek(true);
       try {
-        const loaded = await loadWeekAction(target, rowCount);
+        const loaded = await loadWeekAction(target);
         setWeeks((current) => ({ ...current, [target]: loaded }));
       } catch (cause) {
         console.error(`[scheduler] Could not load ${target}:`, cause);
@@ -236,7 +226,7 @@ export function Scheduler({
         if (pendingWeek.current === target) setLoadingWeek(false);
       }
     },
-    [rowCount, weeks, refreshPublishState],
+    [weeks, refreshPublishState],
   );
 
   /** Apply a change to one week in the local cache. */
@@ -244,10 +234,10 @@ export function Scheduler({
     (target: string, mutate: (current: WeekSchedule) => WeekSchedule) => {
       setWeeks((current) => ({
         ...current,
-        [target]: mutate(current[target] ?? makeEmptyWeek(rowCount)),
+        [target]: mutate(current[target] ?? makeEmptyWeek()),
       }));
     },
-    [rowCount],
+    [],
   );
 
   /** Assign (or clear, with `null`) every cell in a dragged block at once. */
@@ -257,8 +247,8 @@ export function Scheduler({
         ...current,
         [day]: current[day].map((cells, rowIndex) =>
           rowIndex >= range.rowStart && rowIndex <= range.rowEnd
-            ? cells.map((cell, hourIndex) =>
-                hourIndex >= range.hourStart && hourIndex <= range.hourEnd ? employeeId : cell,
+            ? cells.map((cell, slotIndex) =>
+                slotIndex >= range.slotStart && slotIndex <= range.slotEnd ? employeeId : cell,
               )
             : cells,
         ),
@@ -339,24 +329,6 @@ export function Scheduler({
     );
   }, []);
 
-  const changeRowCount = useCallback(
-    (delta: number) => {
-      const next = Math.max(MIN_ROW_COUNT, Math.min(MAX_ROW_COUNT, rowCount + delta));
-      if (next === rowCount) return;
-      setRowCount(next);
-      setWeeks((current) =>
-        Object.fromEntries(
-          Object.entries(current).map(([key, value]) => [key, resizeWeek(value, next)]),
-        ),
-      );
-      markDirty();
-      void save("change the row count", async () => {
-        await setRowCountAction(next);
-      });
-    },
-    [markDirty, rowCount, save],
-  );
-
   /** Send the visible week to every employee's `/staff` schedule. */
   const publish = async () => {
     setPublishing(true);
@@ -388,7 +360,7 @@ export function Scheduler({
       // Has to be checked against the database, not just the cache — otherwise
       // an unvisited week would look empty and get overwritten without asking.
       try {
-        existing = await loadWeekAction(target, rowCount);
+        existing = await loadWeekAction(target);
       } catch (cause) {
         console.error(`[scheduler] Could not check ${target} before copying:`, cause);
         setError(`Couldn't check whether ${formatWeekRange(target)} is empty. Nothing was copied.`);
@@ -409,7 +381,7 @@ export function Scheduler({
       return;
     }
 
-    const source = weeks[weekStart] ?? makeEmptyWeek(rowCount);
+    const source = weeks[weekStart] ?? makeEmptyWeek();
     // Deep copy, or the two weeks would share row arrays and edit together.
     const copy = Object.fromEntries(
       DAY_KEYS.map((day) => [day, (source[day] ?? []).map((row) => [...row])]),
@@ -481,7 +453,7 @@ export function Scheduler({
   const handleExport = async (scope: ExportScope) => {
     setExporting(true);
     try {
-      await exportSchedulePdf({ week, employees, rowCount, weekStartISO: weekStart, scope });
+      await exportSchedulePdf({ week, employees, weekStartISO: weekStart, scope });
     } catch (cause) {
       console.error("[scheduler] PDF export failed:", cause);
       setError("The export didn't finish. Please try again.");
@@ -598,30 +570,6 @@ export function Scheduler({
             Copy to next week
           </Button>
 
-          {/* Rows per day */}
-          <div className="flex items-center gap-1 rounded-lg border border-border p-1">
-            <span className="px-1.5 text-xs text-muted-foreground">Rows</span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Remove a row"
-              onClick={() => changeRowCount(-1)}
-              disabled={rowCount <= MIN_ROW_COUNT}
-            >
-              <Minus />
-            </Button>
-            <span className="w-5 text-center text-sm font-semibold">{rowCount}</span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Add a row"
-              onClick={() => changeRowCount(1)}
-              disabled={rowCount >= MAX_ROW_COUNT}
-            >
-              <Plus />
-            </Button>
-          </div>
-
           <ExportMenu employees={employees} exporting={exporting} onExport={handleExport} />
 
           <GoLiveButton state={publishState} publishing={publishing} onPublish={publish} />
@@ -706,8 +654,7 @@ export function Scheduler({
               key={day}
               day={day}
               date={dates[day]}
-              schedule={week[day] ?? makeEmptyDay(rowCount)}
-              rowCount={rowCount}
+              schedule={week[day] ?? makeEmptyDay()}
               employees={employees}
               peak={peak}
               selection={editing?.day === day ? editing.range : null}

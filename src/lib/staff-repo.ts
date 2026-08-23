@@ -4,11 +4,12 @@ import { getDb } from "@/lib/supabase/server";
 import { STAFF_ATTEMPT_WINDOW_MINUTES, STAFF_MAX_ATTEMPTS } from "@/lib/staff-auth";
 import {
   DAY_KEYS,
-  HOURS,
-  START_HOUR,
+  ROW_COUNT,
+  SLOT_COUNT,
   addDays,
   fromISODate,
   makeEmptyWeek,
+  minuteSlot,
   toISODate,
   type DayKey,
   type Employee,
@@ -144,23 +145,20 @@ export async function listPublishedWeeks(fromWeekISO: string): Promise<Published
  * The published grid for one week, in the same shape the admin grid uses so the
  * existing `employeeWeek` helpers work unchanged.
  */
-export async function loadPublishedWeek(
-  weekStartISO: string,
-  rowCount: number,
-): Promise<WeekSchedule> {
+export async function loadPublishedWeek(weekStartISO: string): Promise<WeekSchedule> {
   const { data, error } = await getDb()
     .from("published_shifts")
-    .select("shift_date, row_index, hour, employee_id")
+    .select("shift_date, row_index, start_minute, employee_id")
     .eq("week_start", weekStartISO);
 
   if (error) fail(`loading published week ${weekStartISO}`, error);
 
-  const week = makeEmptyWeek(rowCount);
+  const week = makeEmptyWeek();
   for (const row of data) {
     const day = dayOf(weekStartISO, row.shift_date);
-    const hourIndex = row.hour - START_HOUR;
-    if (!day || row.row_index >= rowCount || hourIndex < 0 || hourIndex >= HOURS.length) continue;
-    week[day][row.row_index][hourIndex] = row.employee_id;
+    const slotIndex = minuteSlot(row.start_minute);
+    if (!day || row.row_index >= ROW_COUNT || slotIndex < 0 || slotIndex >= SLOT_COUNT) continue;
+    week[day][row.row_index][slotIndex] = row.employee_id;
   }
   return week;
 }
@@ -199,7 +197,7 @@ export async function publishWeek(weekStartISO: string): Promise<string> {
 
   const { data, error } = await db
     .from("shift_assignments")
-    .select("shift_date, row_index, hour, employee_id")
+    .select("shift_date, row_index, start_minute, employee_id")
     .gte("shift_date", weekStartISO)
     .lte("shift_date", weekEndISO);
   if (error) fail("reading the week being published", error);
@@ -243,12 +241,12 @@ export async function getPublishState(weekStartISO: string): Promise<PublishStat
     db.from("published_weeks").select("published_at").eq("week_start", weekStartISO).maybeSingle(),
     db
       .from("shift_assignments")
-      .select("shift_date, row_index, hour, employee_id")
+      .select("shift_date, row_index, start_minute, employee_id")
       .gte("shift_date", weekStartISO)
       .lte("shift_date", weekEndISO),
     db
       .from("published_shifts")
-      .select("shift_date, row_index, hour, employee_id")
+      .select("shift_date, row_index, start_minute, employee_id")
       .eq("week_start", weekStartISO),
   ]);
 
@@ -258,8 +256,12 @@ export async function getPublishState(weekStartISO: string): Promise<PublishStat
 
   if (!week.data) return { publishedAt: null, hasUnpublishedChanges: working.data.length > 0 };
 
-  const key = (row: { shift_date: string; row_index: number; hour: number; employee_id: string }) =>
-    `${row.shift_date}|${row.row_index}|${row.hour}|${row.employee_id}`;
+  const key = (row: {
+    shift_date: string;
+    row_index: number;
+    start_minute: number;
+    employee_id: string;
+  }) => `${row.shift_date}|${row.row_index}|${row.start_minute}|${row.employee_id}`;
   const workingKeys = new Set(working.data.map(key));
   const publishedKeys = new Set(published.data.map(key));
   const same =

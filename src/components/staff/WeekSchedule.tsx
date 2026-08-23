@@ -5,6 +5,7 @@ import { CalendarCheck, MoonStar } from "lucide-react";
 import {
   datesForWeek,
   employeeWeek,
+  formatHours,
   formatRange,
   formatShortDate,
   isClosingShift,
@@ -38,7 +39,7 @@ export function WeekSchedule({ week, employeeId, weekStart }: Props) {
     <div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-lg bg-brand px-3 py-1.5 text-sm font-bold text-white">
-          Total hours this week: {totalHours}
+          Total hours this week: {formatHours(totalHours)}
         </span>
         {closingDays.length > 0 && (
           <span className="flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-xs font-bold tracking-wide text-background uppercase">
@@ -76,7 +77,7 @@ export function WeekSchedule({ week, employeeId, weekStart }: Props) {
 
               {hours > 0 && (
                 <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {hours} h
+                  {formatHours(hours)} h
                 </span>
               )}
             </li>

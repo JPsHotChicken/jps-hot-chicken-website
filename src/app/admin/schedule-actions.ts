@@ -7,9 +7,8 @@ import * as repo from "@/lib/schedule-repo";
 import * as staff from "@/lib/staff-repo";
 import {
   DAY_KEYS,
-  HOURS,
-  MAX_ROW_COUNT,
-  MIN_ROW_COUNT,
+  ROW_COUNT,
+  SLOT_COUNT,
   SHIFT_GROUPS,
   TIME_OFF_STATUSES,
   type DayKey,
@@ -73,12 +72,12 @@ function assertBlock(block: repo.CellBlock): repo.CellBlock {
   const within = (value: number, max: number) =>
     Number.isInteger(value) && value >= 0 && value < max;
   const ok =
-    within(block.rowStart, MAX_ROW_COUNT) &&
-    within(block.rowEnd, MAX_ROW_COUNT) &&
-    within(block.hourStart, HOURS.length) &&
-    within(block.hourEnd, HOURS.length) &&
+    within(block.rowStart, ROW_COUNT) &&
+    within(block.rowEnd, ROW_COUNT) &&
+    within(block.slotStart, SLOT_COUNT) &&
+    within(block.slotEnd, SLOT_COUNT) &&
     block.rowStart <= block.rowEnd &&
-    block.hourStart <= block.hourEnd;
+    block.slotStart <= block.slotEnd;
   if (!ok) throw new Error("That block of cells is out of range.");
   return block;
 }
@@ -93,11 +92,10 @@ function assertText(value: string, field: string, { max = 200, required = false 
 
 /* ------------------------------------------------------------------- reads */
 
-export async function loadWeekAction(weekStart: string, rowCount: number): Promise<WeekSchedule> {
+export async function loadWeekAction(weekStart: string): Promise<WeekSchedule> {
   await requireAdmin();
   assertMonday(weekStart);
-  const rows = Math.min(MAX_ROW_COUNT, Math.max(MIN_ROW_COUNT, Math.trunc(rowCount)));
-  return repo.loadWeek(weekStart, rows);
+  return repo.loadWeek(weekStart);
 }
 
 /**
@@ -111,7 +109,7 @@ export async function reloadAction(
   await requireAdmin();
   assertMonday(weekStart);
   const base = await repo.loadScheduleBase();
-  return { ...base, week: await repo.loadWeek(weekStart, base.rowCount) };
+  return { ...base, week: await repo.loadWeek(weekStart) };
 }
 
 /* --------------------------------------------------------------- employees */
@@ -161,15 +159,6 @@ export async function publishStateAction(weekStart: string): Promise<staff.Publi
 export async function removeEmployeeAction(id: string): Promise<void> {
   await requireAdmin();
   await repo.deleteEmployee(assertUuid(id, "Employee"));
-}
-
-/* ---------------------------------------------------------------- settings */
-
-export async function setRowCountAction(rowCount: number): Promise<number> {
-  await requireAdmin();
-  const clamped = Math.min(MAX_ROW_COUNT, Math.max(MIN_ROW_COUNT, Math.trunc(rowCount)));
-  await repo.setRowCount(clamped);
-  return clamped;
 }
 
 /* -------------------------------------------------------------------- grid */
