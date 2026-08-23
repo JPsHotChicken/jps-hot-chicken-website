@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Copy, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { employeeColors } from "@/lib/employee-colors";
 import {
   DAY_KEYS,
   DAY_LABELS,
@@ -20,20 +21,12 @@ import {
   type DayKey,
   type DaySchedule,
   type Employee,
-  type ShiftGroup,
 } from "@/lib/schedule";
-
-/** Cell tint by shift group, so the week reads at a glance. */
-const GROUP_CELL_STYLES: Record<ShiftGroup, string> = {
-  morning: "bg-amber-100 text-amber-950 hover:bg-amber-200",
-  night: "bg-indigo-100 text-indigo-950 hover:bg-indigo-200",
-  other: "bg-emerald-100 text-emerald-950 hover:bg-emerald-200",
-};
 
 /**
  * The heat map's five filled shades, coldest first, with the empty look at
- * index 0. Kept apart from the shift-group tints above so a busy half hour
- * never reads as a shift group.
+ * index 0. Reds are kept out of the per-person palette so a busy half hour
+ * never reads as somebody's shift.
  */
 const HEAT_STYLES = [
   "border-dashed border-border bg-muted/40 text-muted-foreground",
@@ -58,19 +51,48 @@ function heatLevel(count: number, peak: number): number {
 const COLUMNS = `112px repeat(${SLOT_COUNT}, minmax(38px, 1fr))`;
 
 /**
- * The day still reads as a row of hour cells. Whole hours are set apart by a
- * wider gutter than the hairline between the two halves inside one, so filling
- * a single half is clearly "half of the 10–11 hour" — a 10:30 start.
+ * The position column stays put while the hours scroll past it, and the hour
+ * header stays put while the positions scroll under it — so a cell in the
+ * middle of the grid can always be read off both axes.
  */
+const STUCK_COLUMN = "sticky left-0 z-10 bg-background";
+
+/**
+ * The day reads as a row of hour cells: a white spacer parts one hour from the
+ * next, and nothing parts the two halves inside an hour. Filling a single half
+ * is still how a 10:30 start is drawn — the halves are separate targets, they
+ * just aren't drawn as separate boxes.
+ *
+ * The rows carry no grid `gap`: a gap would push the tracks apart on every
+ * column, and the tracks have to line up between the header, the heat map and
+ * the grid. Margins move a cell inside its track and leave the track alone.
+ */
+const HOUR_GUTTER_PX = 2;
+
 function hourGutter(slotIndex: number): string {
-  return slotIndex % SLOTS_PER_HOUR === 0 && slotIndex > 0 ? "ml-px" : "";
+  return slotIndex % SLOTS_PER_HOUR === 0 ? "ml-0.5" : "";
 }
 
-/** The two halves of an empty hour round into one box, parted down the middle. */
-function halfShape(slotIndex: number): string {
+/**
+ * An empty hour is one dashed box. Each half rounds at the hour's outer edge
+ * and drops its border where the two meet, so no line runs down the middle.
+ */
+function emptyHalf(slotIndex: number): string {
   return slotIndex % SLOTS_PER_HOUR === 0
-    ? "rounded-l-sm rounded-r-none"
-    : "rounded-r-sm rounded-l-none";
+    ? "rounded-l-sm rounded-r-none border-r-0"
+    : "rounded-r-sm rounded-l-none border-l-0";
+}
+
+/**
+ * The heat map keeps both halves boxed and adds a hairline between them: unlike
+ * a shift, its two halves are separate numbers and would otherwise run together.
+ */
+function heatHalf(slotIndex: number): string {
+  const [shape, gutter] =
+    slotIndex % SLOTS_PER_HOUR === 0
+      ? ["rounded-l-sm rounded-r-none", "ml-0.5"]
+      : ["rounded-r-sm rounded-l-none", "ml-px"];
+  return `${shape} ${gutter}`;
 }
 
 type Props = {
@@ -153,6 +175,7 @@ export function DayGrid({
   const [drag, setDrag] = useState<Drag | null>(null);
   const closed = isClosedDay(day);
   const employeeById = new Map(employees.map((e) => [e.id, e]));
+  const colorById = employeeColors(employees);
   const coverage = coverageBySlot(schedule);
 
   // Finish the drag wherever the pointer is released — including outside the
@@ -217,61 +240,88 @@ export function DayGrid({
           The store is closed on {DAY_LABELS[day]}s, so no shifts can be scheduled.
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        // Scrolls on both axes so the pinned hour header and position column
+        // have a scrollport of their own to stay put against. The cap is high
+        // enough that a whole day fits outright on a normal screen, and only
+        // short ones scroll the day inside its own card.
+        <div className="max-h-[80vh] overflow-auto">
           {/* select-none so dragging across cells doesn't smear a text selection. */}
-          <div className="min-w-max p-2 select-none">
-            {/* Hour header — each label sits over the two halves of its hour. */}
-            <div className="grid gap-px" style={{ gridTemplateColumns: COLUMNS }}>
-              <div aria-hidden />
-              {HOURS.map((hour) => (
-                <div
-                  key={hour}
-                  style={{ gridColumn: `span ${SLOTS_PER_HOUR}` }}
-                  className="px-1 pb-1 text-center text-[0.65rem] font-bold tracking-wide text-muted-foreground uppercase"
-                >
-                  {formatHourBlock(hour)}
-                </div>
-              ))}
-            </div>
-
-            {/* Heat map: how many people are on in each half hour. */}
-            <div
-              aria-label={`People on each half hour on ${DAY_LABELS[day]}`}
-              className="mb-1.5 grid gap-px border-b border-border pb-1.5"
-              style={{ gridTemplateColumns: COLUMNS }}
-            >
-              <div
-                className="flex items-center justify-center text-muted-foreground"
-                title="How many people are on in each half hour"
-              >
-                <Users className="size-3.5" />
+          <div className="min-w-max py-2 select-none">
+            <div className="sticky top-0 z-20 mb-1.5 border-b border-border bg-background pb-1.5">
+              {/* Hour header — each label sits over the two halves of its hour. */}
+              <div className="grid" style={{ gridTemplateColumns: COLUMNS }}>
+                <div aria-hidden className={STUCK_COLUMN} />
+                {HOURS.map((hour, hourIndex) => {
+                  // Lit up while a block covering any part of this hour is being
+                  // dragged out, so the selection can be read off the axis.
+                  const picked =
+                    highlight !== null &&
+                    highlight.slotStart <= hourIndex * SLOTS_PER_HOUR + SLOTS_PER_HOUR - 1 &&
+                    highlight.slotEnd >= hourIndex * SLOTS_PER_HOUR;
+                  return (
+                    <div
+                      key={hour}
+                      style={{ gridColumn: `span ${SLOTS_PER_HOUR}` }}
+                      className={`px-1 pb-1 text-center text-[0.65rem] font-bold tracking-wide uppercase ${
+                        picked ? "rounded bg-brand/15 text-brand" : "text-muted-foreground"
+                      }`}
+                    >
+                      {formatHourBlock(hour)}
+                    </div>
+                  );
+                })}
               </div>
-              {SLOTS.map((minute, slotIndex) => {
-                const count = coverage[slotIndex] ?? 0;
-                return (
-                  <div
-                    key={minute}
-                    title={`${count === 1 ? "1 person" : `${count} people`} on ${formatSlotBlock(slotIndex)}`}
-                    className={`flex h-5 items-center justify-center border text-[0.65rem] font-bold tabular-nums ${hourGutter(slotIndex)} ${halfShape(slotIndex)} ${HEAT_STYLES[heatLevel(count, peak)]}`}
-                  >
-                    {count}
-                  </div>
-                );
-              })}
+
+              {/* Heat map: how many people are on in each half hour. */}
+              <div
+                aria-label={`People on each half hour on ${DAY_LABELS[day]}`}
+                className="grid"
+                style={{ gridTemplateColumns: COLUMNS }}
+              >
+                <div
+                  className={`flex items-center justify-center text-muted-foreground ${STUCK_COLUMN}`}
+                  title="How many people are on in each half hour"
+                >
+                  <Users className="size-3.5" />
+                </div>
+                {SLOTS.map((minute, slotIndex) => {
+                  const count = coverage[slotIndex] ?? 0;
+                  const picked =
+                    highlight !== null &&
+                    within(slotIndex, highlight.slotStart, highlight.slotEnd);
+                  return (
+                    <div
+                      key={minute}
+                      title={`${count === 1 ? "1 person" : `${count} people`} on ${formatSlotBlock(slotIndex)}`}
+                      className={`flex h-5 items-center justify-center border text-[0.65rem] font-bold tabular-nums ${heatHalf(slotIndex)} ${HEAT_STYLES[heatLevel(count, peak)]} ${
+                        picked ? "ring-2 ring-brand ring-inset" : ""
+                      }`}
+                    >
+                      {count}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* One row per position. */}
             {POSITION_ROWS.map((position, rowIndex) => (
               <div
                 key={position.label}
-                className={`grid gap-px ${
+                className={`grid ${
                   // A hairline between stations, so the five line spots read as
                   // one block rather than running into the fryers below them.
                   position.firstOfGroup && rowIndex > 0 ? "mt-1 border-t border-border pt-1" : ""
                 }`}
                 style={{ gridTemplateColumns: COLUMNS }}
               >
-                <div className="flex items-center truncate pr-2 text-[0.7rem] font-semibold text-muted-foreground">
+                <div
+                  className={`flex items-center truncate pr-2 pl-2 text-[0.7rem] font-semibold ${STUCK_COLUMN} ${
+                    highlight !== null && within(rowIndex, highlight.rowStart, highlight.rowEnd)
+                      ? "text-brand"
+                      : "text-muted-foreground"
+                  }`}
+                >
                   {position.label}
                 </div>
                 {SLOTS.map((minute, slotIndex) => {
@@ -329,19 +379,25 @@ export function DayGrid({
                         hourGutter(slotIndex)
                       } ${
                         employee
-                          ? `border-transparent ${GROUP_CELL_STYLES[employee.group]} ${
+                          ? `border-transparent ${
+                              colorById.get(employee.id)?.cell ?? "bg-muted"
+                            } ${
                               // A shift is one bar: only its two ends are rounded.
                               startsRun ? "rounded-l-md" : "rounded-l-none"
                             } ${endsRun ? "rounded-r-md" : "rounded-r-none"}`
-                          : `border-dashed border-border bg-muted/40 hover:bg-muted ${halfShape(slotIndex)}`
-                      } ${selected ? "z-20 ring-2 ring-brand ring-inset" : ""}`}
+                          : `border-dashed border-border bg-muted/40 hover:bg-muted ${emptyHalf(slotIndex)}`
+                      } ${selected ? "z-[2] ring-2 ring-brand ring-inset" : ""}`}
                     >
                       {named && employee && (
                         // Positioned so a name can spill over the other half of
                         // its hour; the 1px grid gap is added back in.
                         <span
-                          style={{ width: `calc(${span * 100}% + ${span - 1}px - 0.5rem)` }}
-                          className="pointer-events-none absolute inset-y-0 left-1 z-10 truncate leading-8"
+                          style={{
+                            width: `calc(${span * 100}% + ${
+                              (span - 1) * HOUR_GUTTER_PX
+                            }px - 0.5rem)`,
+                          }}
+                          className="pointer-events-none absolute inset-y-0 left-1 z-[1] truncate leading-8"
                         >
                           {employee.name}
                         </span>

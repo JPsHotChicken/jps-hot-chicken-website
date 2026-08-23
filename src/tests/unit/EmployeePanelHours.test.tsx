@@ -24,9 +24,7 @@ const employees = [
 
 describe("EmployeePanel weekly hours", () => {
   it("shows each person's total for the week on screen", () => {
-    render(
-      <EmployeePanel employees={employees} week={buildWeek()} onAdd={() => {}} onRemove={() => {}} />,
-    );
+    render(<EmployeePanel employees={employees} week={buildWeek()} />);
 
     const row = (name: string) => screen.getByText(name).closest("li")!;
     expect(within(row("Alex Morning")).getByText("12h")).toBeInTheDocument();

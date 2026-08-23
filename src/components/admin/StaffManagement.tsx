@@ -1,7 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Dices, KeyRound, LoaderCircle, Users, X } from "lucide-react";
+import {
+  Check,
+  Dices,
+  KeyRound,
+  LoaderCircle,
+  Plus,
+  Trash2,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +36,72 @@ type Props = {
   /** Resolves to the saved code, or rejects with a message worth showing. */
   onSaveCode: (id: string, code: string) => Promise<void>;
   onRandomCode: (id: string) => Promise<void>;
+  onAdd: (name: string, group: ShiftGroup) => void;
+  onRemove: (id: string) => void;
 };
+
+/** Hire somebody: a name and which shift they belong to. */
+function AddEmployeeForm({ onAdd }: { onAdd: (name: string, group: ShiftGroup) => void }) {
+  const [name, setName] = useState("");
+  const [group, setGroup] = useState<ShiftGroup>("morning");
+
+  const submit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onAdd(trimmed, group);
+    setName("");
+  };
+
+  return (
+    <div className="border-b border-border px-4 py-3">
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <UserPlus className="size-4 text-muted-foreground" />
+        Add someone to the team
+      </h3>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <label htmlFor="employee-name" className="sr-only">
+          Employee name
+        </label>
+        <input
+          id="employee-name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              submit();
+            }
+          }}
+          placeholder="Employee name"
+          className="min-w-40 flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+        <label htmlFor="employee-group" className="sr-only">
+          Shift group
+        </label>
+        <select
+          id="employee-group"
+          value={group}
+          onChange={(event) => setGroup(event.target.value as ShiftGroup)}
+          className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          {SHIFT_GROUPS.map((value) => (
+            <option key={value} value={value}>
+              {SHIFT_GROUP_LABELS[value]}
+            </option>
+          ))}
+        </select>
+        <Button onClick={submit} disabled={!name.trim()}>
+          <Plus data-icon="inline-start" />
+          Add employee
+        </Button>
+      </div>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        They show up on the schedule maker straight away. Give them a code below so they can sign
+        in.
+      </p>
+    </div>
+  );
+}
 
 /** One employee row: their name, and the code they sign in with. */
 function EmployeeRow({
@@ -35,12 +110,14 @@ function EmployeeRow({
   onSaveCode,
   onRandomCode,
   onForgetPayrollName,
+  onRemove,
 }: {
   employee: Employee;
   payrollNames?: string[];
   onSaveCode: (id: string, code: string) => Promise<void>;
   onRandomCode: (id: string) => Promise<void>;
   onForgetPayrollName?: (payrollName: string) => Promise<void>;
+  onRemove: (id: string) => void;
 }) {
   const saved = employee.loginCode ?? "";
   const [draft, setDraft] = useState(saved);
@@ -77,6 +154,19 @@ function EmployeeRow({
       await onRandomCode(employee.id);
       setError(null);
     });
+
+  /** Letting somebody go takes their shifts and time off with them. */
+  const remove = () => {
+    if (
+      !confirm(
+        `Remove ${employee.name}?\n\n` +
+          "Every shift they're on and all of their time off goes with them. This can't be undone.",
+      )
+    ) {
+      return;
+    }
+    onRemove(employee.id);
+  };
 
   return (
     <li className="flex flex-wrap items-center gap-3 px-4 py-3">
@@ -170,6 +260,16 @@ function EmployeeRow({
         >
           <Dices />
         </Button>
+
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={remove}
+          aria-label={`Remove ${employee.name}`}
+          title="Remove this person, and everything they're scheduled for"
+        >
+          <Trash2 className="text-destructive" />
+        </Button>
       </div>
     </li>
   );
@@ -177,8 +277,8 @@ function EmployeeRow({
 
 /**
  * Staff management: who works here and what they type in to see their schedule.
- * Codes live here rather than on the scheduler's employee card, which is for
- * dragging shifts, not admin.
+ * Hiring, letting go and codes all live here rather than on the scheduler's
+ * employee card, which is for dragging shifts, not admin.
  */
 export function StaffManagement({
   employees,
@@ -186,6 +286,8 @@ export function StaffManagement({
   onSaveCode,
   onRandomCode,
   onForgetPayrollName,
+  onAdd,
+  onRemove,
 }: Props) {
   const grouped = employeesByGroup(employees);
   const namesFor = (employeeId: string) =>
@@ -205,9 +307,11 @@ export function StaffManagement({
           </p>
         </header>
 
+        <AddEmployeeForm onAdd={onAdd} />
+
         {employees.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            No employees yet. Add them from the schedule maker.
+            No employees yet. Add your first one above.
           </p>
         ) : (
           <div className="divide-y divide-border">
@@ -226,6 +330,7 @@ export function StaffManagement({
                       onSaveCode={onSaveCode}
                       onRandomCode={onRandomCode}
                       onForgetPayrollName={onForgetPayrollName}
+                      onRemove={onRemove}
                     />
                   ))}
                 </ul>

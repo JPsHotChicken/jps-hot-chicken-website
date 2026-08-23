@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2, Users } from "lucide-react";
+import { Users } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { employeeColors } from "@/lib/employee-colors";
 import {
   SHIFT_GROUPS,
   SHIFT_GROUP_LABELS,
@@ -11,38 +10,32 @@ import {
   employeesByGroup,
   formatHours,
   type Employee,
-  type ShiftGroup,
   type WeekSchedule,
 } from "@/lib/schedule";
-
-const GROUP_DOT: Record<ShiftGroup, string> = {
-  morning: "bg-amber-400",
-  night: "bg-indigo-400",
-  other: "bg-emerald-400",
-};
 
 type Props = {
   employees: Employee[];
   /** The week on screen, so each person can show their hours for it. */
   week: WeekSchedule;
-  onAdd: (name: string, group: ShiftGroup) => void;
-  onRemove: (id: string) => void;
+  /** Jump to Staff management, where people are hired and let go. */
+  onManageStaff?: () => void;
 };
 
-export function EmployeePanel({ employees, week, onAdd, onRemove }: Props) {
-  const [name, setName] = useState("");
-  const [group, setGroup] = useState<ShiftGroup>("morning");
+/**
+ * The roster beside the grid: who can be dropped into a shift, what colour they
+ * are drawn in, and how many hours the week already gives them.
+ *
+ * Read only by design — adding and removing people lives in Staff management,
+ * so a click while building a week can't delete somebody's shifts.
+ */
+export function EmployeePanel({ employees, week, onManageStaff }: Props) {
   const grouped = employeesByGroup(employees);
+  // This list doubles as the grid's key: the dot beside a name is the colour
+  // their shifts are drawn in.
+  const colorById = employeeColors(employees);
   const hoursById = new Map(
     employees.map((employee) => [employee.id, employeeWeek(week, employee.id).totalHours]),
   );
-
-  const submit = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    onAdd(trimmed, group);
-    setName("");
-  };
 
   // Width comes from the sidebar wrapper — this sits beside the time-off card.
   return (
@@ -57,51 +50,32 @@ export function EmployeePanel({ employees, week, onAdd, onRemove }: Props) {
         </p>
       </header>
 
-      {/* Add form */}
-      <div className="space-y-2 border-b border-border p-4">
-        <label htmlFor="employee-name" className="sr-only">
-          Employee name
-        </label>
-        <input
-          id="employee-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              submit();
-            }
-          }}
-          placeholder="Employee name"
-          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-        />
-        <label htmlFor="employee-group" className="sr-only">
-          Shift group
-        </label>
-        <select
-          id="employee-group"
-          value={group}
-          onChange={(event) => setGroup(event.target.value as ShiftGroup)}
-          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          {SHIFT_GROUPS.map((value) => (
-            <option key={value} value={value}>
-              {SHIFT_GROUP_LABELS[value]}
-            </option>
-          ))}
-        </select>
-        <Button onClick={submit} disabled={!name.trim()} className="w-full">
-          <Plus data-icon="inline-start" />
-          Add employee
-        </Button>
-      </div>
-
       {/* Grouped list */}
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        {employees.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Nobody on the roster yet
+            {onManageStaff ? (
+              <>
+                {" — add your team in "}
+                <button
+                  type="button"
+                  onClick={onManageStaff}
+                  className="font-semibold text-brand underline underline-offset-2 hover:no-underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                >
+                  Staff management
+                </button>
+                .
+              </>
+            ) : (
+              "."
+            )}
+          </p>
+        )}
+
         {SHIFT_GROUPS.map((value) => (
           <div key={value}>
-            <h3 className="flex items-center gap-2 text-[0.65rem] font-bold tracking-widest text-muted-foreground uppercase">
-              <span className={`size-2 rounded-full ${GROUP_DOT[value]}`} />
+            <h3 className="text-[0.65rem] font-bold tracking-widest text-muted-foreground uppercase">
               {SHIFT_GROUP_LABELS[value]}
             </h3>
             {grouped[value].length === 0 ? (
@@ -113,8 +87,14 @@ export function EmployeePanel({ employees, week, onAdd, onRemove }: Props) {
                   return (
                     <li
                       key={employee.id}
-                      className="group flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted"
+                      className="flex items-center gap-2 rounded-md px-2 py-1 text-sm"
                     >
+                      <span
+                        aria-hidden
+                        className={`size-2.5 shrink-0 rounded-full ${
+                          colorById.get(employee.id)?.dot ?? "bg-muted"
+                        }`}
+                      />
                       <span className="min-w-0 flex-1 truncate">{employee.name}</span>
                       <span
                         title={`${formatHours(hours)} scheduled ${hours === 1 ? "hour" : "hours"} this week`}
@@ -124,15 +104,6 @@ export function EmployeePanel({ employees, week, onAdd, onRemove }: Props) {
                       >
                         {formatHours(hours)}h
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label={`Remove ${employee.name}`}
-                        onClick={() => onRemove(employee.id)}
-                        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                      >
-                        <Trash2 className="text-destructive" />
-                      </Button>
                     </li>
                   );
                 })}
@@ -141,6 +112,18 @@ export function EmployeePanel({ employees, week, onAdd, onRemove }: Props) {
           </div>
         ))}
       </div>
+
+      {employees.length > 0 && onManageStaff && (
+        <footer className="border-t border-border px-4 py-2.5">
+          <button
+            type="button"
+            onClick={onManageStaff}
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            Add or remove people in Staff management
+          </button>
+        </footer>
+      )}
     </aside>
   );
 }

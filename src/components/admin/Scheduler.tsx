@@ -503,7 +503,7 @@ export function Scheduler({
               {view === "scheduler" ? "Schedule maker" : "Staff management"}
             </h1>
             <p className="text-xs text-muted-foreground">
-              {view === "scheduler" ? "Monday – Sunday" : "Sign-in codes"}
+              {view === "scheduler" ? "Monday – Sunday" : "Your team and their sign-in codes"}
             </p>
           </div>
 
@@ -619,6 +619,8 @@ export function Scheduler({
           payrollNames={payrollNames}
           onSaveCode={saveLoginCode}
           onRandomCode={randomLoginCode}
+          onAdd={addEmployee}
+          onRemove={removeEmployee}
           onForgetPayrollName={async (payrollName) => {
             await forgetPayrollNameAction(payrollName);
             setPayrollNames((names) => names.filter((n) => n.payrollName !== payrollName));
@@ -631,8 +633,10 @@ export function Scheduler({
           <EmployeePanel
             employees={employees}
             week={week}
-            onAdd={addEmployee}
-            onRemove={removeEmployee}
+            onManageStaff={() => {
+              setView("staff");
+              setEditing(null);
+            }}
           />
 
           <TimeOffPanel

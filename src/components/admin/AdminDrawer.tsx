@@ -53,7 +53,7 @@ const TABS: {
     view: "staff",
     label: "Staff management",
     icon: <Users className="size-4" />,
-    hint: "Sign-in codes for your team",
+    hint: "Your team, and their sign-in codes",
     href: "/admin?view=staff",
   },
   {

@@ -1,7 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarOff, Check, Plus, Repeat, RotateCcw, Trash2, X } from "lucide-react";
+import {
+  CalendarOff,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  Repeat,
+  RotateCcw,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -107,6 +117,10 @@ export function TimeOffPanel({
   const today = toISODate(new Date());
   const [requestOpen, setRequestOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
+  // The list is about the week being built, so everything else is folded away
+  // until asked for. The card's own subtitle still counts every request, so a
+  // decision waiting on a later week can't go unnoticed.
+  const [allRequests, setAllRequests] = useState(false);
 
   const [reqEmployee, setReqEmployee] = useState("");
   const [reqStart, setReqStart] = useState(today);
@@ -122,6 +136,9 @@ export function TimeOffPanel({
   const noStaff = employees.length === 0;
 
   const sortedRequests = [...requests].sort(compareTimeOff);
+  const weekRequests = sortedRequests.filter((request) => coversWeek(request, weekStart));
+  const shownRequests = allRequests ? sortedRequests : weekRequests;
+  const hiddenRequests = sortedRequests.length - weekRequests.length;
   const sortedRecurring = [...recurring].sort(
     (a, b) =>
       DAY_KEYS.indexOf(a.day) - DAY_KEYS.indexOf(b.day) ||
@@ -180,8 +197,8 @@ export function TimeOffPanel({
         <section>
           <SectionHeader
             icon={<CalendarOff className="size-3" />}
-            title="Requests"
-            count={requests.length}
+            title={allRequests ? "Requests" : "Requests this week"}
+            count={shownRequests.length}
             open={requestOpen}
             disabled={noStaff}
             onToggle={() => setRequestOpen((open) => !open)}
@@ -269,11 +286,13 @@ export function TimeOffPanel({
             </div>
           )}
 
-          {sortedRequests.length === 0 ? (
-            <p className="mt-1.5 text-xs text-muted-foreground/70">No requests yet</p>
+          {shownRequests.length === 0 ? (
+            <p className="mt-1.5 text-xs text-muted-foreground/70">
+              {sortedRequests.length === 0 ? "No requests yet" : "Nobody is off this week"}
+            </p>
           ) : (
             <ul className="mt-2 space-y-2">
-              {sortedRequests.map((request) => {
+              {shownRequests.map((request) => {
                 const days = requestDayCount(request);
                 return (
                   <li
@@ -297,9 +316,10 @@ export function TimeOffPanel({
                       {formatDateRange(request.startDate, request.endDate)}
                       <span className="mx-1">·</span>
                       {days} {days === 1 ? "day" : "days"}
-                      {/* nowrap so the chip moves to the next line whole rather
-                          than splitting its own background across two lines. */}
-                      {coversWeek(request, weekStart) && (
+                      {/* Only worth saying when the list is showing other weeks
+                          too. nowrap so the chip moves to the next line whole
+                          rather than splitting its background across two. */}
+                      {allRequests && coversWeek(request, weekStart) && (
                         <span className="ml-1.5 inline-block rounded bg-brand/15 px-1.5 py-0.5 font-semibold whitespace-nowrap text-brand">
                           This week
                         </span>
@@ -358,6 +378,28 @@ export function TimeOffPanel({
                 );
               })}
             </ul>
+          )}
+
+          {hiddenRequests > 0 && (
+            <Button
+              variant="ghost"
+              size="xs"
+              aria-expanded={allRequests}
+              onClick={() => setAllRequests((open) => !open)}
+              className="mt-2 w-full justify-center text-muted-foreground"
+            >
+              {allRequests ? (
+                <>
+                  <ChevronUp data-icon="inline-start" />
+                  Show only this week
+                </>
+              ) : (
+                <>
+                  <ChevronDown data-icon="inline-start" />
+                  Show all requests ({sortedRequests.length})
+                </>
+              )}
+            </Button>
           )}
         </section>
 

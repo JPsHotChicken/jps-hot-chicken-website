@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Check, X } from "lucide-react";
 
+import { employeeColors } from "@/lib/employee-colors";
 import {
   SHIFT_GROUPS,
   SHIFT_GROUP_LABELS,
@@ -52,6 +53,7 @@ export function CellEditor({
     return { top: rect.bottom + 4, left: rect.left };
   });
   const grouped = employeesByGroup(employees);
+  const colorById = employeeColors(employees);
 
   // Flip above / nudge inward when the popup would overflow the viewport.
   const reposition = useCallback(() => {
@@ -131,6 +133,12 @@ export function CellEditor({
                 onClick={() => onSelect(employee.id)}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
               >
+                <span
+                  aria-hidden
+                  className={`size-2.5 shrink-0 rounded-full ${
+                    colorById.get(employee.id)?.dot ?? "bg-muted"
+                  }`}
+                />
                 <span className="truncate">{employee.name}</span>
                 {selectedId === employee.id && <Check className="ml-auto size-3.5 shrink-0" />}
               </button>
