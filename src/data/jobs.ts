@@ -10,11 +10,18 @@ export type Job = {
   /** Where the role is based. */
   location: string;
   employmentType: "Full-time" | "Part-time" | "Full-time / Part-time";
-  /** Hourly pay range, in whole dollars. */
+  /** Pay range, in whole dollars — hourly unless `payPeriod` says otherwise. */
   payMin: number;
   payMax: number;
+  /** Omit for hourly roles; salaried roles set "annual". */
+  payPeriod?: "hourly" | "annual";
   /** Typical weekly hours / scheduling note. */
   hours: string;
+  /**
+   * Minimum age to apply. Omit for the site-wide floor of 16; set it higher on
+   * roles that need it. The application form blocks anyone younger.
+   */
+  minAge?: number;
   summary: string;
   responsibilities: string[];
   requirements: string[];
@@ -28,6 +35,36 @@ export type Job = {
 };
 
 export const jobs: Job[] = [
+  {
+    id: "General Manager",
+    title: "General Manager",
+    location: "Clarksville, TN & Oak Grove, KY",
+    employmentType: "Full-time",
+    payMin: 45000,
+    payMax: 60000,
+    payPeriod: "annual",
+    hours: "Full-time · salaried · nights and weekends included",
+    minAge: 26,
+    summary:
+      "Run the store day to day — train and direct the team, hold the standards, and make sure every plate and every guest leaves right.",
+    responsibilities: [
+      "Train and direct staff across every station",
+      "Enforce store policies, rules, and safety standards",
+      "Ensure food quality and consistency on every order",
+      "Own customer satisfaction and resolve guest issues",
+    ],
+    requirements: [
+      "26 or older",
+      "Restaurant management or shift-lead experience",
+      "Comfortable coaching a team and holding it accountable",
+      "Full-time availability, including nights and weekends",
+    ],
+    image: {
+      src: "/images/interior/JPs_Trenton_Interior1.jpeg",
+      alt: "Inside a JP's Hot Chicken dining room",
+    },
+    available: true,
+  },
   {
     id: "Kitchen Staff",
     title: "Kitchen Staff",

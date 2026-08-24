@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 import { siteConfig } from "@/data/site";
-import { jobs } from "@/data/jobs";
+import { jobs, type Job } from "@/data/jobs";
 import { formatPrice } from "@/lib/format";
 
 export const metadata: Metadata = {
@@ -46,8 +46,8 @@ const STATS = [
   { value: "2", label: "Locations" },
 ];
 
-function payRange(min: number, max: number) {
-  return `${formatPrice(min)}–${formatPrice(max)} / hr`;
+function payRange(min: number, max: number, period: Job["payPeriod"] = "hourly") {
+  return `${formatPrice(min)}–${formatPrice(max)} / ${period === "annual" ? "yr" : "hr"}`;
 }
 
 export default function CareersPage() {

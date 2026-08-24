@@ -18,6 +18,14 @@ type Experience = { where: string; position: string; dates: string };
 
 const STEP_TITLES = ["Basic information", "Job details", "Review & submit"] as const;
 
+// Site-wide minimum age. Individual roles can require more via `minAge`.
+const MIN_AGE = 16;
+
+/** The age floor for a role, falling back to the site-wide minimum. */
+function minAgeFor(jobs: Job[], position: string) {
+  return jobs.find((j) => j.id === position)?.minAge ?? MIN_AGE;
+}
+
 // Location options for "Which location are you applying at?"
 // Oak Grove is intentionally excluded — we're only hiring at Clarksville.
 const LOCATION_OPTIONS = siteConfig.locations
@@ -134,6 +142,9 @@ export function ApplicationForm({
 
     if (current === 1) {
       if (!position) e.position = "Please choose the position you're applying for.";
+      // Some roles set their own age floor (see `minAge` in src/data/jobs.ts).
+      // The callout under the select explains it, so this just blocks Continue.
+      else if (Number(age) < minAgeFor(jobs, position)) e.positionAge = "1";
       if (!location) e.location = "Please choose a location.";
       if (!Object.values(availability).some(Boolean))
         e.availability = "Select at least one time you can work.";
@@ -270,6 +281,10 @@ export function ApplicationForm({
     "space-y-5 transition-opacity",
     underage && "pointer-events-none select-none opacity-40",
   );
+
+  // Roles can set their own age floor above the site-wide 16 — flagged as soon
+  // as the position is picked, not held back until Continue.
+  const tooYoungForRole = !!position && Number(age) < minAgeFor(jobs, position);
 
   return (
     <form onSubmit={handleSubmit} noValidate className="mx-auto max-w-xl">
@@ -412,9 +427,15 @@ export function ApplicationForm({
                 id={`${formId}-position`}
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
-                aria-invalid={errors.position ? true : undefined}
-                aria-describedby={errors.position ? `${formId}-position-error` : undefined}
-                className={selectClass(!!errors.position)}
+                aria-invalid={errors.position || tooYoungForRole ? true : undefined}
+                aria-describedby={
+                  tooYoungForRole
+                    ? `${formId}-position-age`
+                    : errors.position
+                      ? `${formId}-position-error`
+                      : undefined
+                }
+                className={selectClass(!!errors.position || tooYoungForRole)}
               >
                 <option value="">Select a position…</option>
                 {jobs.map((job) => (
@@ -425,6 +446,16 @@ export function ApplicationForm({
                 <option value="any">Any position</option>
               </select>
               <FieldError id={`${formId}-position`} message={errors.position} />
+              {tooYoungForRole && (
+                <p
+                  id={`${formId}-position-age`}
+                  role="alert"
+                  className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 p-4 text-base font-semibold text-destructive"
+                >
+                  You must be {minAgeFor(jobs, position)} or older to apply for this
+                  position. Pick another role to continue.
+                </p>
+              )}
             </div>
 
             {/* Location */}
