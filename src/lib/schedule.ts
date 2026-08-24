@@ -100,6 +100,66 @@ export function compareTimeOff(a: TimeOffRequest, b: TimeOffRequest): number {
   return a.startDate.localeCompare(b.startDate);
 }
 
+/**
+ * What keeps somebody off a given day. `approved` and `pending` come from a
+ * request; `recurring` is a standing weekly conflict, which was never a request
+ * and so has nothing to approve.
+ */
+export type DayOffKind = "approved" | "recurring" | "pending";
+
+export type DayOff = {
+  employee: Employee;
+  kind: DayOffKind;
+  /** Why they are away, when they gave a reason. */
+  reason: string;
+};
+
+/** Firmest answer first: two accepted days are worth seeing before a maybe. */
+const DAY_OFF_ORDER: DayOffKind[] = ["approved", "recurring", "pending"];
+
+/**
+ * Everybody who is off on one day, so the day can say so while it is being
+ * filled in.
+ *
+ * Declined requests are left out — a declined request means they are working.
+ * Somebody covered twice over (a request on a day they are always off, say) is
+ * listed once, under whichever answer is the firmer of the two.
+ */
+export function offOnDay(
+  employees: Employee[],
+  requests: TimeOffRequest[],
+  recurring: RecurringTimeOff[],
+  day: DayKey,
+  dateISO: string,
+): DayOff[] {
+  const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
+  const found = new Map<string, DayOff>();
+
+  const add = (employeeId: string, kind: DayOffKind, reason: string) => {
+    const employee = employeeById.get(employeeId);
+    // Time off outliving the person it belongs to is a moment mid-delete, not a
+    // state worth drawing a badge for.
+    if (!employee) return;
+    const existing = found.get(employeeId);
+    if (existing && DAY_OFF_ORDER.indexOf(existing.kind) <= DAY_OFF_ORDER.indexOf(kind)) return;
+    found.set(employeeId, { employee, kind, reason });
+  };
+
+  for (const request of requests) {
+    if (request.status === "denied" || !coversDate(request, dateISO)) continue;
+    add(request.employeeId, request.status, request.reason);
+  }
+  for (const entry of recurring) {
+    if (entry.day === day) add(entry.employeeId, "recurring", entry.reason);
+  }
+
+  return [...found.values()].sort(
+    (a, b) =>
+      DAY_OFF_ORDER.indexOf(a.kind) - DAY_OFF_ORDER.indexOf(b.kind) ||
+      a.employee.name.localeCompare(b.employee.name),
+  );
+}
+
 /* -------------------------------------------------------------------- hours */
 
 /** First hour block on the grid (8 AM). */

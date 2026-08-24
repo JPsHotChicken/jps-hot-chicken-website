@@ -1,8 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { DayGrid } from "@/components/admin/DayGrid";
-import { ROW_COUNT, SLOT_COUNT, formatSlotBlock, type DaySchedule } from "@/lib/schedule";
+import {
+  ROW_COUNT,
+  SLOT_COUNT,
+  formatSlotBlock,
+  type DayOff,
+  type DaySchedule,
+} from "@/lib/schedule";
 
 function buildDay(): DaySchedule {
   const day: DaySchedule = Array.from({ length: ROW_COUNT }, () =>
@@ -21,13 +27,14 @@ const employees = [
   { id: "e2", name: "Bo", group: "night" as const },
 ];
 
-function renderDay() {
+function renderDay(off: DayOff[] = []) {
   render(
     <DayGrid
       day="monday"
       date={new Date(2026, 7, 17)}
       schedule={buildDay()}
       employees={employees}
+      off={off}
       peak={2}
       selection={null}
       onEditRange={() => {}}
@@ -86,6 +93,7 @@ describe("DayGrid half-hour heat map", () => {
         date={new Date(2026, 7, 23)}
         schedule={buildDay()}
         employees={employees}
+        off={[]}
         peak={2}
         selection={null}
         onEditRange={() => {}}
@@ -95,5 +103,39 @@ describe("DayGrid half-hour heat map", () => {
 
     expect(screen.queryByTitle(/on \d/)).toBeNull();
     expect(screen.getByText(/store is closed/i)).toBeInTheDocument();
+  });
+});
+
+describe("DayGrid time-off badges", () => {
+  const off: DayOff[] = [
+    { employee: employees[1], kind: "approved", reason: "Wedding" },
+    { employee: employees[0], kind: "pending", reason: "" },
+  ];
+
+  it("names everybody who is off, in the day's header", () => {
+    renderDay(off);
+
+    const badges = screen.getByRole("list", { name: "Off on Monday" });
+    expect(within(badges).getByText("Bo")).toBeInTheDocument();
+    expect(within(badges).getByText("Ann")).toBeInTheDocument();
+  });
+
+  it("says which are accepted and which are still in review, not by colour alone", () => {
+    renderDay(off);
+
+    // Scoped to the header — both names are also written across their shifts.
+    const badges = screen.getByRole("list", { name: "Off on Monday" });
+    const badge = (name: string) => within(badges).getByText(name).closest("li")!;
+    expect(within(badge("Bo")).getByText("— Accepted")).toBeInTheDocument();
+    expect(within(badge("Ann")).getByText("— In review")).toBeInTheDocument();
+    // The reason is there to be hovered, rather than taking up room in the bar.
+    expect(badge("Bo")).toHaveAttribute("title", "Accepted — Wedding");
+    expect(badge("Ann")).toHaveAttribute("title", "In review");
+  });
+
+  it("leaves the header alone on a day nobody is off", () => {
+    renderDay();
+
+    expect(screen.queryByRole("list", { name: "Off on Monday" })).toBeNull();
   });
 });

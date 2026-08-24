@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -43,9 +43,11 @@ import {
   makeEmptyDay,
   makeEmptyWeek,
   mondayOf,
+  offOnDay,
   peakCoverage,
   toISODate,
   type DayKey,
+  type DayOff,
   type Employee,
   type RecurringTimeOff,
   type ShiftGroup,
@@ -134,12 +136,41 @@ export function Scheduler({
   const [menuOpen, setMenuOpen] = useState(false);
   const weekPickerRef = useRef<HTMLInputElement>(null);
   const pendingWeek = useRef(initialWeekStart);
+  const toolbarRef = useRef<HTMLElement>(null);
+  // How far down the sticky sidebar has to start. Measured rather than assumed:
+  // the toolbar wraps to two rows on a narrow window, and the error banner sits
+  // inside it, so its height is not a constant.
+  const [toolbarHeight, setToolbarHeight] = useState(0);
 
   const week = weeks[weekStart] ?? makeEmptyWeek();
   const dates = useMemo(() => datesForWeek(weekStart), [weekStart]);
   // One scale for every day's heat map, so Friday lunch and Monday lunch shade
   // the same way when they are staffed the same.
   const peak = useMemo(() => peakCoverage(week), [week]);
+  // Who is away on each day of the week on screen, for the badges in the day
+  // headers. Time off is week-wide, so it is worked out here once rather than
+  // handing all of it to all seven days.
+  const offByDay = useMemo(
+    () =>
+      Object.fromEntries(
+        DAY_KEYS.map((day) => [
+          day,
+          offOnDay(employees, timeOff, recurring, day, toISODate(dates[day])),
+        ]),
+      ) as Record<DayKey, DayOff[]>,
+    [employees, timeOff, recurring, dates],
+  );
+
+  useEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+    // `offsetHeight` rather than the entry's box, so the bottom border counts.
+    const measure = () => setToolbarHeight(toolbar.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(toolbar);
+    return () => observer.disconnect();
+  }, []);
 
   /** Pull the database's version of everything back into state. */
   const reload = useCallback(async (forWeek: string) => {
@@ -486,7 +517,10 @@ export function Scheduler({
   return (
     <div className="flex min-h-screen flex-col bg-muted">
       {/* Toolbar */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
+      <header
+        ref={toolbarRef}
+        className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur"
+      >
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
           <Button
             variant="ghost"
@@ -628,8 +662,23 @@ export function Scheduler({
         />
       ) : (
       <div className="flex flex-1 flex-col gap-4 p-4 sm:px-6 lg:flex-row-reverse lg:items-start">
-        {/* Sidebar: employees, then time off to its right once there's room. */}
-        <div className="flex w-full shrink-0 flex-col gap-4 lg:w-72 xl:w-[33rem] xl:flex-row xl:items-start">
+        {/*
+          Sidebar: employees, then time off to its right once there's room.
+
+          From `lg` up — where it sits beside the grid rather than above it — it
+          sticks under the toolbar, so the time-off list and everyone's hours
+          stay on screen while scrolling down through the week. Taller than the
+          viewport, it scrolls within itself instead of running off the bottom.
+        */}
+        <div
+          // Left unset until measured, so the fallback in the classes below —
+          // not a stray `0px` — is what the first paint sticks to.
+          style={
+            toolbarHeight
+              ? ({ "--toolbar-h": `${toolbarHeight}px` } as React.CSSProperties)
+              : undefined
+          }
+          className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-[calc(var(--toolbar-h,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--toolbar-h,4rem)-2rem)] lg:w-72 lg:self-start lg:overflow-y-auto xl:w-[33rem] xl:flex-row xl:items-start">
           <EmployeePanel
             employees={employees}
             week={week}
@@ -660,6 +709,7 @@ export function Scheduler({
               date={dates[day]}
               schedule={week[day] ?? makeEmptyDay()}
               employees={employees}
+              off={offByDay[day]}
               peak={peak}
               selection={editing?.day === day ? editing.range : null}
               onEditRange={(range, el) => setEditing({ day, range, el })}

@@ -13,12 +13,15 @@ import {
   SLOTS,
   SLOTS_PER_HOUR,
   SLOT_COUNT,
+  TIME_OFF_STATUS_LABELS,
   coverageBySlot,
   formatHourBlock,
   formatShortDate,
   formatSlotBlock,
   isClosedDay,
   type DayKey,
+  type DayOff,
+  type DayOffKind,
   type DaySchedule,
   type Employee,
 } from "@/lib/schedule";
@@ -36,6 +39,23 @@ const HEAT_STYLES = [
   "border-transparent bg-orange-400 text-orange-950",
   "border-transparent bg-red-500 text-white",
 ];
+
+/**
+ * The off badges in the day's header. Accepted and in review are tinted the way
+ * the time-off panel tints them, so the two read as one system; a standing
+ * weekly conflict was never a request and stays neutral, as it is there.
+ */
+const OFF_BADGE: Record<DayOffKind, string> = {
+  approved: "bg-emerald-100 text-emerald-900",
+  recurring: "bg-muted text-foreground",
+  pending: "bg-amber-100 text-amber-900",
+};
+
+const OFF_LABEL: Record<DayOffKind, string> = {
+  approved: TIME_OFF_STATUS_LABELS.approved,
+  recurring: "Every week",
+  pending: TIME_OFF_STATUS_LABELS.pending,
+};
 
 /**
  * Which shade a half hour gets, scaled against the busiest one of the week so
@@ -100,6 +120,9 @@ type Props = {
   date: Date;
   schedule: DaySchedule;
   employees: Employee[];
+  /** Everybody who is off today, so the header can say so before a shift is
+   * dropped on one of them. */
+  off: DayOff[];
   /** Busiest half hour of the whole week — the top of the heat map's scale. */
   peak: number;
   /** The block currently being edited, when it belongs to this day. */
@@ -165,6 +188,7 @@ export function DayGrid({
   date,
   schedule,
   employees,
+  off,
   peak,
   selection,
   onEditRange,
@@ -221,17 +245,47 @@ export function DayGrid({
 
   return (
     <section className="rounded-xl border border-border bg-background shadow-sm">
-      <header className="flex items-baseline justify-between gap-3 border-b border-border px-4 py-3">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 border-b border-border px-4 py-3">
         <h3 className="font-heading text-base font-bold">
           {DAY_LABELS[day]}{" "}
           <span className="text-sm font-normal text-muted-foreground">
             {formatShortDate(date)}
           </span>
         </h3>
-        {closed && (
+
+        {closed ? (
           <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
             Closed — everyone off
           </span>
+        ) : (
+          // Nobody off is the normal case, and an empty rail would just be a gap
+          // on most days.
+          off.length > 0 && (
+            <ul
+              aria-label={`Off on ${DAY_LABELS[day]}`}
+              className="flex flex-1 flex-wrap items-center justify-end gap-1.5"
+            >
+              {off.map(({ employee, kind, reason }) => (
+                <li
+                  key={employee.id}
+                  title={`${OFF_LABEL[kind]}${reason ? ` — ${reason}` : ""}`}
+                  className={`flex max-w-44 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${OFF_BADGE[kind]}`}
+                >
+                  <span
+                    aria-hidden
+                    className={`size-1.5 shrink-0 rounded-full ${
+                      colorById.get(employee.id)?.dot ?? "bg-muted-foreground"
+                    }`}
+                  />
+                  <span className="truncate">{employee.name}</span>
+                  <span className="font-normal opacity-70">off</span>
+                  {/* The tint is the only thing separating an accepted day from
+                      one still in review, which colour alone can't carry. */}
+                  <span className="sr-only">— {OFF_LABEL[kind]}</span>
+                </li>
+              ))}
+            </ul>
+          )
         )}
       </header>
 

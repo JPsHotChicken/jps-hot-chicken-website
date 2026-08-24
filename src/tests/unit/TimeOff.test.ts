@@ -5,7 +5,10 @@ import {
   coversDate,
   coversWeek,
   formatDateRange,
+  offOnDay,
   requestDayCount,
+  type Employee,
+  type RecurringTimeOff,
   type TimeOffRequest,
 } from "@/lib/schedule";
 
@@ -85,5 +88,96 @@ describe("time off ordering", () => {
       .map((entry) => entry.id);
 
     expect(ordered).toEqual(["soon-pending", "later-pending", "denied", "old-approved"]);
+  });
+});
+
+describe("who is off on a day", () => {
+  const employees: Employee[] = [
+    { id: "e1", name: "Ann", group: "morning" },
+    { id: "e2", name: "Bo", group: "night" },
+    { id: "e3", name: "Cy", group: "other" },
+  ];
+
+  const recurring = (over: Partial<RecurringTimeOff> = {}): RecurringTimeOff => ({
+    id: "x1",
+    employeeId: "e3",
+    day: "wednesday",
+    reason: "Class",
+    ...over,
+  });
+
+  /** Wednesday of the week the fixture requests sit in. */
+  const WEDNESDAY = "2026-08-12";
+
+  it("lists the requests covering the date, accepted and in review alike", () => {
+    const off = offOnDay(
+      employees,
+      [
+        request({ id: "r1", employeeId: "e1", startDate: WEDNESDAY, endDate: WEDNESDAY }),
+        request({
+          id: "r2",
+          employeeId: "e2",
+          startDate: "2026-08-10",
+          endDate: "2026-08-20",
+          status: "approved",
+        }),
+      ],
+      [],
+      "wednesday",
+      WEDNESDAY,
+    );
+
+    // Accepted first — it is the firmer answer of the two.
+    expect(off.map((entry) => [entry.employee.name, entry.kind])).toEqual([
+      ["Bo", "approved"],
+      ["Ann", "pending"],
+    ]);
+  });
+
+  it("leaves out declined requests, and days the request doesn't reach", () => {
+    const off = offOnDay(
+      employees,
+      [
+        request({ id: "r1", employeeId: "e1", startDate: WEDNESDAY, endDate: WEDNESDAY, status: "denied" }),
+        request({ id: "r2", employeeId: "e2", startDate: "2026-08-13", endDate: "2026-08-14" }),
+      ],
+      [],
+      "wednesday",
+      WEDNESDAY,
+    );
+
+    expect(off).toEqual([]);
+  });
+
+  it("includes a standing weekly conflict, on that weekday only", () => {
+    expect(offOnDay(employees, [], [recurring()], "wednesday", WEDNESDAY)).toMatchObject([
+      { employee: { name: "Cy" }, kind: "recurring", reason: "Class" },
+    ]);
+    expect(offOnDay(employees, [], [recurring()], "thursday", "2026-08-13")).toEqual([]);
+  });
+
+  it("lists somebody covered twice over only once, under the firmer answer", () => {
+    const off = offOnDay(
+      employees,
+      [request({ id: "r1", employeeId: "e3", startDate: WEDNESDAY, endDate: WEDNESDAY })],
+      [recurring()],
+      "wednesday",
+      WEDNESDAY,
+    );
+
+    expect(off).toHaveLength(1);
+    expect(off[0].kind).toBe("recurring");
+  });
+
+  it("ignores time off belonging to somebody who is no longer on the roster", () => {
+    const off = offOnDay(
+      employees,
+      [request({ id: "r1", employeeId: "gone", startDate: WEDNESDAY, endDate: WEDNESDAY })],
+      [recurring({ employeeId: "gone" })],
+      "wednesday",
+      WEDNESDAY,
+    );
+
+    expect(off).toEqual([]);
   });
 });
