@@ -9,6 +9,7 @@ const PAGES = [
   { path: "/locations", heading: /our locations/i },
   { path: "/locations/oak-grove", heading: /hot chicken in oak grove, ky/i },
   { path: "/locations/clarksville", heading: /hot chicken in clarksville, tn/i },
+  { path: "/privacy", heading: /privacy policy/i },
 ];
 
 test.describe("page loads", () => {

@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
         destination: "https://www.jpshotchicken.com/:path*",
         permanent: true,
       },
+      // The privacy policy lives at /privacy; /privacy-policy is the other name
+      // people (and Google's ad reviewers) try, so it points at the same page
+      // instead of 404ing.
+      {
+        source: "/privacy-policy",
+        destination: "/privacy",
+        permanent: true,
+      },
     ];
   },
 };

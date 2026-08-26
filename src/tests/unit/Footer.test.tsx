@@ -29,6 +29,14 @@ describe("Footer", () => {
     expect(screen.queryByRole("link", { name: "Careers" })).not.toBeInTheDocument();
   });
 
+  it("links to the privacy policy", () => {
+    render(<Footer />);
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
+      "href",
+      "/privacy",
+    );
+  });
+
   it("links to the staff-only areas", () => {
     render(<Footer />);
     for (const [label, href] of [

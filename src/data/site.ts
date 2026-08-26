@@ -120,6 +120,14 @@ export const siteConfig = {
     "JP's Hot Chicken serves Nashville-style hot chicken in Clarksville, TN and Oak Grove, KY.",
   url: "https://www.jpshotchicken.com",
   email: "jpshotchicken@gmail.com",
+  // 📧 PRIVACY / ADVERTISING CONTACT — the address published on /privacy and the
+  // one to give Google Ads. Google's review checks that the contact email's
+  // domain matches the site's domain, so an @jpshotchicken.com alias clears
+  // review more cleanly than the Gmail. Change this one line to
+  // "ads-api@jpshotchicken.com" once that alias exists in Google Workspace and
+  // someone is actually reading it — a bouncing address on a legal contact page
+  // is worse than one that doesn't match.
+  privacyEmail: "jpshotchicken@gmail.com",
   locations,
   // Cuisine + price range power the Restaurant JSON-LD for local search.
   cuisine: "Hot Chicken",

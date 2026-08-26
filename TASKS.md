@@ -148,6 +148,13 @@ Replace the placeholder images in `public/images/*.webp` with real photography
 
 `email` is already the real address (`jpshotchicken@gmail.com`).
 
+`privacyEmail` — the contact published on `/privacy` and given to Google Ads.
+Google Ads reviews the contact address against the site's domain, so create the
+`ads-api@jpshotchicken.com` alias in Google Workspace (Admin console → Directory
+→ Users → the mailbox → Alternate email addresses), point it at the inbox
+someone actually reads, then set `privacyEmail` to it. Until then it stays on
+the Gmail so the address on a legal contact page is one that works.
+
 ## Deviations flagged
 
 - **shadcn/ui** pulled in its standard peers (`@base-ui/react`, `class-variance-authority`,

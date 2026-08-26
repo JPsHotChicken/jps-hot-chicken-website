@@ -125,9 +125,17 @@ export function Footer() {
       </div>
 
       <div className="border-t border-background/10">
-        <p className="mx-auto w-full max-w-6xl px-4 py-6 text-center text-xs text-background/50 sm:px-6">
-          © {new Date().getFullYear()} {siteConfig.name}. All rights reserved.
-        </p>
+        {/* The privacy policy sits here rather than in Explore above: it is the
+            spot people — and ad-network reviewers — look for it. */}
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-2 px-4 py-6 text-xs text-background/50 sm:flex-row sm:justify-between sm:px-6">
+          <p>© {new Date().getFullYear()} {siteConfig.name}. All rights reserved.</p>
+          <Link
+            href="/privacy"
+            className="inline-flex h-9 items-center transition-colors hover:text-brand-light"
+          >
+            Privacy Policy
+          </Link>
+        </div>
       </div>
     </footer>
   );
