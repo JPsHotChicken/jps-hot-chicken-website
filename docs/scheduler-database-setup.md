@@ -55,7 +55,7 @@ That is the intended posture, not a finding to fix.
 | `schedule_settings` | Single row. `row_count` — rows shown per day. |
 | `employees` | Name, shift group, and the four digit `login_code`. |
 | `shift_assignments` | One row per filled grid cell — the owner's working copy. |
-| `time_off_requests` | Dated requests, `pending` / `approved` / `denied`. |
+| `time_off_requests` | Dated requests, `pending` / `approved` / `denied`. Deleting one sets `deleted_at` rather than removing the row, so the owner can list deleted requests and undo one. |
 | `recurring_time_off` | Standing weekly conflicts, one per person per weekday. |
 | `published_weeks` | One row per week the owner has sent to staff. |
 | `published_shifts` | Snapshot of the grid as of the last "Go Live". |

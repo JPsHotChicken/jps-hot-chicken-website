@@ -452,6 +452,7 @@ export type Database = {
       time_off_requests: {
         Row: {
           created_at: string;
+          deleted_at: string | null;
           employee_id: string;
           end_date: string;
           id: string;
@@ -462,6 +463,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          deleted_at?: string | null;
           employee_id: string;
           end_date: string;
           id?: string;
@@ -472,6 +474,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          deleted_at?: string | null;
           employee_id?: string;
           end_date?: string;
           id?: string;

@@ -10,6 +10,7 @@ import {
   Repeat,
   RotateCcw,
   Trash2,
+  Undo2,
   X,
 } from "lucide-react";
 
@@ -18,6 +19,7 @@ import {
   DAY_KEYS,
   DAY_LABELS,
   TIME_OFF_STATUS_LABELS,
+  compareDeletedTimeOff,
   compareEmployees,
   compareTimeOff,
   coversWeek,
@@ -25,6 +27,7 @@ import {
   requestDayCount,
   toISODate,
   type DayKey,
+  type DeletedTimeOffRequest,
   type Employee,
   type RecurringTimeOff,
   type TimeOffRequest,
@@ -56,15 +59,28 @@ export type NewRecurringTimeOff = {
 type Props = {
   employees: Employee[];
   requests: TimeOffRequest[];
+  /** Deleted requests, newest delete first, kept so a delete can be undone. */
+  deletedRequests: DeletedTimeOffRequest[];
   recurring: RecurringTimeOff[];
   /** Monday of the week on screen, so overlapping requests can be flagged. */
   weekStart: string;
   onAddRequest: (input: NewTimeOffRequest) => void;
   onSetRequestStatus: (id: string, status: TimeOffStatus) => void;
   onRemoveRequest: (id: string) => void;
+  onRestoreRequest: (id: string) => void;
   onAddRecurring: (input: NewRecurringTimeOff) => void;
   onRemoveRecurring: (id: string) => void;
 };
+
+/** "3:40 PM" for a delete today, "Aug 12, 3:40 PM" for an older one. */
+function formatDeletedAt(iso: string): string {
+  const when = new Date(iso);
+  const time = when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const isToday = new Date().toDateString() === when.toDateString();
+  return isToday
+    ? `today at ${time}`
+    : `${when.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`;
+}
 
 /** Section heading shared by both halves of the card. */
 function SectionHeader({
@@ -106,11 +122,13 @@ function SectionHeader({
 export function TimeOffPanel({
   employees,
   requests,
+  deletedRequests,
   recurring,
   weekStart,
   onAddRequest,
   onSetRequestStatus,
   onRemoveRequest,
+  onRestoreRequest,
   onAddRecurring,
   onRemoveRecurring,
 }: Props) {
@@ -121,6 +139,9 @@ export function TimeOffPanel({
   // until asked for. The card's own subtitle still counts every request, so a
   // decision waiting on a later week can't go unnoticed.
   const [allRequests, setAllRequests] = useState(false);
+  // Deleted requests are folded away for the same reason, only harder: they are
+  // history, and only ever wanted when something was thrown away by mistake.
+  const [deletedOpen, setDeletedOpen] = useState(false);
 
   const [reqEmployee, setReqEmployee] = useState("");
   const [reqStart, setReqStart] = useState(today);
@@ -144,6 +165,7 @@ export function TimeOffPanel({
       DAY_KEYS.indexOf(a.day) - DAY_KEYS.indexOf(b.day) ||
       (nameById.get(a.employeeId) ?? "").localeCompare(nameById.get(b.employeeId) ?? ""),
   );
+  const sortedDeleted = [...deletedRequests].sort(compareDeletedTimeOff);
   const pendingCount = requests.filter((request) => request.status === "pending").length;
 
   const submitRequest = () => {
@@ -400,6 +422,86 @@ export function TimeOffPanel({
                 </>
               )}
             </Button>
+          )}
+
+          {/* Deleting a request only sets it aside, so the ones thrown away are
+              still here to be looked at and put back. Hidden entirely when
+              nothing has been deleted — there would be nothing behind it. */}
+          {sortedDeleted.length > 0 && (
+            <div className="mt-2 border-t border-dashed border-border pt-2">
+              <Button
+                variant="ghost"
+                size="xs"
+                aria-expanded={deletedOpen}
+                onClick={() => setDeletedOpen((open) => !open)}
+                className="w-full justify-center text-muted-foreground"
+              >
+                {deletedOpen ? (
+                  <>
+                    <ChevronUp data-icon="inline-start" />
+                    Hide deleted requests
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown data-icon="inline-start" />
+                    Show deleted requests ({sortedDeleted.length})
+                  </>
+                )}
+              </Button>
+
+              {deletedOpen && (
+                <ul className="mt-2 space-y-2">
+                  {sortedDeleted.map((request) => {
+                    const name = nameById.get(request.employeeId) ?? "Removed employee";
+                    const days = requestDayCount(request);
+                    return (
+                      <li
+                        key={request.id}
+                        className="rounded-lg border border-dashed border-border bg-muted/30 px-2.5 py-2 text-sm"
+                      >
+                        <div className="flex items-start gap-2">
+                          <span className="min-w-0 flex-1 truncate font-semibold text-muted-foreground">
+                            {name}
+                          </span>
+                          {/* Muted, not the live badge: what it was decided is
+                              worth keeping, but it isn't in force any more. */}
+                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-bold text-muted-foreground">
+                            {TIME_OFF_STATUS_LABELS[request.status]}
+                          </span>
+                        </div>
+
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {formatDateRange(request.startDate, request.endDate)}
+                          <span className="mx-1">·</span>
+                          {days} {days === 1 ? "day" : "days"}
+                        </p>
+
+                        {request.reason && (
+                          <p className="mt-1 text-xs break-words text-muted-foreground">
+                            {request.reason}
+                          </p>
+                        )}
+
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <p className="min-w-0 flex-1 truncate text-[0.7rem] text-muted-foreground/80">
+                            Deleted {formatDeletedAt(request.deletedAt)}
+                          </p>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            aria-label={`Undo deleting ${name}'s request`}
+                            onClick={() => onRestoreRequest(request.id)}
+                          >
+                            <Undo2 data-icon="inline-start" />
+                            Undo delete
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           )}
         </section>
 

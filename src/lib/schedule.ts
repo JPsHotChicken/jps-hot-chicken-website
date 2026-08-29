@@ -101,6 +101,21 @@ export function compareTimeOff(a: TimeOffRequest, b: TimeOffRequest): number {
 }
 
 /**
+ * A request the owner has deleted. Deleting keeps the row and stamps the moment
+ * it went, so a delete can be looked at again and undone rather than being the
+ * one action in the panel with no way back.
+ */
+export type DeletedTimeOffRequest = TimeOffRequest & { deletedAt: string };
+
+/** Most recently deleted first: an undo is nearly always of the last delete. */
+export function compareDeletedTimeOff(
+  a: DeletedTimeOffRequest,
+  b: DeletedTimeOffRequest,
+): number {
+  return b.deletedAt.localeCompare(a.deletedAt);
+}
+
+/**
  * What keeps somebody off a given day. `approved` and `pending` come from a
  * request; `recurring` is a standing weekly conflict, which was never a request
  * and so has nothing to approve.

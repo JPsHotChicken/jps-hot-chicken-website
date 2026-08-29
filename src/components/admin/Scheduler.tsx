@@ -30,6 +30,7 @@ import {
   removeEmployeeAction,
   removeRecurringTimeOffAction,
   removeTimeOffAction,
+  restoreTimeOffAction,
   setLoginCodeAction,
   setTimeOffStatusAction,
 } from "@/app/admin/schedule-actions";
@@ -48,6 +49,7 @@ import {
   toISODate,
   type DayKey,
   type DayOff,
+  type DeletedTimeOffRequest,
   type Employee,
   type RecurringTimeOff,
   type ShiftGroup,
@@ -76,6 +78,8 @@ export type SchedulerProps = {
   /** How payroll spells each person, learned when a pay stub was assigned. */
   payrollNames?: { employeeId: string; payrollName: string }[];
   timeOff: TimeOffRequest[];
+  /** Requests that were deleted, kept so a delete can be undone. */
+  deletedTimeOff: DeletedTimeOffRequest[];
   recurringTimeOff: RecurringTimeOff[];
   /** Monday of the week the page was opened on. */
   weekStart: string;
@@ -110,6 +114,7 @@ function cellsIn(week: WeekSchedule, day: DayKey, range: CellRange): (string | n
 export function Scheduler({
   employees: initialEmployees,
   timeOff: initialTimeOff,
+  deletedTimeOff: initialDeletedTimeOff,
   recurringTimeOff: initialRecurring,
   weekStart: initialWeekStart,
   week: initialWeek,
@@ -120,6 +125,7 @@ export function Scheduler({
   const [employees, setEmployees] = useState(initialEmployees);
   const [payrollNames, setPayrollNames] = useState(initialPayrollNames);
   const [timeOff, setTimeOff] = useState(initialTimeOff);
+  const [deletedTimeOff, setDeletedTimeOff] = useState(initialDeletedTimeOff);
   const [recurring, setRecurring] = useState(initialRecurring);
   const [weeks, setWeeks] = useState<Record<string, WeekSchedule>>({
     [initialWeekStart]: initialWeek,
@@ -177,6 +183,7 @@ export function Scheduler({
     const fresh = await reloadAction(forWeek);
     setEmployees(fresh.employees);
     setTimeOff(fresh.timeOff);
+    setDeletedTimeOff(fresh.deletedTimeOff);
     setRecurring(fresh.recurringTimeOff);
     // Drop the rest of the cache: other weeks may have been touched too, and
     // they will be re-read when navigated to.
@@ -321,6 +328,7 @@ export function Scheduler({
       // Their shifts and time off cascade away in the database; clear the local
       // copies too so nothing on screen points at somebody who is gone.
       setTimeOff((current) => current.filter((request) => request.employeeId !== id));
+      setDeletedTimeOff((current) => current.filter((request) => request.employeeId !== id));
       setRecurring((current) => current.filter((entry) => entry.employeeId !== id));
       setWeeks((current) =>
         Object.fromEntries(
@@ -447,12 +455,50 @@ export function Scheduler({
     [save],
   );
 
+  /**
+   * Deleting moves the request to the deleted list rather than dropping it: the
+   * row is only stamped in the database, so it can be put back. The stamp used
+   * here is the local clock — the database's own is read back on the next load,
+   * and a few milliseconds' difference changes nothing that is shown.
+   */
   const removeTimeOffRequest = useCallback(
     (id: string) => {
-      setTimeOff((current) => current.filter((request) => request.id !== id));
-      void save("delete that request", () => removeTimeOffAction(id));
+      const request = timeOff.find((entry) => entry.id === id);
+      if (!request) return;
+      setTimeOff((current) => current.filter((entry) => entry.id !== id));
+      setDeletedTimeOff((current) => [
+        { ...request, deletedAt: new Date().toISOString() },
+        ...current,
+      ]);
+      void save("delete that request", async () => {
+        await removeTimeOffAction(id);
+      });
     },
-    [save],
+    [save, timeOff],
+  );
+
+  const restoreTimeOffRequest = useCallback(
+    (id: string) => {
+      const deleted = deletedTimeOff.find((entry) => entry.id === id);
+      if (!deleted) return;
+      setDeletedTimeOff((current) => current.filter((entry) => entry.id !== id));
+      // Back exactly as it was — same status, same dates — minus the stamp that
+      // marked it deleted.
+      setTimeOff((current) => [
+        ...current,
+        {
+          id: deleted.id,
+          employeeId: deleted.employeeId,
+          startDate: deleted.startDate,
+          endDate: deleted.endDate,
+          reason: deleted.reason,
+          status: deleted.status,
+          requestedAt: deleted.requestedAt,
+        },
+      ]);
+      void save("restore that request", () => restoreTimeOffAction(id));
+    },
+    [deletedTimeOff, save],
   );
 
   const addRecurringTimeOff = useCallback(
@@ -691,11 +737,13 @@ export function Scheduler({
           <TimeOffPanel
             employees={employees}
             requests={timeOff}
+            deletedRequests={deletedTimeOff}
             recurring={recurring}
             weekStart={weekStart}
             onAddRequest={addTimeOffRequest}
             onSetRequestStatus={setTimeOffStatus}
             onRemoveRequest={removeTimeOffRequest}
+            onRestoreRequest={restoreTimeOffRequest}
             onAddRecurring={addRecurringTimeOff}
             onRemoveRecurring={removeRecurringTimeOff}
           />

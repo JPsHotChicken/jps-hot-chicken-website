@@ -6,6 +6,7 @@ import {
   ROW_COUNT,
   SLOT_COUNT,
   addDays,
+  compareDeletedTimeOff,
   datesForWeek,
   fromISODate,
   makeEmptyWeek,
@@ -13,6 +14,7 @@ import {
   slotMinute,
   toISODate,
   type DayKey,
+  type DeletedTimeOffRequest,
   type Employee,
   type RecurringTimeOff,
   type ShiftGroup,
@@ -56,6 +58,8 @@ function fail(context: string, error: { message: string } | null): never {
 export type ScheduleBase = {
   employees: Employee[];
   timeOff: TimeOffRequest[];
+  /** Requests the owner deleted, newest delete first, so one can be put back. */
+  deletedTimeOff: DeletedTimeOffRequest[];
   recurringTimeOff: RecurringTimeOff[];
 };
 
@@ -65,9 +69,11 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
 
   const [employees, timeOff, recurring] = await Promise.all([
     db.from("employees").select("id, name, shift_group, login_code").order("name"),
+    // Deleted requests come back too — deleting is reversible, so the panel has
+    // to be able to show what was thrown away.
     db
       .from("time_off_requests")
-      .select("id, employee_id, start_date, end_date, reason, status, requested_at")
+      .select("id, employee_id, start_date, end_date, reason, status, requested_at, deleted_at")
       .order("start_date"),
     db.from("recurring_time_off").select("id, employee_id, day, reason"),
   ]);
@@ -76,14 +82,12 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
   if (timeOff.error) fail("loading time off", timeOff.error);
   if (recurring.error) fail("loading recurring time off", recurring.error);
 
-  return {
-    employees: employees.data.map((row) => ({
-      id: row.id,
-      name: row.name,
-      group: row.shift_group,
-      loginCode: row.login_code,
-    })),
-    timeOff: timeOff.data.map((row) => ({
+  // One query, split in two: a deleted request is the same row with a stamp on
+  // it, and the panel needs both piles.
+  const active: TimeOffRequest[] = [];
+  const deleted: DeletedTimeOffRequest[] = [];
+  for (const row of timeOff.data) {
+    const request: TimeOffRequest = {
       id: row.id,
       employeeId: row.employee_id,
       startDate: row.start_date,
@@ -91,7 +95,21 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
       reason: row.reason,
       status: row.status,
       requestedAt: row.requested_at,
+    };
+    if (row.deleted_at === null) active.push(request);
+    else deleted.push({ ...request, deletedAt: row.deleted_at });
+  }
+  deleted.sort(compareDeletedTimeOff);
+
+  return {
+    employees: employees.data.map((row) => ({
+      id: row.id,
+      name: row.name,
+      group: row.shift_group,
+      loginCode: row.login_code,
     })),
+    timeOff: active,
+    deletedTimeOff: deleted,
     recurringTimeOff: recurring.data.map((row) => ({
       id: row.id,
       employeeId: row.employee_id,
@@ -299,9 +317,29 @@ export async function updateTimeOffStatus(id: string, status: TimeOffStatus): Pr
   if (error) fail("updating a request", error);
 }
 
-export async function deleteTimeOff(id: string): Promise<void> {
-  const { error } = await getDb().from("time_off_requests").delete().eq("id", id);
+/**
+ * Delete a request — softly. The row stays with `deleted_at` set, which keeps it
+ * out of every list that matters (the owner's panel, the day badges, the staff
+ * member's own view) while leaving it there to be put back. Nothing prunes these
+ * yet; a handful of dead rows is cheaper than a delete that can't be undone.
+ */
+export async function deleteTimeOff(id: string): Promise<string> {
+  const deletedAt = new Date().toISOString();
+  const { error } = await getDb()
+    .from("time_off_requests")
+    .update({ deleted_at: deletedAt })
+    .eq("id", id);
   if (error) fail("deleting a request", error);
+  return deletedAt;
+}
+
+/** Undo a delete, putting the request back exactly as it was. */
+export async function restoreTimeOff(id: string): Promise<void> {
+  const { error } = await getDb()
+    .from("time_off_requests")
+    .update({ deleted_at: null })
+    .eq("id", id);
+  if (error) fail("restoring a request", error);
 }
 
 /**

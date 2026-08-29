@@ -170,6 +170,9 @@ export async function listRequestsForEmployee(employeeId: string): Promise<TimeO
     .from("time_off_requests")
     .select("id, employee_id, start_date, end_date, reason, status, requested_at")
     .eq("employee_id", employeeId)
+    // A request the owner deleted is gone as far as staff are concerned, even
+    // though the row is still there waiting to be undone.
+    .is("deleted_at", null)
     .order("start_date", { ascending: false });
 
   if (error) fail("loading your requests", error);

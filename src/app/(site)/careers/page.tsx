@@ -16,7 +16,7 @@ import { formatPrice } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "Careers",
-  description: `Join the ${siteConfig.name} team in Clarksville, TN and Oak Grove, KY. Competitive pay posted up front, flexible scheduling, free meals, and a clear path to advance. See open roles and apply.`,
+  description: `Now hiring at the ${siteConfig.name} Fort Campbell Blvd location in Oak Grove, KY. Competitive pay posted up front, flexible scheduling, free meals, and a clear path to advance. See open roles and apply.`,
   alternates: { canonical: "/careers" },
 };
 
@@ -62,9 +62,15 @@ export default function CareersPage() {
           <h1 className="mt-4 max-w-3xl text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">
             Job positions
           </h1>
+          {/* Which store is hiring right now. Update this when the hiring location
+              changes, and keep the `location` field in src/data/jobs.ts in sync. */}
+          <p className="mt-6 flex max-w-2xl items-center gap-2.5 rounded-xl border border-brand/30 bg-brand/5 px-4 py-3 text-base font-semibold text-slate-900 sm:text-lg">
+            <MapPin className="size-5 shrink-0 text-brand" aria-hidden="true" />
+            Fort Campbell Blvd, Oak Grove location is hiring
+          </p>
           <p className="mt-5 max-w-2xl text-lg leading-relaxed text-slate-600">
-            We&apos;re hiring across our Clarksville, TN and Oak Grove, KY locations.
-            Below is all open positions available right now.
+            Front of house and back of house roles are open at our Fort Campbell Blvd
+            store in Oak Grove, KY. Below is all open positions available right now.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a
@@ -106,8 +112,9 @@ export default function CareersPage() {
               Open positions
             </h2>
             <p className="mt-3 text-base leading-relaxed text-slate-600">
-              {openJobs.length} {openJobs.length === 1 ? "role is" : "roles are"} currently open.{" "}
-              Grayed-out roles aren&apos;t hiring yet — check back soon.
+              {openJobs.length} {openJobs.length === 1 ? "role is" : "roles are"} currently open at the{" "}
+              Fort Campbell Blvd, Oak Grove location. Grayed-out roles aren&apos;t
+              hiring yet — check back soon.
             </p>
           </div>
 

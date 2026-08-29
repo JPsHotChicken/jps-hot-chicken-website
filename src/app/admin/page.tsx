@@ -52,6 +52,7 @@ export default async function AdminPage({
     <Scheduler
       employees={base.employees}
       timeOff={base.timeOff}
+      deletedTimeOff={base.deletedTimeOff}
       recurringTimeOff={base.recurringTimeOff}
       weekStart={weekStart}
       week={week}

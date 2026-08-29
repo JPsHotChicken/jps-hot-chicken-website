@@ -68,7 +68,7 @@ export const jobs: Job[] = [
   {
     id: "Kitchen Staff",
     title: "Kitchen Staff",
-    location: "Clarksville, TN & Oak Grove, KY",
+    location: "Fort Campbell Blvd · Oak Grove, KY",
     employmentType: "Full-time / Part-time",
     payMin: 13,
     payMax: 16,
@@ -96,7 +96,7 @@ export const jobs: Job[] = [
   {
     id: "Front Staff",
     title: "Front Counter Staff",
-    location: "Clarksville, TN & Oak Grove, KY",
+    location: "Fort Campbell Blvd · Oak Grove, KY",
     employmentType: "Full-time / Part-time",
     payMin: 13,
     payMax: 15,

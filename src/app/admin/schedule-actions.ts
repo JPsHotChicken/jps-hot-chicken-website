@@ -223,9 +223,19 @@ export async function setTimeOffStatusAction(id: string, status: TimeOffStatus):
   await repo.updateTimeOffStatus(assertUuid(id, "Request"), status);
 }
 
-export async function removeTimeOffAction(id: string): Promise<void> {
+/**
+ * Delete a request. Soft, so it can be listed under "Deleted requests" and put
+ * back; returns when it was deleted so the panel can say.
+ */
+export async function removeTimeOffAction(id: string): Promise<string> {
   await requireAdmin();
-  await repo.deleteTimeOff(assertUuid(id, "Request"));
+  return repo.deleteTimeOff(assertUuid(id, "Request"));
+}
+
+/** Undo a delete. */
+export async function restoreTimeOffAction(id: string): Promise<void> {
+  await requireAdmin();
+  await repo.restoreTimeOff(assertUuid(id, "Request"));
 }
 
 export async function addRecurringTimeOffAction(input: {
