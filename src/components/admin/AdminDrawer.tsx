@@ -65,7 +65,7 @@ const TABS: {
   },
   {
     view: "tips",
-    label: "Tips payout",
+    label: "Labor summary",
     icon: <HandCoins className="size-4" />,
     hint: "Split the week's tips by the hour",
     href: "/admin/tips",

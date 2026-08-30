@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
+import { STAFF_PASSWORD_MIN_LENGTH, isValidPasswordShape } from "@/lib/staff-auth";
 import * as repo from "@/lib/schedule-repo";
 import * as staff from "@/lib/staff-repo";
 import {
@@ -114,31 +115,66 @@ export async function reloadAction(
 
 /* --------------------------------------------------------------- employees */
 
-/** New employees get a sign-in code straight away, so they can be told it on the spot. */
+/** New employees get a setup code straight away, so they can be told it on the spot. */
 export async function addEmployeeAction(name: string, group: ShiftGroup): Promise<Employee> {
   await requireAdmin();
   if (!SHIFT_GROUPS.includes(group)) throw new Error(`Unknown shift group "${group}".`);
   return repo.insertEmployee(
     assertText(name, "Name", { max: 80, required: true }),
     group,
-    await staff.generateUniqueLoginCode(),
+    await staff.generateUniqueSetupCode(),
   );
 }
 
-/** Issue a fresh random code — used when one is forgotten, or shared too widely. */
-export async function regenerateLoginCodeAction(employeeId: string): Promise<string> {
+/**
+ * Issue a fresh setup code — used when one is forgotten, or shared too widely.
+ *
+ * This does not touch a password they have already set: the code is only what
+ * gets somebody through setup the first time.
+ */
+export async function regenerateSetupCodeAction(employeeId: string): Promise<string> {
   await requireAdmin();
-  const code = await staff.generateUniqueLoginCode();
-  await staff.setLoginCode(assertUuid(employeeId, "Employee"), code);
+  const code = await staff.generateUniqueSetupCode();
+  await staff.setSetupCode(assertUuid(employeeId, "Employee"), code);
   return code;
 }
 
-/** Set a specific sign-in code, chosen by the owner in Staff management. */
-export async function setLoginCodeAction(employeeId: string, code: string): Promise<string> {
+/**
+ * Set an employee's password on their behalf, from Staff management.
+ *
+ * The owner can already read these back, so letting them type a new one is how
+ * a locked-out employee gets going again without a reset flow to build.
+ *
+ * A refusal comes back as a value rather than a thrown error, because both
+ * reasons for one — too short, or already somebody else's — are things the owner
+ * needs to read. Next.js replaces the message on an uncaught Server Action error
+ * with a generic one in production, so throwing would leave them staring at
+ * "something went wrong" with no idea which password to try instead.
+ */
+export type SetPasswordResult =
+  | { ok: true; password: string; passwordSetAt: string }
+  | { ok: false; error: string };
+
+export async function setStaffPasswordAction(
+  employeeId: string,
+  password: string,
+): Promise<SetPasswordResult> {
   await requireAdmin();
-  if (!/^[0-9]{4}$/.test(code)) throw new Error("A code has to be exactly four digits.");
-  await staff.setLoginCode(assertUuid(employeeId, "Employee"), code);
-  return code;
+  if (!isValidPasswordShape(password)) {
+    return {
+      ok: false,
+      error: `A password has to be at least ${STAFF_PASSWORD_MIN_LENGTH} characters.`,
+    };
+  }
+
+  try {
+    await staff.setStaffPassword(assertUuid(employeeId, "Employee"), password);
+  } catch (cause) {
+    if (cause instanceof staff.PasswordTakenError) return { ok: false, error: cause.message };
+    throw cause;
+  }
+
+  return { ok: true, password, passwordSetAt: new Date().toISOString() };
 }
 
 /* -------------------------------------------------------------- publishing */

@@ -4,18 +4,25 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import {
+  STAFF_ATTEMPT_WINDOW_MINUTES,
+  STAFF_PASSWORD_MIN_LENGTH,
   STAFF_SESSION_COOKIE,
   STAFF_SESSION_MAX_AGE_SECONDS,
+  STAFF_SETUP_COOKIE,
+  STAFF_SETUP_MAX_AGE_SECONDS,
   createStaffSessionToken,
-  isValidCodeShape,
+  createStaffSetupToken,
+  isValidPasswordShape,
+  isValidSetupCodeShape,
   readStaffSession,
-  STAFF_ATTEMPT_WINDOW_MINUTES,
+  readStaffSetupToken,
 } from "@/lib/staff-auth";
 import * as staff from "@/lib/staff-repo";
 import { insertTimeOff } from "@/lib/schedule-repo";
 import { type TimeOffRequest, type WeekSchedule } from "@/lib/schedule";
 
 export type StaffLoginState = { error?: string };
+export type StaffSetupState = { error?: string };
 
 /**
  * Best guess at who is calling, for throttling only. `x-forwarded-for` can be
@@ -35,38 +42,131 @@ async function requireStaff(): Promise<string> {
   return employeeId;
 }
 
+/** The cookie settings every signed thing here is stored under. */
+function cookieOptions(maxAge: number) {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge,
+  } as const;
+}
+
+const THROTTLED = `Too many incorrect tries. Wait ${STAFF_ATTEMPT_WINDOW_MINUTES} minutes, or ask your manager.`;
+
+/**
+ * Sign in with the password the employee chose for themselves.
+ *
+ * The password is the only thing asked for, so it is also what says who is
+ * signing in — there is no name to go with it. That is why the database keeps
+ * `staff_password` unique, and why nobody can be let in on a password that two
+ * people happen to share.
+ */
 export async function staffLogin(
   _prevState: StaffLoginState,
   formData: FormData,
 ): Promise<StaffLoginState> {
-  const code = String(formData.get("code") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
   const ip = await callerIp();
 
-  if (staff.isThrottled(await staff.recentFailedAttempts(ip))) {
-    return {
-      error: `Too many incorrect codes. Try again in ${STAFF_ATTEMPT_WINDOW_MINUTES} minutes, or ask your manager.`,
-    };
-  }
+  if (staff.isThrottled(await staff.recentFailedAttempts(ip))) return { error: THROTTLED };
 
-  if (!isValidCodeShape(code)) return { error: "Enter your four digit code." };
+  if (!password) return { error: "Enter your password." };
 
-  const employee = await staff.findEmployeeByCode(code);
+  const employee = await staff.findEmployeeByPassword(password);
   await staff.recordLoginAttempt(ip, employee !== null);
 
   if (!employee) {
     // Same delay as the admin login, for the same reason.
     await new Promise((resolve) => setTimeout(resolve, 600));
+    return {
+      error: "That password isn't right. If you haven't set one yet, use the button below.",
+    };
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set(
+    STAFF_SESSION_COOKIE,
+    await createStaffSessionToken(employee.id),
+    cookieOptions(STAFF_SESSION_MAX_AGE_SECONDS),
+  );
+
+  redirect("/staff");
+}
+
+/**
+ * Step one of a first sign-in: trade the five digit code the owner read out for
+ * a short-lived ticket saying which employee it belongs to.
+ *
+ * The ticket is a signed cookie rather than an id in the URL, so the page that
+ * follows cannot be talked into setting somebody else's password.
+ */
+export async function staffVerifySetupCode(
+  _prevState: StaffSetupState,
+  formData: FormData,
+): Promise<StaffSetupState> {
+  const code = String(formData.get("code") ?? "").trim();
+  const ip = await callerIp();
+
+  if (staff.isThrottled(await staff.recentFailedAttempts(ip))) return { error: THROTTLED };
+
+  if (!isValidSetupCodeShape(code)) return { error: "Enter the five digit code from your manager." };
+
+  const employee = await staff.findEmployeeBySetupCode(code);
+  await staff.recordLoginAttempt(ip, employee !== null);
+
+  if (!employee) {
+    await new Promise((resolve) => setTimeout(resolve, 600));
     return { error: "That code doesn't match anyone. Check with your manager." };
   }
 
   const cookieStore = await cookies();
-  cookieStore.set(STAFF_SESSION_COOKIE, await createStaffSessionToken(employee.id), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: STAFF_SESSION_MAX_AGE_SECONDS,
-  });
+  cookieStore.set(
+    STAFF_SETUP_COOKIE,
+    await createStaffSetupToken(employee.id),
+    cookieOptions(STAFF_SETUP_MAX_AGE_SECONDS),
+  );
+
+  redirect("/staff/setup/password");
+}
+
+/**
+ * Step two: save the password, then sign them straight in so they land on their
+ * schedule rather than being asked to type it again.
+ */
+export async function staffCreatePassword(
+  _prevState: StaffSetupState,
+  formData: FormData,
+): Promise<StaffSetupState> {
+  const cookieStore = await cookies();
+  const employeeId = await readStaffSetupToken(cookieStore.get(STAFF_SETUP_COOKIE)?.value);
+  if (!employeeId) {
+    return { error: "That took too long. Enter your five digit code again to start over." };
+  }
+
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+
+  if (!isValidPasswordShape(password)) {
+    return { error: `Your password needs to be at least ${STAFF_PASSWORD_MIN_LENGTH} characters.` };
+  }
+  if (password !== confirm) return { error: "Those two passwords don't match." };
+
+  try {
+    await staff.setStaffPassword(employeeId, password);
+  } catch (cause) {
+    if (cause instanceof staff.PasswordTakenError) return { error: cause.message };
+    throw cause;
+  }
+
+  // The code has done its job; the ticket goes so it cannot be replayed.
+  cookieStore.delete(STAFF_SETUP_COOKIE);
+  cookieStore.set(
+    STAFF_SESSION_COOKIE,
+    await createStaffSessionToken(employeeId),
+    cookieOptions(STAFF_SESSION_MAX_AGE_SECONDS),
+  );
 
   redirect("/staff");
 }
@@ -74,6 +174,7 @@ export async function staffLogin(
 export async function staffLogout(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(STAFF_SESSION_COOKIE);
+  cookieStore.delete(STAFF_SETUP_COOKIE);
   redirect("/staff/login");
 }
 

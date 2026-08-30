@@ -666,11 +666,11 @@ export async function buildTipsPdf(options: TipsPdfOptions): Promise<jsPDF> {
   return doc;
 }
 
-/** `jp-tips-payout-2026-08-10-to-2026-08-15.pdf`. */
+/** `jp-labor-summary-2026-08-10-to-2026-08-15.pdf`. */
 export function tipsPdfFilename(from: string | null, to: string | null): string {
   const today = new Date().toISOString().slice(0, 10);
-  if (from && to && from !== to) return `jp-tips-payout-${from}-to-${to}.pdf`;
-  return `jp-tips-payout-${from ?? to ?? today}.pdf`;
+  if (from && to && from !== to) return `jp-labor-summary-${from}-to-${to}.pdf`;
+  return `jp-labor-summary-${from ?? to ?? today}.pdf`;
 }
 
 /** Build the summary and hand it to the browser as a download. */

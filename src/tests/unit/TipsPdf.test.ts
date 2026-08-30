@@ -259,9 +259,9 @@ describe("the accountant's summary", () => {
 
   it("names the file after the period", () => {
     expect(tipsPdfFilename("2026-08-10", "2026-08-15")).toBe(
-      "jp-tips-payout-2026-08-10-to-2026-08-15.pdf",
+      "jp-labor-summary-2026-08-10-to-2026-08-15.pdf",
     );
-    expect(tipsPdfFilename("2026-08-10", "2026-08-10")).toBe("jp-tips-payout-2026-08-10.pdf");
-    expect(tipsPdfFilename(null, null)).toMatch(/^jp-tips-payout-\d{4}-\d{2}-\d{2}\.pdf$/);
+    expect(tipsPdfFilename("2026-08-10", "2026-08-10")).toBe("jp-labor-summary-2026-08-10.pdf");
+    expect(tipsPdfFilename(null, null)).toMatch(/^jp-labor-summary-\d{4}-\d{2}-\d{2}\.pdf$/);
   });
 });

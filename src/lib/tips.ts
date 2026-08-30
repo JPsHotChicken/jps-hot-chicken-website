@@ -2,7 +2,7 @@ import { matchColumns, parseCsv, toCsv } from "@/lib/csv";
 import { formatShortDate, fromISODate } from "@/lib/schedule";
 
 /**
- * Everything the tips payout page understands, with no database or React in it.
+ * Everything the labor summary page understands, with no database or React in it.
  *
  * A payout is built from two exports that arrive separately: the time clock's
  * entries say who worked and for how long, and the sales summary says how much
@@ -642,7 +642,7 @@ export function toPayoutCsv(
   const byId = new Map(payout.shares.map((share) => [share.id, share]));
 
   const rows: (string | number | null)[][] = [
-    ["Tips payout", meta.period],
+    ["Labor summary", meta.period],
     [HOURS_BASIS_LABELS[meta.basis], "", "", "", "", ""],
     [],
     // The two bonus columns are broken out and then added together, because
@@ -687,8 +687,8 @@ export function toPayoutCsv(
   return toCsv(rows);
 }
 
-/** `tips-2026-08-10-to-2026-08-15.csv`, or dated today when the span is unknown. */
+/** `labor-summary-2026-08-10-to-2026-08-15.csv`, or dated today when the span is unknown. */
 export function payoutFilename(from: string | null, to: string | null): string {
-  if (from && to && from !== to) return `tips-${from}-to-${to}.csv`;
-  return `tips-${from ?? to ?? new Date().toISOString().slice(0, 10)}.csv`;
+  if (from && to && from !== to) return `labor-summary-${from}-to-${to}.csv`;
+  return `labor-summary-${from ?? to ?? new Date().toISOString().slice(0, 10)}.csv`;
 }

@@ -19,11 +19,20 @@ export type Employee = {
   name: string;
   group: ShiftGroup;
   /**
-   * The four digit code this person signs in with at `/staff`. Only ever loaded
-   * for the owner's dashboard — the staff side never receives anyone's code but
-   * their own, and it is absent everywhere else.
+   * The five digit code this person trades once for a password the first time
+   * they sign in at `/staff`.
    */
-  loginCode?: string | null;
+  setupCode?: string | null;
+  /**
+   * The password they chose, which is also what identifies them at sign-in.
+   *
+   * Both of these are only ever loaded for the owner's dashboard, where reading
+   * a code out or a forgotten password back is the whole point. The staff side
+   * never receives anybody's, and they are absent everywhere else.
+   */
+  password?: string | null;
+  /** When that password was set, or `null` if they haven't been through setup. */
+  passwordSetAt?: string | null;
 };
 
 /* ----------------------------------------------------------------- time off */

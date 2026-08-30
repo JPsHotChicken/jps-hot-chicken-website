@@ -95,7 +95,7 @@ export function Footer() {
             ))}
             {/* Staff areas. Deliberately linked from here and nowhere else:
                 the owner's dashboard, the tools for running a shift, and the
-                schedule employees sign in to with their four digit code. */}
+                schedule employees sign in to with their own password. */}
             <li>
               <Link
                 href="/admin"

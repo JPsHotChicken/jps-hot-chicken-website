@@ -38,7 +38,10 @@ export async function proxy(request: NextRequest) {
       await readStaffSession(request.cookies.get(STAFF_SESSION_COOKIE)?.value),
     );
 
-    if (pathname === "/staff/login") {
+    // Signing in and setting a first password both have to work while signed
+    // out — a new hire has no session yet, and that is the whole point of them.
+    const isPublic = pathname === "/staff/login" || pathname.startsWith("/staff/setup");
+    if (isPublic) {
       return isSignedIn
         ? NextResponse.redirect(new URL("/staff", request.url))
         : NextResponse.next();

@@ -295,7 +295,7 @@ export function StaffDashboard({
           <div className="p-4">
             {sorted.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                You haven&apos;t asked for any days off yet.
+                Requested days off will appear here.
               </p>
             ) : (
               <ul className="space-y-2">
@@ -311,9 +311,8 @@ export function StaffDashboard({
                           {formatDateRange(request.startDate, request.endDate)}
                         </span>
                         <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[0.65rem] font-bold ${
-                            STATUS_BADGE[request.status]
-                          }`}
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[0.65rem] font-bold ${STATUS_BADGE[request.status]
+                            }`}
                         >
                           {TIME_OFF_STATUS_LABELS[request.status]}
                         </span>

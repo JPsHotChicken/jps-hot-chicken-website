@@ -63,7 +63,7 @@ Each save bumps the version and writes a dated, attributed line to the history.
 Eight types, each showing only the field groups its role calls for — a
 thermometer is never asked about allergens.
 
-Reached from the dashboard drawer, next to the truck order and tips payout.
+Reached from the dashboard drawer, next to the truck order and labor summary.
 
 | Type | Code prefix | Field groups |
 |---|---|---|

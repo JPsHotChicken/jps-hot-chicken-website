@@ -68,7 +68,10 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
   const db = getDb();
 
   const [employees, timeOff, recurring] = await Promise.all([
-    db.from("employees").select("id, name, shift_group, login_code").order("name"),
+    db
+      .from("employees")
+      .select("id, name, shift_group, setup_code, staff_password, password_set_at")
+      .order("name"),
     // Deleted requests come back too — deleting is reversible, so the panel has
     // to be able to show what was thrown away.
     db
@@ -106,7 +109,9 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
       id: row.id,
       name: row.name,
       group: row.shift_group,
-      loginCode: row.login_code,
+      setupCode: row.setup_code,
+      password: row.staff_password,
+      passwordSetAt: row.password_set_at,
     })),
     timeOff: active,
     deletedTimeOff: deleted,
@@ -149,12 +154,12 @@ export async function loadWeek(weekStartISO: string): Promise<WeekSchedule> {
 export async function insertEmployee(
   name: string,
   group: ShiftGroup,
-  loginCode: string | null,
+  setupCode: string | null,
 ): Promise<Employee> {
   const { data, error } = await getDb()
     .from("employees")
-    .insert({ name, shift_group: group, login_code: loginCode })
-    .select("id, name, shift_group, login_code")
+    .insert({ name, shift_group: group, setup_code: setupCode })
+    .select("id, name, shift_group, setup_code, staff_password, password_set_at")
     .single();
 
   if (error) fail("adding an employee", error);
@@ -162,7 +167,9 @@ export async function insertEmployee(
     id: data.id,
     name: data.name,
     group: data.shift_group,
-    loginCode: data.login_code,
+    setupCode: data.setup_code,
+    password: data.staff_password,
+    passwordSetAt: data.password_set_at,
   };
 }
 

@@ -53,7 +53,7 @@ That is the intended posture, not a finding to fix.
 | Table | Holds |
 |---|---|
 | `schedule_settings` | Single row. `row_count` — rows shown per day. |
-| `employees` | Name, shift group, and the four digit `login_code`. |
+| `employees` | Name, shift group, the five digit `setup_code`, and the `staff_password` they chose. |
 | `shift_assignments` | One row per filled grid cell — the owner's working copy. |
 | `time_off_requests` | Dated requests, `pending` / `approved` / `denied`. Deleting one sets `deleted_at` rather than removing the row, so the owner can list deleted requests and undo one. |
 | `recurring_time_off` | Standing weekly conflicts, one per person per weekday. |
@@ -71,13 +71,24 @@ takes their shifts, requests and recurring entries with them in one statement.
 
 ## The staff side (`/staff`)
 
-Employees sign in at `/staff/login` with a four digit code held on their row in
-`employees`. There is no environment variable and no account to create: the owner
-reads the code off the employee list in `/admin` and tells them.
+Employees sign in at `/staff/login` with a password they chose themselves, held
+on their row in `employees`. There is no environment variable and no account to
+create.
 
-New employees are given a code automatically when they're added. Anyone added
-before this existed has `login_code = null` and cannot sign in until the owner
-clicks the refresh icon beside their name to issue one.
+Getting that password is a two-step flow at `/staff/setup`, reached from the
+**New to signing in?** button under the sign-in box:
+
+1. They type the five digit `setup_code` the owner read out from Staff
+   management. A match is traded for a signed, 15-minute cookie naming them —
+   the id never travels in the URL or a form field, so the next page cannot be
+   pointed at somebody else.
+2. That cookie gets them to **Create your password**, where anything of five
+   characters or more is accepted. Saving it signs them straight in and spends
+   the ticket, so one code cannot set two passwords.
+
+New employees are given a setup code automatically when they're added. The dice
+beside their name issues a fresh one, which does not disturb a password they
+have already set.
 
 ### Publishing is a snapshot, not a flag
 
@@ -90,17 +101,32 @@ disappears for them.
 The button shows three states: `Go live` (never sent), `Push changes` (sent, but
 edited since), and `Live` (sent and unchanged).
 
-### Why the code is stored as typed
+### Why the password is stored as typed
 
-`login_code` is stored in plain text rather than hashed, because the owner has to
-be able to read it back to the employee. That is a deliberate trade-off, and the
-reason the throttle in `staff_login_attempts` exists — four digits is only 10,000
-possibilities. What the code protects is one person's own shift times and their
-time-off requests.
+`staff_password` is stored in plain text rather than hashed, because the owner
+asked to be able to read one back to an employee who has forgotten it, and to
+retype it for them. Hashing would make both impossible. That is a deliberate
+trade-off, and the reason the throttle in `staff_login_attempts` exists. What a
+password protects is one person's own shift times and their time-off requests.
 
-If that ever feels too thin, the change is small: widen the column and the
-`employee_login_code_is_four_digits` check to six digits, and update `LENGTH` in
-`src/app/staff/login/LoginForm.tsx`.
+It is also **unique across employees**, and that is not an arbitrary constraint:
+the sign-in box asks for a password and nothing else, so the password is the only
+thing saying who has arrived. Two people sharing one would make that unanswerable.
+A clash surfaces as "that password is already in use" while somebody is choosing.
+
+### Signing everybody out
+
+Session cookies carry `ver`, checked against `STAFF_SESSION_VERSION` in
+`lib/staff-auth.ts`. Bumping that constant refuses every token minted before it,
+which empties every staff session at the next deploy without a table of live
+sessions to clear. It went to `2` when passwords replaced the four digit codes.
+
+If the setup code ever feels too thin, the change is small: widen the column and
+the `employee_setup_code_is_five_digits` check, then move
+`STAFF_SETUP_CODE_LENGTH` in `lib/staff-auth.ts` — the code boxes and the shape
+check both read it. `STAFF_PASSWORD_MIN_LENGTH` sits beside it and is enforced in
+the same three places: that constant, the Server Action, and the
+`staff_password_length` check in the database.
 
 ## Changing the schema
 

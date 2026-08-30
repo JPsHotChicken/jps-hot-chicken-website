@@ -22,8 +22,11 @@ export type Database = {
           id: string;
           login_code: string | null;
           name: string;
+          password_set_at: string | null;
           performance_role: Database["public"]["Enums"]["performance_role"];
+          setup_code: string | null;
           shift_group: Database["public"]["Enums"]["shift_group"];
+          staff_password: string | null;
         };
         Insert: {
           active?: boolean;
@@ -33,8 +36,11 @@ export type Database = {
           id?: string;
           login_code?: string | null;
           name: string;
+          password_set_at?: string | null;
           performance_role?: Database["public"]["Enums"]["performance_role"];
+          setup_code?: string | null;
           shift_group?: Database["public"]["Enums"]["shift_group"];
+          staff_password?: string | null;
         };
         Update: {
           active?: boolean;
@@ -44,8 +50,11 @@ export type Database = {
           id?: string;
           login_code?: string | null;
           name?: string;
+          password_set_at?: string | null;
           performance_role?: Database["public"]["Enums"]["performance_role"];
+          setup_code?: string | null;
           shift_group?: Database["public"]["Enums"]["shift_group"];
+          staff_password?: string | null;
         };
         Relationships: [];
       };

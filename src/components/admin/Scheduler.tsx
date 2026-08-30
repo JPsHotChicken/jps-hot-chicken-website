@@ -25,13 +25,13 @@ import {
   loadWeekAction,
   publishStateAction,
   publishWeekAction,
-  regenerateLoginCodeAction,
+  regenerateSetupCodeAction,
   reloadAction,
   removeEmployeeAction,
   removeRecurringTimeOffAction,
   removeTimeOffAction,
   restoreTimeOffAction,
-  setLoginCodeAction,
+  setStaffPasswordAction,
   setTimeOffStatusAction,
 } from "@/app/admin/schedule-actions";
 import { exportSchedulePdf, type ExportScope } from "@/lib/schedule-pdf";
@@ -350,21 +350,27 @@ export function Scheduler({
   );
 
   /**
-   * Set an employee's sign-in code. Errors are thrown rather than swallowed into
-   * the banner: Staff management shows them against the row they belong to, so
-   * "that code is taken" appears next to the person it's about.
+   * Set an employee's password for them. A refusal is thrown rather than
+   * swallowed into the banner: Staff management shows it against the row it
+   * belongs to, so "that password is taken" appears next to the person it's
+   * about.
    */
-  const saveLoginCode = useCallback(async (id: string, code: string) => {
-    const loginCode = await setLoginCodeAction(id, code);
+  const savePassword = useCallback(async (id: string, password: string) => {
+    const result = await setStaffPasswordAction(id, password);
+    if (!result.ok) throw new Error(result.error);
     setEmployees((current) =>
-      current.map((employee) => (employee.id === id ? { ...employee, loginCode } : employee)),
+      current.map((employee) =>
+        employee.id === id
+          ? { ...employee, password: result.password, passwordSetAt: result.passwordSetAt }
+          : employee,
+      ),
     );
   }, []);
 
-  const randomLoginCode = useCallback(async (id: string) => {
-    const loginCode = await regenerateLoginCodeAction(id);
+  const regenerateSetupCode = useCallback(async (id: string) => {
+    const setupCode = await regenerateSetupCodeAction(id);
     setEmployees((current) =>
-      current.map((employee) => (employee.id === id ? { ...employee, loginCode } : employee)),
+      current.map((employee) => (employee.id === id ? { ...employee, setupCode } : employee)),
     );
   }, []);
 
@@ -697,8 +703,8 @@ export function Scheduler({
         <StaffManagement
           employees={employees}
           payrollNames={payrollNames}
-          onSaveCode={saveLoginCode}
-          onRandomCode={randomLoginCode}
+          onSavePassword={savePassword}
+          onRegenerateSetupCode={regenerateSetupCode}
           onAdd={addEmployee}
           onRemove={removeEmployee}
           onForgetPayrollName={async (payrollName) => {

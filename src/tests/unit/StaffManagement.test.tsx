@@ -1,29 +1,36 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { StaffManagement } from "@/components/admin/StaffManagement";
 import type { Employee } from "@/lib/schedule";
 
 const employees: Employee[] = [
-  { id: "e1", name: "Alex Morning", group: "morning", loginCode: "1234" },
-  { id: "e2", name: "Zoe Nightshift", group: "night", loginCode: null },
+  { id: "e1", name: "Alex Morning", group: "morning", setupCode: "12345", password: "hotsauce" },
+  { id: "e2", name: "Zoe Nightshift", group: "night", setupCode: "54321", password: null },
 ];
 
 /** The panel with every callback stubbed, plus the spies worth asserting on. */
 function setup(over: Partial<Parameters<typeof StaffManagement>[0]> = {}) {
   const onAdd = vi.fn();
   const onRemove = vi.fn();
+  const onSavePassword = vi.fn(async () => {});
+  const onRegenerateSetupCode = vi.fn(async () => {});
   render(
     <StaffManagement
       employees={employees}
-      onSaveCode={vi.fn(async () => {})}
-      onRandomCode={vi.fn(async () => {})}
+      onSavePassword={onSavePassword}
+      onRegenerateSetupCode={onRegenerateSetupCode}
       onAdd={onAdd}
       onRemove={onRemove}
       {...over}
     />,
   );
-  return { onAdd, onRemove };
+  return { onAdd, onRemove, onSavePassword, onRegenerateSetupCode };
+}
+
+/** The password box on one person's row. */
+function passwordBox(name: string) {
+  return screen.getByLabelText(`Password for ${name}`);
 }
 
 afterEach(() => {
@@ -79,5 +86,85 @@ describe("StaffManagement hiring and removing", () => {
     const night = screen.getByRole("heading", { name: "Night shift" }).closest("section")!;
     expect(within(night).getByRole("button", { name: "Remove Zoe Nightshift" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /^Remove / })).toHaveLength(employees.length);
+  });
+});
+
+describe("StaffManagement setup codes", () => {
+  it("shows each person's five digit code so it can be read out", () => {
+    setup();
+
+    expect(screen.getByLabelText("Setup code for Alex Morning")).toHaveTextContent("12345");
+    expect(screen.getByLabelText("Setup code for Zoe Nightshift")).toHaveTextContent("54321");
+  });
+
+  it("issues a new code without touching the password", async () => {
+    const { onRegenerateSetupCode, onSavePassword } = setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "Pick a new setup code for Alex Morning" }));
+
+    await waitFor(() => expect(onRegenerateSetupCode).toHaveBeenCalledWith("e1"));
+    expect(onSavePassword).not.toHaveBeenCalled();
+  });
+});
+
+describe("StaffManagement passwords", () => {
+  it("keeps passwords covered until they are asked for", () => {
+    setup();
+
+    const box = passwordBox("Alex Morning");
+    // The value is there to be revealed, but the field renders it as dots and
+    // refuses edits until View password is pressed.
+    expect(box).toHaveAttribute("type", "password");
+    expect(box).toHaveAttribute("readonly");
+    expect(box).toHaveValue("hotsauce");
+  });
+
+  it("reveals one password without revealing the rest", () => {
+    setup();
+
+    const rows = screen.getAllByRole("button", { name: "View password" });
+    fireEvent.click(rows[0]);
+
+    expect(passwordBox("Alex Morning")).toHaveAttribute("type", "text");
+    expect(passwordBox("Zoe Nightshift")).toHaveAttribute("type", "password");
+  });
+
+  it("saves an edited password", async () => {
+    const { onSavePassword } = setup();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "View password" })[0]);
+    fireEvent.change(passwordBox("Alex Morning"), { target: { value: "newpass" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onSavePassword).toHaveBeenCalledWith("e1", "newpass"));
+  });
+
+  it("won't save a password under five characters", () => {
+    const { onSavePassword } = setup();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "View password" })[0]);
+    fireEvent.change(passwordBox("Alex Morning"), { target: { value: "four" } });
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(onSavePassword).not.toHaveBeenCalled();
+  });
+
+  it("shows a refusal against the row it belongs to", async () => {
+    const onSavePassword = vi.fn(async () => {
+      throw new Error("That password is already in use. Please choose a different one.");
+    });
+    setup({ onSavePassword });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "View password" })[0]);
+    fireEvent.change(passwordBox("Alex Morning"), { target: { value: "takenpw" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("already in use");
+  });
+
+  it("says who still has to go through setup", () => {
+    setup();
+
+    expect(screen.getByText(/Hasn't set a password yet/)).toBeInTheDocument();
   });
 });

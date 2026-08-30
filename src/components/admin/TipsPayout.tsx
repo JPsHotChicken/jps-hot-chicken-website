@@ -137,7 +137,7 @@ function download(filename: string, text: string) {
 }
 
 /**
- * The tips payout page.
+ * The labor summary page.
  *
  * Two reports go in — the time clock's hours and the sales summary's tips — and
  * a sheet of who gets what comes out. The arithmetic is in `lib/tips.ts`; what
@@ -310,7 +310,7 @@ function PayoutEditor() {
           <div className="mr-auto">
             <h1 className="flex items-center gap-2 font-heading text-lg font-bold tracking-tight">
               <HandCoins className="size-4 text-brand" />
-              Tips payout
+              Labor summary
             </h1>
             <p className="text-xs text-muted-foreground">
               {people.length === 0

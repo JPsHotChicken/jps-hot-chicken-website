@@ -1,7 +1,11 @@
 import "server-only";
 
 import { getDb } from "@/lib/supabase/server";
-import { STAFF_ATTEMPT_WINDOW_MINUTES, STAFF_MAX_ATTEMPTS } from "@/lib/staff-auth";
+import {
+  STAFF_ATTEMPT_WINDOW_MINUTES,
+  STAFF_MAX_ATTEMPTS,
+  STAFF_SETUP_CODE_LENGTH,
+} from "@/lib/staff-auth";
 import {
   DAY_KEYS,
   ROW_COUNT,
@@ -30,47 +34,83 @@ function dayOf(weekStartISO: string, dateISO: string): DayKey | undefined {
   return DAY_KEYS[offset];
 }
 
-/* ------------------------------------------------------------- login codes */
+/* ------------------------------------------------------------- setup codes */
+
+/** How many five digit codes exist, i.e. 00000-99999. */
+const SETUP_CODE_SPACE = 10 ** STAFF_SETUP_CODE_LENGTH;
+
+function randomSetupCode(): string {
+  const [pick] = crypto.getRandomValues(new Uint32Array(1));
+  return String(pick % SETUP_CODE_SPACE).padStart(STAFF_SETUP_CODE_LENGTH, "0");
+}
 
 /**
- * A code nobody else has. Four digits is only 10,000 possibilities, so this
- * retries on collision rather than assuming a random pick is free.
+ * A setup code nobody else has.
+ *
+ * Guesses at random and checks against the codes already handed out rather than
+ * building the whole hundred-thousand-code range: a restaurant has tens of
+ * employees, so the first guess is free virtually every time. Leading zeros
+ * survive because the column is text, not a number.
  */
-export async function generateUniqueLoginCode(): Promise<string> {
+export async function generateUniqueSetupCode(): Promise<string> {
   const db = getDb();
-  const { data, error } = await db.from("employees").select("login_code");
-  if (error) fail("reading existing codes", error);
+  const { data, error } = await db.from("employees").select("setup_code");
+  if (error) fail("reading existing setup codes", error);
 
-  const taken = new Set(data.map((row) => row.login_code).filter(Boolean));
-  // Codes starting 0 are fine; leading zeros are preserved because the column
-  // is text, not a number.
-  const available: string[] = [];
-  for (let n = 0; n < 10_000; n++) {
-    const code = String(n).padStart(4, "0");
-    if (!taken.has(code)) available.push(code);
-  }
-  if (available.length === 0) throw new Error("Every four digit code is taken.");
-  return available[Math.floor(Math.random() * available.length)];
+  const taken = new Set(data.map((row) => row.setup_code).filter(Boolean));
+  if (taken.size >= SETUP_CODE_SPACE) throw new Error("Every five digit code is taken.");
+
+  let code = randomSetupCode();
+  while (taken.has(code)) code = randomSetupCode();
+  return code;
 }
 
 /** Raised when the chosen code already belongs to somebody else. */
-export class LoginCodeTakenError extends Error {
+export class SetupCodeTakenError extends Error {
   constructor() {
     super("Another employee already uses that code. Pick a different one.");
-    this.name = "LoginCodeTakenError";
+    this.name = "SetupCodeTakenError";
   }
 }
 
-export async function setLoginCode(employeeId: string, code: string): Promise<void> {
+export async function setSetupCode(employeeId: string, code: string): Promise<void> {
   const { error } = await getDb()
     .from("employees")
-    .update({ login_code: code })
+    .update({ setup_code: code })
     .eq("id", employeeId);
 
   // 23505 is Postgres' unique violation. Codes have to identify one person, so
   // a clash is a normal thing for the owner to hit and fix, not a crash.
-  if (error?.code === "23505") throw new LoginCodeTakenError();
-  if (error) fail("setting a login code", error);
+  if (error?.code === "23505") throw new SetupCodeTakenError();
+  if (error) fail("setting a setup code", error);
+}
+
+/* ---------------------------------------------------------------- passwords */
+
+/**
+ * Raised when the password somebody typed is already another employee's.
+ *
+ * Sign-in is by password alone, so two people cannot share one — there would be
+ * no way to tell who had just arrived. This is why the message says to pick a
+ * different one rather than that it is wrong.
+ */
+export class PasswordTakenError extends Error {
+  constructor() {
+    super("That password is already in use. Please choose a different one.");
+    this.name = "PasswordTakenError";
+  }
+}
+
+/** Store a password against an employee, stamping when it was set. */
+export async function setStaffPassword(employeeId: string, password: string): Promise<string> {
+  const { error } = await getDb()
+    .from("employees")
+    .update({ staff_password: password, password_set_at: new Date().toISOString() })
+    .eq("id", employeeId);
+
+  if (error?.code === "23505") throw new PasswordTakenError();
+  if (error) fail("setting a password", error);
+  return password;
 }
 
 /* ---------------------------------------------------------------- sign in */
@@ -102,15 +142,32 @@ export function isThrottled(failures: number): boolean {
   return failures >= STAFF_MAX_ATTEMPTS;
 }
 
-/** The employee a code belongs to, or `null` when nothing matches. */
-export async function findEmployeeByCode(code: string): Promise<Employee | null> {
+/**
+ * The employee a password belongs to, or `null` when nothing matches.
+ *
+ * The password is the only thing typed at sign-in, so it is also what says who
+ * is signing in — which is why `staff_password` is unique in the database.
+ */
+export async function findEmployeeByPassword(password: string): Promise<Employee | null> {
   const { data, error } = await getDb()
     .from("employees")
     .select("id, name, shift_group")
-    .eq("login_code", code)
+    .eq("staff_password", password)
     .maybeSingle();
 
-  if (error) fail("checking a login code", error);
+  if (error) fail("checking a password", error);
+  return data ? { id: data.id, name: data.name, group: data.shift_group } : null;
+}
+
+/** The employee a setup code belongs to, for the first-time sign-in flow. */
+export async function findEmployeeBySetupCode(code: string): Promise<Employee | null> {
+  const { data, error } = await getDb()
+    .from("employees")
+    .select("id, name, shift_group")
+    .eq("setup_code", code)
+    .maybeSingle();
+
+  if (error) fail("checking a setup code", error);
   return data ? { id: data.id, name: data.name, group: data.shift_group } : null;
 }
 

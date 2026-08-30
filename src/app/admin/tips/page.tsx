@@ -6,12 +6,12 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 import { TipsPayout } from "@/components/admin/TipsPayout";
 
 export const metadata: Metadata = {
-  title: "Tips payout",
+  title: "Labor summary",
   robots: { index: false, follow: false },
 };
 
 /**
- * The tips payout page.
+ * The labor summary page.
  *
  * Unlike the rest of the dashboard there is nothing to load: a payout is built
  * from two reports the owner has just downloaded, read in the browser, and

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { siteConfig } from "@/data/site";
+import { StaffAuthShell } from "@/components/staff/AuthShell";
 import { StaffLoginForm } from "./LoginForm";
 
 export const metadata: Metadata = {
@@ -10,31 +10,29 @@ export const metadata: Metadata = {
 };
 
 export default function StaffLoginPage() {
-  const [brandFirst, ...brandRest] = siteConfig.name.split(" ");
-
   return (
-    <div className="flex flex-1 items-center justify-center bg-muted px-4 py-16">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <p className="font-heading text-2xl font-bold tracking-tight">
-            <span className="text-brand">{brandFirst}</span> {brandRest.join(" ")}
-          </p>
-          <h1 className="mt-1 text-sm text-muted-foreground">Staff schedule</h1>
-        </div>
-
-        <div className="rounded-xl border border-border bg-background p-6 shadow-sm">
-          <StaffLoginForm />
-        </div>
-
+    <StaffAuthShell
+      subtitle="Staff schedule"
+      footer={
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Don&apos;t have a code? Ask your manager.
+          Forgotten your password? Ask your manager — they can read it back to you.
         </p>
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          <Link href="/" className="hover:underline">
-            ← Back to the website
-          </Link>
-        </p>
+      }
+    >
+      <StaffLoginForm />
+
+      {/* The way in for anybody who has a code but no password yet. Deliberately
+          under the form and plainly worded: this is the first thing a new hire
+          is looking for, and they are being talked through it by a manager. */}
+      <div className="mt-5 border-t border-border pt-5 text-center">
+        <p className="text-sm text-muted-foreground">New to signing in?</p>
+        <Link
+          href="/staff/setup"
+          className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold transition-colors hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          Set up my password
+        </Link>
       </div>
-    </div>
+    </StaffAuthShell>
   );
 }

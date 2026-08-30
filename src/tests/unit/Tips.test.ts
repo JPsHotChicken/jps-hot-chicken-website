@@ -443,8 +443,10 @@ describe("dates", () => {
   });
 
   it("names the export file after the period", () => {
-    expect(payoutFilename("2026-08-10", "2026-08-15")).toBe("tips-2026-08-10-to-2026-08-15.csv");
-    expect(payoutFilename("2026-08-10", "2026-08-10")).toBe("tips-2026-08-10.csv");
+    expect(payoutFilename("2026-08-10", "2026-08-15")).toBe(
+      "labor-summary-2026-08-10-to-2026-08-15.csv",
+    );
+    expect(payoutFilename("2026-08-10", "2026-08-10")).toBe("labor-summary-2026-08-10.csv");
   });
 
   it("takes a period off a file name, for a file with no dates in it", () => {
@@ -486,7 +488,7 @@ describe("the exported sheet", () => {
 
   it("explains where the figures came from", () => {
     // Quoted, because the period has a comma in it.
-    expect(csv).toContain(`Tips payout,"Aug 10 – Aug 15, 2026"`);
+    expect(csv).toContain(`Labor summary,"Aug 10 – Aug 15, 2026"`);
     expect(csv).toContain("Payable hours");
     expect(csv).toContain("Tips from report,100.00");
     // Both kinds of bonus, under one figure.
