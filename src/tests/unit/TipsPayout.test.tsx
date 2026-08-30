@@ -1,11 +1,30 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TipsPayout } from "@/components/admin/TipsPayout";
+import { roundRate, type PublishedTipRate } from "@/lib/tips";
 
 // The page renders a sign-out form pointed at a Server Action, which has no
 // meaning in jsdom.
 vi.mock("@/app/admin/actions", () => ({ logout: vi.fn() }));
+
+/**
+ * Go live talks to the database through two Server Actions. Standing in for
+ * them keeps the sheet's arithmetic testable without one, which is also how the
+ * page behaves in the restaurant on a day Supabase is down.
+ */
+const staffSee = vi.hoisted(() => ({
+  /** What staff can already see, as the page finds it on the way in. */
+  current: null as PublishedTipRate | null,
+  read: vi.fn(),
+  send: vi.fn(),
+}));
+
+vi.mock("@/app/admin/tips/actions", () => ({
+  publishedTipRateAction: (periodStart: string) => staffSee.read(periodStart),
+  publishTipRateAction: (input: { periodStart: string; periodEnd: string; perHour: number }) =>
+    staffSee.send(input),
+}));
 
 /** A trimmed-down copy of the real time clock export, quirks intact. */
 const TIME_ENTRIES = [
@@ -41,7 +60,16 @@ const bonuses = (name: string) => cell(name, 3);
 
 beforeEach(() => {
   window.localStorage.clear();
+  staffSee.current = null;
+  staffSee.read.mockReset().mockImplementation(async () => staffSee.current);
+  staffSee.send.mockReset().mockImplementation(async (input) => {
+    staffSee.current = { ...input, perHour: roundRate(input.perHour), publishedAt: NOW };
+    return staffSee.current;
+  });
 });
+
+/** A fixed moment for anything the button stamps, so it reads the same twice. */
+const NOW = "2026-08-16T20:40:00.000Z";
 
 describe("importing", () => {
   it("turns a time clock export into a payout, adding up each person's shifts", () => {
@@ -360,5 +388,96 @@ describe("the sheet between visits", () => {
 
     render(<TipsPayout />);
     expect(screen.getByText(/Nobody here yet/)).toBeInTheDocument();
+  });
+});
+
+describe("sending the rate to staff", () => {
+  const goLive = () => screen.getByRole("button", { name: /Go live|Update|Live|Sending/ });
+
+  /** The whole week, as it stands the moment before the button is pressed. */
+  async function ready() {
+    render(<TipsPayout />);
+    importReport(TIME_ENTRIES);
+    importReport(TIP_SUMMARY);
+    // The page asks what staff can see as soon as the export gives it dates.
+    await waitFor(() => expect(staffSee.read).toHaveBeenCalledWith("2026-08-10"));
+  }
+
+  it("has nothing to send before a report has been read", () => {
+    render(<TipsPayout />);
+    expect(goLive()).toBeDisabled();
+  });
+
+  it("still has nothing to send with hours but no tips", () => {
+    render(<TipsPayout />);
+    importReport(TIME_ENTRIES);
+
+    expect(goLive()).toBeDisabled();
+  });
+
+  it("sends the hourly rate and the days it covers, and nothing else", async () => {
+    await ready();
+    await act(async () => {
+      fireEvent.click(goLive());
+    });
+
+    expect(staffSee.send).toHaveBeenCalledTimes(1);
+    const sent = staffSee.send.mock.calls[0][0];
+    expect(sent.periodStart).toBe("2026-08-10");
+    expect(sent.periodEnd).toBe("2026-08-15");
+    // $263.17 across the 32.62 hours the three of them worked.
+    expect(sent.perHour).toBeCloseTo(263.17 / 32.62, 6);
+
+    // Nobody's name, hours or wage goes with it.
+    expect(Object.keys(sent).sort()).toEqual(["perHour", "periodEnd", "periodStart"]);
+  });
+
+  it("says so once the week is live, and won't send the same figure twice", async () => {
+    await ready();
+    await act(async () => {
+      fireEvent.click(goLive());
+    });
+
+    expect(screen.getByRole("button", { name: "Live" })).toBeDisabled();
+    expect(screen.getByText(/Live · sent/)).toBeInTheDocument();
+  });
+
+  it("offers to update a week whose figures have moved since it went out", async () => {
+    await ready();
+    await act(async () => {
+      fireEvent.click(goLive());
+    });
+
+    // The test account should never have been in the split.
+    fireEvent.click(screen.getByLabelText("Pay Example Staff Testing"));
+
+    expect(screen.getByRole("button", { name: "Update" })).toBeEnabled();
+    expect(screen.getByText("Staff see $8.07/hr")).toBeInTheDocument();
+  });
+
+  it("opens on what staff can already see, from whichever browser sent it", async () => {
+    staffSee.current = {
+      periodStart: "2026-08-10",
+      periodEnd: "2026-08-15",
+      perHour: roundRate(263.17 / 32.62),
+      publishedAt: NOW,
+    };
+
+    await ready();
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Live" })).toBeInTheDocument());
+    expect(staffSee.send).not.toHaveBeenCalled();
+  });
+
+  it("keeps the sheet when the rate can't be sent", async () => {
+    staffSee.send.mockRejectedValueOnce(new Error("Not signed in."));
+    await ready();
+    await act(async () => {
+      fireEvent.click(goLive());
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Not signed in.");
+    expect(screen.getByRole("button", { name: "Go live" })).toBeEnabled();
+    expect(total("Uddhipti Basnet")).toBeCloseTo(86.65, 2);
   });
 });

@@ -9,9 +9,12 @@ import {
   HOURS_BASIS_LABELS,
   formatHours,
   formatMoney,
+  formatPerHour,
   type HoursBasis,
   type Payout,
+  type PublishedTipRate,
 } from "@/lib/tips";
+import { TipsGoLive } from "./TipsGoLive";
 
 type Props = {
   payout: Payout;
@@ -22,6 +25,12 @@ type Props = {
   onBasis: (basis: HoursBasis) => void;
   onTips: (value: string) => void;
   onBonus: (value: string) => void;
+  /** This period's rate as staff can currently see it, or null. */
+  published: PublishedTipRate | null;
+  /** Why the rate can't be sent out, or null when it can. */
+  publishBlocked: string | null;
+  publishing: boolean;
+  onPublish: () => void;
 };
 
 /** One figure in the summary. */
@@ -53,15 +62,29 @@ export function TipsPanel({
   onBasis,
   onTips,
   onBonus,
+  published,
+  publishBlocked,
+  publishing,
+  onPublish,
 }: Props) {
   return (
     <div className="rounded-xl border border-border bg-background shadow-sm">
-      <header className="border-b border-border px-4 py-3">
-        <h2 className="flex items-center gap-2 font-heading text-base font-bold">
-          <Coins className="size-4 text-brand" />
-          The pot
-        </h2>
-        {period && <p className="mt-0.5 text-xs text-muted-foreground">{period}</p>}
+      <header className="flex items-start gap-3 border-b border-border px-4 py-3">
+        <div className="mr-auto min-w-0">
+          <h2 className="flex items-center gap-2 font-heading text-base font-bold">
+            <Coins className="size-4 text-brand" />
+            The pot
+          </h2>
+          {period && <p className="mt-0.5 text-xs text-muted-foreground">{period}</p>}
+        </div>
+
+        <TipsGoLive
+          perHour={payout.perHour}
+          published={published}
+          blocked={publishBlocked}
+          sending={publishing}
+          onPublish={onPublish}
+        />
       </header>
 
       <div className="space-y-4 p-4">
@@ -138,7 +161,7 @@ export function TipsPanel({
           <Figure label="Hours between them" value={formatHours(payout.hours)} />
           <Figure
             label="Tips per hour"
-            value={payout.perHour > 0 ? `${formatMoney(payout.perHour)}/hr` : "—"}
+            value={payout.perHour > 0 ? formatPerHour(payout.perHour) : "—"}
           />
           <Figure
             label="Shared bonus per person"

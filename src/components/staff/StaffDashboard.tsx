@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  HandCoins,
   LoaderCircle,
   LogOut,
   Send,
@@ -36,6 +37,7 @@ import {
   type WeekSchedule,
 } from "@/lib/schedule";
 import { formatPayDate } from "@/lib/pay-stubs";
+import { formatMoney, formatPeriod, type PublishedTipRate } from "@/lib/tips";
 import { TimeOffCalendar } from "./TimeOffCalendar";
 import { WeekSchedule as WeekScheduleView } from "./WeekSchedule";
 
@@ -66,6 +68,8 @@ export type StaffDashboardProps = {
   scheduledRange: { from: string; to: string };
   /** Released stubs belonging to this person, newest pay date first. */
   payStubs: MyPayStub[];
+  /** Every week of tips per hour the owner has sent out, oldest first. */
+  tipRates: PublishedTipRate[];
 };
 
 export function StaffDashboard({
@@ -77,6 +81,7 @@ export function StaffDashboard({
   initialScheduledDates,
   scheduledRange,
   payStubs,
+  tipRates,
 }: StaffDashboardProps) {
   const [weekStart, setWeekStart] = useState(initialWeekStart);
   const [weeks, setWeeks] = useState<Record<string, WeekSchedule>>(
@@ -86,6 +91,10 @@ export function StaffDashboard({
   const [scheduledDates, setScheduledDates] = useState(initialScheduledDates);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /** Which week of tips is on screen. Opens on the most recent one. */
+  const [rateIndex, setRateIndex] = useState(tipRates.length - 1);
+  const rate = tipRates[rateIndex];
 
   const [selection, setSelection] = useState<{ start: string; end: string } | null>(null);
   const [reason, setReason] = useState("");
@@ -383,6 +392,62 @@ export function StaffDashboard({
                   );
                 })}
               </ul>
+            )}
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------ online tips */}
+        <section className="rounded-xl border border-border bg-background shadow-sm">
+          <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border px-4 py-3">
+            <h2 className="mr-auto flex items-center gap-2 font-heading text-base font-bold">
+              <HandCoins className="size-4 text-brand" />
+              Online tips
+            </h2>
+            {rate && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Earlier week"
+                  disabled={rateIndex <= 0}
+                  onClick={() => setRateIndex(rateIndex - 1)}
+                >
+                  <ChevronLeft />
+                </Button>
+                <span className="text-sm font-semibold whitespace-nowrap">
+                  {formatPeriod(rate.periodStart, rate.periodEnd)}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Later week"
+                  disabled={rateIndex >= tipRates.length - 1}
+                  onClick={() => setRateIndex(rateIndex + 1)}
+                >
+                  <ChevronRight />
+                </Button>
+              </div>
+            )}
+          </header>
+
+          <div className="p-4">
+            {rate ? (
+              <>
+                <p className="flex items-baseline gap-2">
+                  <span className="font-mono text-3xl font-bold tabular-nums">
+                    {formatMoney(rate.perHour)}
+                  </span>
+                  <span className="text-sm font-semibold text-muted-foreground">per hour</span>
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  What every hour worked that week earned in tips.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nothing yet. Once your manager works out the week&apos;s tips, what an hour earned
+                shows up here.
+              </p>
             )}
           </div>
         </section>

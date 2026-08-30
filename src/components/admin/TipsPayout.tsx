@@ -17,6 +17,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { logout } from "@/app/admin/actions";
+import { publishTipRateAction, publishedTipRateAction } from "@/app/admin/tips/actions";
 import { FIELD_CLASS } from "./field";
 import {
   computePayout,
@@ -27,6 +28,7 @@ import {
   personId,
   toPayoutCsv,
   type HoursBasis,
+  type PublishedTipRate,
   type TimeEntriesImport,
   type TipsPerson,
 } from "@/lib/tips";
@@ -164,6 +166,17 @@ function PayoutEditor() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * The last answer the server gave about what staff can see, and which period
+   * it was about. The period is kept with it so a rate read for last week can
+   * never be shown against this one — the sheet's dates change the moment a new
+   * export is read, and the answer for the new dates arrives a moment later.
+   */
+  const [sent, setSent] = useState<{ periodStart: string; rate: PublishedTipRate | null } | null>(
+    null,
+  );
+  const [publishing, setPublishing] = useState(false);
+
   const { people, rows, tips, bonus, basis, note, from, to } = draft;
 
   useEffect(() => {
@@ -264,6 +277,74 @@ function PayoutEditor() {
   );
 
   const period = formatPeriod(from, to);
+
+  /**
+   * What staff can see for the period on the sheet right now.
+   *
+   * Read on the way in rather than remembered in the draft, because the draft
+   * lives in one browser and what has been sent out does not: the owner can
+   * finish a sheet on the laptop, send it from the phone, and the laptop should
+   * still say it is live. A failure here is left quiet — the page is built to
+   * work on a day the database doesn't, and the worst it costs is a button that
+   * offers to send a rate that is already out, which sends the same figure
+   * again.
+   */
+  useEffect(() => {
+    if (!from) return;
+
+    let current = true;
+    publishedTipRateAction(from)
+      .then((rate) => {
+        if (current) setSent({ periodStart: from, rate });
+      })
+      .catch((cause) => {
+        console.error("[tips] Could not read what staff can see:", cause);
+      });
+
+    return () => {
+      current = false;
+    };
+  }, [from]);
+
+  /** What staff can see for the period on the sheet, and nothing else. */
+  const published = sent && sent.periodStart === from ? sent.rate : null;
+
+  /** Why this week's rate can't go out yet, in a sentence, or null when it can. */
+  const publishBlocked =
+    !from || !to
+      ? "Import a time clock export first — the dates the rate covers come from it."
+      : payout.perHour <= 0
+        ? "There is no rate yet. Fill in the tips and tick who is being paid."
+        : null;
+
+  /**
+   * Put this week's tips per hour in front of every employee.
+   *
+   * The rate is all that goes — not the sheet it came off, and not what any one
+   * person was handed.
+   */
+  const goLive = async () => {
+    if (!from || !to || publishBlocked) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const rate = await publishTipRateAction({
+        periodStart: from,
+        periodEnd: to,
+        perHour: payout.perHour,
+      });
+      setSent({ periodStart: from, rate });
+    } catch (cause) {
+      console.error("[tips] Could not send the rate to staff:", cause);
+      setError(
+        cause instanceof Error && cause.message
+          ? cause.message
+          : "That rate couldn't be sent to staff. Please try again.",
+      );
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const exportCsv = () => {
     download(payoutFilename(from, to), toPayoutCsv(people, payout, { period, basis, note }));
@@ -393,6 +474,10 @@ function PayoutEditor() {
             onBasis={(value) => patch({ basis: value })}
             onTips={(value) => patch({ tips: value })}
             onBonus={(value) => patch({ bonus: value })}
+            published={published}
+            publishBlocked={publishBlocked}
+            publishing={publishing}
+            onPublish={goLive}
           />
 
           <TipsImport

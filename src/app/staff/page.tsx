@@ -11,6 +11,7 @@ import {
   loadPublishedWeek,
 } from "@/lib/staff-repo";
 import { payStubsForEmployee } from "@/lib/pay-stubs-repo";
+import { listPublishedTipRates } from "@/lib/tip-rates-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { CALENDAR_DAY_COUNT, addDays, calendarStart, mondayOf, toISODate } from "@/lib/schedule";
 import { StaffDashboard } from "@/components/staff/StaffDashboard";
@@ -46,13 +47,17 @@ export default async function StaffPage() {
     to: toISODate(addDays(scheduledFrom, CALENDAR_DAY_COUNT + 13)),
   };
 
-  const [publishedWeeks, requests, scheduledDates, payStubs] = await Promise.all([
+  const [publishedWeeks, requests, scheduledDates, payStubs, tipRates] = await Promise.all([
     listPublishedWeeks(thisWeek),
     listRequestsForEmployee(employee.id),
     listScheduledDates(employee.id, scheduledRange.from, scheduledRange.to),
     // Only released stubs come back, and only this person's — a draft pay run
     // is invisible here the same way it is invisible to the file route.
     payStubsForEmployee(employee.id),
+    // The same handful of rates for everybody: an hour earned what an hour
+    // earned, whoever worked it. Short enough to hand over whole, so paging
+    // back through the weeks costs no further trips.
+    listPublishedTipRates(),
   ]);
 
   // Show the current week when it's published, otherwise the next one that is.
@@ -75,6 +80,7 @@ export default async function StaffPage() {
       initialScheduledDates={scheduledDates}
       scheduledRange={scheduledRange}
       payStubs={payStubs}
+      tipRates={tipRates}
     />
   );
 }

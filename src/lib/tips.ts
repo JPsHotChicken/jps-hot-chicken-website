@@ -107,6 +107,26 @@ export const MAX_WAGE = 1_000;
 /** Nobody works more than this in a pay period, however the clock reads. */
 export const MAX_HOURS = 400;
 
+/**
+ * A ceiling on a tips rate being sent out to staff.
+ *
+ * Same idea as `MAX_WAGE`: far above any hour this restaurant has ever earned,
+ * so it catches a figure that could only be a mistake and argues with nothing
+ * else.
+ */
+export const MAX_TIP_RATE = 1_000;
+
+/**
+ * A tips rate at the precision it is stored and compared at.
+ *
+ * Four decimals, matching the CSV export: the published figure is the sheet's
+ * own arithmetic rather than the two-decimal version of it that is shown, and
+ * both sides round the same way so "this is already live" is an exact answer.
+ */
+export function roundRate(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
 export function clampHours(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(MAX_HOURS, Math.max(0, round2(value)));
@@ -608,6 +628,24 @@ export function formatPeriod(from: string | null, to: string | null): string {
   return start.getFullYear() === end.getFullYear()
     ? `${formatShortDate(start)} – ${formatShortDate(end)}, ${end.getFullYear()}`
     : `${formatShortDate(start)}, ${start.getFullYear()} – ${formatShortDate(end)}, ${end.getFullYear()}`;
+}
+
+/**
+ * One week's tips per hour, as it was sent out to staff.
+ *
+ * The rate and the days it covers, and deliberately nothing else — see
+ * `lib/tip-rates-repo.ts` for why the rest of the sheet stays in the browser.
+ */
+export type PublishedTipRate = {
+  periodStart: string;
+  periodEnd: string;
+  perHour: number;
+  publishedAt: string;
+};
+
+/** A rate the way it is spoken about — "$3.42/hr". */
+export function formatPerHour(value: number): string {
+  return `${formatMoney(value)}/hr`;
 }
 
 /** Money as it goes on the sheet — always two decimals, so columns line up. */

@@ -327,6 +327,27 @@ export type Database = {
         };
         Relationships: [];
       };
+      published_tip_rates: {
+        Row: {
+          per_hour: number;
+          period_end: string;
+          period_start: string;
+          published_at: string;
+        };
+        Insert: {
+          per_hour: number;
+          period_end: string;
+          period_start: string;
+          published_at?: string;
+        };
+        Update: {
+          per_hour?: number;
+          period_end?: string;
+          period_start?: string;
+          published_at?: string;
+        };
+        Relationships: [];
+      };
       staff_login_attempts: {
         Row: {
           attempted_at: string;

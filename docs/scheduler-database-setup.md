@@ -59,6 +59,7 @@ That is the intended posture, not a finding to fix.
 | `recurring_time_off` | Standing weekly conflicts, one per person per weekday. |
 | `published_weeks` | One row per week the owner has sent to staff. |
 | `published_shifts` | Snapshot of the grid as of the last "Go Live". |
+| `published_tip_rates` | One row per week of tips the owner has sent to staff: the dates, and what an hour earned. Nothing else off the labor summary. |
 | `staff_login_attempts` | Sign-in throttling for `/staff`. |
 
 `shift_assignments` is keyed by real calendar date — `(shift_date, row_index,
@@ -108,6 +109,22 @@ disappears for them.
 
 The button shows three states: `Go live` (never sent), `Push changes` (sent, but
 edited since), and `Live` (sent and unchanged).
+
+### Online tips are published the same way
+
+The labor summary at `/admin/tips` works out what an hour earned in tips, and a
+second **Go live** — on **The pot** — sends that one figure to everybody. Staff
+see it under **Online tips** on `/staff`, one week at a time, with arrows back
+through the weeks before it.
+
+Only the rate and the dates it covers are stored, in `published_tip_rates`. The
+sheet it came off — who was on, their hours, their wages, what each person was
+handed — is worked out in the owner's browser and never reaches the database at
+all, which is what keeps one person's pay out of a page everybody can open.
+
+The rate is keyed on the day its period starts, so re-running a week and sending
+it again corrects the number rather than adding a second one. The button reads
+`Go live`, `Update` (staff can see an older figure — it says which), or `Live`.
 
 ### Why the password is stored as typed
 
