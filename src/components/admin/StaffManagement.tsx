@@ -248,10 +248,14 @@ function EmployeeRow({
           </p>
           <div className="flex items-center gap-1.5">
             <span
-              className="rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 font-mono text-base tracking-[0.25em]"
+              className={`rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 font-mono text-base ${
+                employee.setupCode
+                  ? "tracking-[0.25em]"
+                  : "text-sm text-muted-foreground italic"
+              }`}
               aria-label={`Setup code for ${employee.name}`}
             >
-              {employee.setupCode ?? "—————"}
+              {employee.setupCode ?? (saved ? "Used" : "—————")}
             </span>
             <Button
               variant="outline"
@@ -259,7 +263,11 @@ function EmployeeRow({
               onClick={regenerate}
               disabled={busy}
               aria-label={`Pick a new setup code for ${employee.name}`}
-              title="Pick a new code. Their password is left alone."
+              title={
+                employee.setupCode
+                  ? "Pick a new code. Their password is left alone."
+                  : "Issue a new code so they can pick a new password"
+              }
             >
               <Dices />
             </Button>
@@ -400,8 +408,9 @@ export function StaffManagement({
           <KeyRound className="mt-0.5 size-3.5 shrink-0" />
           <p>
             Read somebody their five digit code and they set their own password at{" "}
-            <span className="font-mono">/staff</span>. The password is the whole sign-in — there is
-            no name alongside it — so no two people can share one.
+            <span className="font-mono">/staff</span>. The code expires the moment they use it —
+            hand out a new one with the dice if they need to pick a different password. The password
+            is the whole sign-in — there is no name alongside it — so no two people can share one.
           </p>
         </footer>
       </div>

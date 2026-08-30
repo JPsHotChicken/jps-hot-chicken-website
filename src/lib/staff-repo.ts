@@ -101,11 +101,27 @@ export class PasswordTakenError extends Error {
   }
 }
 
-/** Store a password against an employee, stamping when it was set. */
+/**
+ * Store a password against an employee, stamping when it was set and spending
+ * their setup code.
+ *
+ * Clearing `setup_code` in the same statement is what makes the code expire: it
+ * did its one job, and a code read out across a counter shouldn't stay live
+ * afterwards. It is the same UPDATE deliberately — if the password is refused
+ * for being somebody else's, the whole thing rolls back and the code is still
+ * there to try again with.
+ *
+ * Handing a fresh code out later (the dice in Staff management) is how somebody
+ * who already has a password is let through setup a second time.
+ */
 export async function setStaffPassword(employeeId: string, password: string): Promise<string> {
   const { error } = await getDb()
     .from("employees")
-    .update({ staff_password: password, password_set_at: new Date().toISOString() })
+    .update({
+      staff_password: password,
+      password_set_at: new Date().toISOString(),
+      setup_code: null,
+    })
     .eq("id", employeeId);
 
   if (error?.code === "23505") throw new PasswordTakenError();
@@ -159,7 +175,12 @@ export async function findEmployeeByPassword(password: string): Promise<Employee
   return data ? { id: data.id, name: data.name, group: data.shift_group } : null;
 }
 
-/** The employee a setup code belongs to, for the first-time sign-in flow. */
+/**
+ * The employee a setup code belongs to, for the first-time sign-in flow.
+ *
+ * A spent code is `null` on the row, and no five digit string matches `null`, so
+ * a code that has already been traded for a password simply finds nobody.
+ */
 export async function findEmployeeBySetupCode(code: string): Promise<Employee | null> {
   const { data, error } = await getDb()
     .from("employees")
@@ -219,6 +240,47 @@ export async function loadPublishedWeek(weekStartISO: string): Promise<WeekSched
   }
   return week;
 }
+
+/**
+ * The dates between `fromISO` and `toISO` this employee has a published shift
+ * on, so their calendar can mark the days they are working.
+ *
+ * The snapshot holds one row per half hour per position, so a single day comes
+ * back many times over; the pages are read through and folded down to a set of
+ * dates. Reading in pages rather than one shot keeps the answer complete even
+ * when a long stretch of full days would run past the API's row limit.
+ */
+export async function listScheduledDates(
+  employeeId: string,
+  fromISO: string,
+  toISO: string,
+): Promise<string[]> {
+  const db = getDb();
+  const dates = new Set<string>();
+
+  for (let page = 0; page < SCHEDULED_DATE_MAX_PAGES; page += 1) {
+    const from = page * SCHEDULED_DATE_PAGE;
+    const { data, error } = await db
+      .from("published_shifts")
+      .select("shift_date")
+      .eq("employee_id", employeeId)
+      .gte("shift_date", fromISO)
+      .lte("shift_date", toISO)
+      .order("shift_date")
+      .range(from, from + SCHEDULED_DATE_PAGE - 1);
+
+    if (error) fail("loading your scheduled days", error);
+    for (const row of data) dates.add(row.shift_date);
+    if (data.length < SCHEDULED_DATE_PAGE) break;
+  }
+
+  return [...dates].sort();
+}
+
+/** Rows per read, comfortably under the API's default thousand-row ceiling. */
+const SCHEDULED_DATE_PAGE = 500;
+/** A stop, so a surprise in the data can never turn into an endless loop. */
+const SCHEDULED_DATE_MAX_PAGES = 40;
 
 /* --------------------------------------------------------------- requests */
 

@@ -188,6 +188,16 @@ export async function loadPublishedWeekAction(weekStart: string): Promise<WeekSc
   return staff.loadPublishedWeek(weekStart);
 }
 
+/**
+ * The days the signed-in employee is scheduled on, for one stretch of calendar.
+ * Called again whenever they page the calendar somewhere it hasn't been yet.
+ */
+export async function scheduledDatesAction(fromISO: string, toISO: string): Promise<string[]> {
+  const employeeId = await requireStaff();
+  if (!ISO_DATE.test(fromISO) || !ISO_DATE.test(toISO)) throw new Error("Bad dates.");
+  return staff.listScheduledDates(employeeId, fromISO, toISO);
+}
+
 /** The signed-in employee's requests, re-read after filing a new one. */
 export async function myRequestsAction(): Promise<TimeOffRequest[]> {
   return staff.listRequestsForEmployee(await requireStaff());

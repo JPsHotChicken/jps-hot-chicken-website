@@ -147,6 +147,17 @@ describe("step two: choosing a password", () => {
     expect(jar.store.has(STAFF_SETUP_COOKIE)).toBe(false);
   });
 
+  it("leaves the code alive when the password is refused", async () => {
+    await withTicket();
+    repo.setStaffPassword.mockRejectedValue(new PasswordTakenError());
+
+    await staffCreatePassword({}, form({ password: "hotsauce", confirm: "hotsauce" }));
+
+    // Nothing was stored, so nothing was spent — they can try another password
+    // on the ticket they already hold.
+    expect(jar.store.has(STAFF_SETUP_COOKIE)).toBe(true);
+  });
+
   it("refuses outright when there is no ticket", async () => {
     const state = await staffCreatePassword({}, form({ password: "hotsauce", confirm: "hotsauce" }));
 

@@ -423,6 +423,38 @@ export function datesForWeek(weekStartISO: string): Record<DayKey, Date> {
   ) as Record<DayKey, Date>;
 }
 
+/* --------------------------------------------------- the staff calendar */
+
+/** Whole weeks the staff calendar shows before and after the current one. */
+export const CALENDAR_WEEKS_BEFORE = 2;
+export const CALENDAR_WEEKS_AFTER = 3;
+
+/** Six Monday-start rows: two weeks back, this week, three weeks ahead. */
+export const CALENDAR_DAY_COUNT = (CALENDAR_WEEKS_BEFORE + 1 + CALENDAR_WEEKS_AFTER) * 7;
+
+/**
+ * The Monday the staff calendar opens on. Counting back two weeks from the
+ * current one puts this week in the middle of the six rows, instead of wherever
+ * in the month it happens to fall.
+ */
+export function calendarStart(date: Date = new Date()): Date {
+  return addDays(mondayOf(date), -CALENDAR_WEEKS_BEFORE * 7);
+}
+
+/**
+ * The Monday a month view starts on. Six rows from there always reach the end
+ * of the month — the longest case is a 31 day month starting on a Sunday, which
+ * needs 37 days — so the calendar never changes height.
+ */
+export function monthGridStart(month: Date): Date {
+  return mondayOf(new Date(month.getFullYear(), month.getMonth(), 1));
+}
+
+/** Every date drawn on the calendar, given the Monday it starts on. */
+export function calendarGrid(start: Date): Date[] {
+  return Array.from({ length: CALENDAR_DAY_COUNT }, (_, index) => addDays(start, index));
+}
+
 /** "Aug 3" */
 export function formatShortDate(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });

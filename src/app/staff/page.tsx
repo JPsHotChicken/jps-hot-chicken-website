@@ -7,11 +7,12 @@ import {
   findEmployeeById,
   listPublishedWeeks,
   listRequestsForEmployee,
+  listScheduledDates,
   loadPublishedWeek,
 } from "@/lib/staff-repo";
 import { payStubsForEmployee } from "@/lib/pay-stubs-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
-import { mondayOf, toISODate } from "@/lib/schedule";
+import { CALENDAR_DAY_COUNT, addDays, calendarStart, mondayOf, toISODate } from "@/lib/schedule";
 import { StaffDashboard } from "@/components/staff/StaffDashboard";
 import { SetupNotice } from "@/components/admin/SetupNotice";
 
@@ -35,9 +36,20 @@ export default async function StaffPage() {
   if (!employee) redirect("/staff/login");
 
   const thisWeek = toISODate(mondayOf());
-  const [publishedWeeks, requests, payStubs] = await Promise.all([
+
+  // The six rows the calendar opens on, with a week's slack either side: this
+  // runs on a server clock that can sit a day either side of the employee's, and
+  // a day is enough to move a Monday-start window a whole week.
+  const scheduledFrom = addDays(calendarStart(), -7);
+  const scheduledRange = {
+    from: toISODate(scheduledFrom),
+    to: toISODate(addDays(scheduledFrom, CALENDAR_DAY_COUNT + 13)),
+  };
+
+  const [publishedWeeks, requests, scheduledDates, payStubs] = await Promise.all([
     listPublishedWeeks(thisWeek),
     listRequestsForEmployee(employee.id),
+    listScheduledDates(employee.id, scheduledRange.from, scheduledRange.to),
     // Only released stubs come back, and only this person's — a draft pay run
     // is invisible here the same way it is invisible to the file route.
     payStubsForEmployee(employee.id),
@@ -60,6 +72,8 @@ export default async function StaffPage() {
       initialWeekStart={initialWeekStart}
       initialWeek={initialWeek}
       initialRequests={requests}
+      initialScheduledDates={scheduledDates}
+      scheduledRange={scheduledRange}
       payStubs={payStubs}
     />
   );

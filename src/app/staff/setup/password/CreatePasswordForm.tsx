@@ -27,8 +27,7 @@ export function CreatePasswordForm({ name }: { name: string }) {
   return (
     <form action={formAction} className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Hi {name} — pick a password you&apos;ll remember. You&apos;ll type it on its own to see your
-        schedule, so make it yours.
+        Hi {name} — pick a password you&apos;ll remember.
       </p>
 
       <div className="space-y-2">

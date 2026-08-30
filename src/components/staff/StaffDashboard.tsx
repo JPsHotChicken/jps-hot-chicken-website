@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  CalendarOff,
+  CalendarDays,
   CalendarX,
   ChevronLeft,
   ChevronRight,
@@ -16,7 +16,13 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { staffLogout, loadPublishedWeekAction, myRequestsAction, requestTimeOffAction } from "@/app/staff/actions";
+import {
+  staffLogout,
+  loadPublishedWeekAction,
+  myRequestsAction,
+  requestTimeOffAction,
+  scheduledDatesAction,
+} from "@/app/staff/actions";
 import {
   SHIFT_GROUP_LABELS,
   TIME_OFF_STATUS_LABELS,
@@ -54,6 +60,10 @@ export type StaffDashboardProps = {
   initialWeekStart: string | null;
   initialWeek: WeekSchedule | null;
   initialRequests: TimeOffRequest[];
+  /** Days this person is on, over the span the page loaded up front. */
+  initialScheduledDates: string[];
+  /** What that span was, so the calendar only refetches when it leaves it. */
+  scheduledRange: { from: string; to: string };
   /** Released stubs belonging to this person, newest pay date first. */
   payStubs: MyPayStub[];
 };
@@ -64,6 +74,8 @@ export function StaffDashboard({
   initialWeekStart,
   initialWeek,
   initialRequests,
+  initialScheduledDates,
+  scheduledRange,
   payStubs,
 }: StaffDashboardProps) {
   const [weekStart, setWeekStart] = useState(initialWeekStart);
@@ -71,6 +83,7 @@ export function StaffDashboard({
     initialWeekStart && initialWeek ? { [initialWeekStart]: initialWeek } : {},
   );
   const [requests, setRequests] = useState(initialRequests);
+  const [scheduledDates, setScheduledDates] = useState(initialScheduledDates);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,6 +109,31 @@ export function StaffDashboard({
       setLoading(false);
     }
   };
+
+  /**
+   * Spans of calendar whose shifts have already been fetched. A ref rather than
+   * state because nothing on screen depends on it, and because the callback
+   * below has to stay the same function between renders — the calendar asks
+   * through an effect, and a new function every render would ask forever.
+   */
+  const loadedSpans = useRef([scheduledRange]);
+
+  const loadScheduled = useCallback(async (from: string, to: string) => {
+    if (loadedSpans.current.some((span) => span.from <= from && span.to >= to)) return;
+    loadedSpans.current.push({ from, to });
+    try {
+      const dates = await scheduledDatesAction(from, to);
+      // Merged, not replaced: paging back to a month should not blank the dots
+      // on the one before it.
+      setScheduledDates((current) => [...new Set([...current, ...dates])]);
+    } catch (cause) {
+      console.error("[staff] Could not load scheduled days:", cause);
+      // Let a later look at the same span try again.
+      loadedSpans.current = loadedSpans.current.filter(
+        (span) => span.from !== from || span.to !== to,
+      );
+    }
+  }, []);
 
   const submitRequest = async () => {
     if (!selection) return;
@@ -211,23 +249,37 @@ export function StaffDashboard({
           </div>
         </section>
 
-        {/* --------------------------------------------------- request days */}
+        {/* ------------------------------------------------------- calendar */}
         <section className="rounded-xl border border-border bg-background shadow-sm">
-          <header className="border-b border-border px-4 py-3">
+          <header className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border px-4 py-3">
             <h2 className="flex items-center gap-2 font-heading text-base font-bold">
-              <CalendarOff className="size-4 text-brand" />
-              Request days off
+              <CalendarDays className="size-4 text-brand" />
+              Schedule
             </h2>
+            {/* The same two marks the calendar draws, so the key and the grid
+                can never say different things. */}
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span aria-hidden className="size-1.5 rounded-full bg-orange-500" />
+                Scheduled days
+              </span>
+              <span className="flex items-center gap-1.5">
+                <X aria-hidden strokeWidth={3.5} className="size-3 text-red-600" />
+                Requested days off
+              </span>
+            </p>
           </header>
 
           <div className="space-y-3 p-4">
             <TimeOffCalendar
               requests={requests}
+              scheduledDates={scheduledDates}
               selection={selection}
               onSelect={(next) => {
                 setSelection(next);
                 setConfirmation(null);
               }}
+              onRangeChange={loadScheduled}
             />
 
             {selection && (

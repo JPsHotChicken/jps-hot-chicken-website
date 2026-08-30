@@ -86,9 +86,17 @@ Getting that password is a two-step flow at `/staff/setup`, reached from the
    characters or more is accepted. Saving it signs them straight in and spends
    the ticket, so one code cannot set two passwords.
 
+**The setup code expires as soon as it is used.** Storing a password sets
+`setup_code = null` in the same UPDATE as `staff_password`, so a code read out
+across a counter stops working the moment it has done its job — and because it
+is one statement, a password refused for being somebody else's rolls the whole
+thing back and leaves the code live to try again with. Staff management shows a
+spent code as *Used*.
+
 New employees are given a setup code automatically when they're added. The dice
 beside their name issues a fresh one, which does not disturb a password they
-have already set.
+already have — that is how somebody who wants a different password is let
+through setup a second time.
 
 ### Publishing is a snapshot, not a flag
 

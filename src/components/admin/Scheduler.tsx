@@ -361,7 +361,13 @@ export function Scheduler({
     setEmployees((current) =>
       current.map((employee) =>
         employee.id === id
-          ? { ...employee, password: result.password, passwordSetAt: result.passwordSetAt }
+          ? {
+              ...employee,
+              password: result.password,
+              passwordSetAt: result.passwordSetAt,
+              // Spent by the same write that stored the password.
+              setupCode: null,
+            }
           : employee,
       ),
     );

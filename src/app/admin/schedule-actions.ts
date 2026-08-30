@@ -174,6 +174,8 @@ export async function setStaffPasswordAction(
     throw cause;
   }
 
+  // Setting a password spends the setup code, so the panel is told it has gone
+  // rather than being left showing one that no longer works.
   return { ok: true, password, passwordSetAt: new Date().toISOString() };
 }
 

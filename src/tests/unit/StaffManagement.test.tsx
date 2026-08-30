@@ -97,6 +97,27 @@ describe("StaffManagement setup codes", () => {
     expect(screen.getByLabelText("Setup code for Zoe Nightshift")).toHaveTextContent("54321");
   });
 
+  it("shows a code as used once its owner has a password", () => {
+    // What the database looks like after setup: password set, code spent.
+    render(
+      <StaffManagement
+        employees={[
+          { id: "e3", name: "Sam Setup", group: "other", setupCode: null, password: "allsorted" },
+        ]}
+        onSavePassword={vi.fn(async () => {})}
+        onRegenerateSetupCode={vi.fn(async () => {})}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Setup code for Sam Setup")).toHaveTextContent("Used");
+    // The dice is still there — a new code is how somebody picks a new password.
+    expect(
+      screen.getByRole("button", { name: "Pick a new setup code for Sam Setup" }),
+    ).toBeEnabled();
+  });
+
   it("issues a new code without touching the password", async () => {
     const { onRegenerateSetupCode, onSavePassword } = setup();
 
