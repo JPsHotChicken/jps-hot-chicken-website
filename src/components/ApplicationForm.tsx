@@ -27,12 +27,12 @@ function minAgeFor(jobs: Job[], position: string) {
 }
 
 // Location options for "Which location are you applying at?"
-// Oak Grove is intentionally excluded — we're only hiring at Clarksville.
+// Clarksville is intentionally excluded — we're only hiring at Fort Campbell.
 const LOCATION_OPTIONS = siteConfig.locations
-  .filter((loc) => loc.slug !== "oak-grove")
+  .filter((loc) => loc.slug === "oak-grove")
   .map((loc) => ({
     value: loc.slug,
-    label: `${loc.name} — ${loc.city}, ${loc.state}`,
+    label: `${loc.shortLabel} — ${loc.city}, ${loc.state}`,
   }));
 
 const EMPLOYMENT_OPTIONS: { value: Exclude<EmploymentPref, "">; label: string }[] = [
