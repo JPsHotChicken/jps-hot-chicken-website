@@ -30,7 +30,8 @@ type Props = {
 /** What the import did, in a sentence the owner can act on. */
 function Result({ result }: { result: ImportSummary }) {
   if (result.kind === "invoice") {
-    const { ordersAdded, ordersSkipped, itemsAdded, itemsUpdated, linesAdded, dates } = result;
+    const { ordersAdded, ordersSkipped, itemsAdded, itemsUpdated, linesAdded, credits, dates } =
+      result;
     return (
       <div role="status" className="rounded-lg bg-muted px-3 py-2 text-xs">
         <p className="font-semibold">
@@ -53,6 +54,12 @@ function Result({ result }: { result: ImportSummary }) {
           {ordersSkipped > 0 && (
             <li>
               {plural(ordersSkipped, "invoice")} already imported, so {ordersSkipped === 1 ? "it was" : "they were"} left alone.
+            </li>
+          )}
+          {credits > 0 && (
+            <li>
+              {plural(credits, "credit")} passed over — a return isn&apos;t a delivery, so there is
+              nothing to add to the history.
             </li>
           )}
         </ul>

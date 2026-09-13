@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  POSITION_GROUPS,
+  POSITION_ROWS,
   ROW_COUNT,
   SLOT_COUNT,
   formatHours,
@@ -8,6 +10,7 @@ import {
   formatSlotBlock,
   isClosingShift,
   rangeHours,
+  rowForStoredIndex,
   shiftsForDay,
   type DaySchedule,
 } from "@/lib/schedule";
@@ -22,6 +25,56 @@ function day(fills: { row: number; from: number; to: number; id: string }[]): Da
   }
   return grid;
 }
+
+describe("positions", () => {
+  it("draws the stations in service order, with every spot doubled", () => {
+    expect(POSITION_GROUPS.map((group) => [group.label, group.rows.length])).toEqual([
+      ["Front of house", 4],
+      ["Expo", 2],
+      ["Seasoning", 2],
+      ["Line", 10],
+      ["Sides fryer", 2],
+      ["Fryer", 4],
+      ["Back prep", 4],
+      ["Cleaning", 2],
+    ]);
+    expect(ROW_COUNT).toBe(30);
+  });
+
+  it("keeps every shift saved before the stations moved on the spot it was saved to", () => {
+    // What each `row_index` meant in the original 14 row layout.
+    const original = [
+      "Front of house 1",
+      "Front of house 2",
+      "Expo",
+      "Sides fryer",
+      "Line 1",
+      "Line 2",
+      "Line 3",
+      "Line 4",
+      "Line 5",
+      "Fryer 1",
+      "Fryer 2",
+      "Back prep 1",
+      "Back prep 2",
+      "Cleaning",
+    ];
+    original.forEach((label, storedIndex) => {
+      const position = POSITION_ROWS[rowForStoredIndex(storedIndex)!];
+      // A station that had one spot now has two, so it gained a number.
+      expect(position.label.replace(/ 1$/, "")).toBe(label.replace(/ 1$/, ""));
+    });
+  });
+
+  it("saves each spot under its own number, inside what the database allows", () => {
+    const stored = POSITION_ROWS.map((position) => position.storedIndex);
+    expect(new Set(stored).size).toBe(stored.length);
+    // `row_index_in_range` on shift_assignments and published_shifts.
+    expect(Math.min(...stored)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...stored)).toBeLessThan(30);
+    expect(rowForStoredIndex(30)).toBeUndefined();
+  });
+});
 
 describe("shiftsForDay", () => {
   it("reads a half-hour start as a half-hour start", () => {

@@ -582,6 +582,8 @@ export type InvoiceImport = {
   invoices: ParsedInvoice[];
   /** Rows with no product on them — page furniture, mostly. */
   skipped: number;
+  /** Credit lines passed over — see `isCreditRow`. */
+  credits: number;
 };
 
 /** Headers that only an invoice export has, used to tell the two files apart. */
@@ -604,6 +606,21 @@ export function detectImportKind(text: string): "invoice" | "guide" | "unknown" 
   return cleaned.length > 1 ? "guide" : "unknown";
 }
 
+/**
+ * Is this row a return rather than something that came off the truck?
+ *
+ * A credit memo is its own document in the export — its own invoice number,
+ * negative quantities, a negative total — and an order has nowhere to put one:
+ * a quantity below zero isn't on the truck, so every line of it would be
+ * filtered back out, leaving a delivery with nothing on it and a total below
+ * zero. The type column says outright which document a row belongs to; the
+ * negative quantity is there for an export that doesn't carry that column, and
+ * catches a lone credited line sitting on an otherwise ordinary invoice.
+ */
+function isCreditRow(invoiceType: string, quantityShipped: number): boolean {
+  return invoiceType.toLowerCase().includes("credit") || quantityShipped < 0;
+}
+
 /** A number from a money or quantity cell, or null when the cell is empty. */
 function parseNumber(value: string | undefined): number | null {
   if (!value) return null;
@@ -622,6 +639,9 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
  * repeated on every row — so the work is grouping the rows back up by invoice
  * number and lifting the header fields off the first of each.
  *
+ * Credit memos are passed over. They are returns, and an order is a record of
+ * what arrived; the count of them comes back so the page can say so.
+ *
  * Prices are worked out from the line's extended price divided by the quantity
  * that shipped, rather than read from the unit price column. On a catch-weight
  * item those two disagree: a block of cheese invoiced at 43.88 lb shows a unit
@@ -631,7 +651,7 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
  */
 export function parseInvoiceExport(text: string): InvoiceImport {
   const rows = parseCsv(text);
-  if (rows.length < 2) return { invoices: [], skipped: 0 };
+  if (rows.length < 2) return { invoices: [], skipped: 0, credits: 0 };
 
   const [headers, ...body] = rows;
   const cleaned = headers.map(normaliseHeader);
@@ -643,6 +663,7 @@ export function parseInvoiceExport(text: string): InvoiceImport {
     invoiceDate: column("invoice date"),
     invoiceNumber: column("invoice number"),
     orderNumber: column("invoice order number"),
+    invoiceType: column("invoice type"),
     subtotal: column("invoice subtotal"),
     fees: column("invoice charges fees"),
     tax: column("invoice total tax"),
@@ -665,6 +686,7 @@ export function parseInvoiceExport(text: string): InvoiceImport {
 
   const invoices = new Map<string, ParsedInvoice>();
   let skipped = 0;
+  let credits = 0;
 
   for (const row of body) {
     const description = at(row, columns.description);
@@ -673,6 +695,12 @@ export function parseInvoiceExport(text: string): InvoiceImport {
     // order and nothing to add to the set list.
     if (!description) {
       skipped++;
+      continue;
+    }
+
+    const quantity = parseNumber(at(row, columns.quantityShipped)) ?? 0;
+    if (isCreditRow(at(row, columns.invoiceType), quantity)) {
+      credits++;
       continue;
     }
 
@@ -693,7 +721,6 @@ export function parseInvoiceExport(text: string): InvoiceImport {
       invoices.set(invoiceNumber, invoice);
     }
 
-    const quantity = parseNumber(at(row, columns.quantityShipped)) ?? 0;
     const extendedPrice = parseNumber(at(row, columns.extendedPrice));
     const listed = parseNumber(at(row, columns.unitPrice)) ?? parseNumber(at(row, columns.netPrice));
     const unitPrice =
@@ -721,7 +748,7 @@ export function parseInvoiceExport(text: string): InvoiceImport {
 
   // Newest first, matching how the history list reads.
   const ordered = [...invoices.values()].sort((a, b) => b.invoiceDate.localeCompare(a.invoiceDate));
-  return { invoices: ordered, skipped };
+  return { invoices: ordered, skipped, credits };
 }
 
 /* ----------------------------------------------------- order guide exporting */

@@ -17,8 +17,8 @@ function buildDay(): DaySchedule {
   // Ann 8–11 AM on front of house, Bo 9:30 AM–1 PM on the line, and Ann again
   // on expo at 9:30 — one person on two positions is still one person.
   for (let i = 0; i <= 5; i++) day[0][i] = "e1";
-  for (let i = 3; i <= 9; i++) day[4][i] = "e2";
-  day[2][3] = "e1";
+  for (let i = 3; i <= 9; i++) day[8][i] = "e2";
+  day[4][3] = "e1";
   return day;
 }
 
@@ -81,9 +81,24 @@ describe("DayGrid half-hour heat map", () => {
     renderDay();
 
     expect(screen.getByText("Front of house 1")).toBeInTheDocument();
-    expect(screen.getByText("Expo")).toBeInTheDocument();
-    expect(screen.getByText("Line 5")).toBeInTheDocument();
-    expect(screen.getByText("Cleaning")).toBeInTheDocument();
+    expect(screen.getByText("Expo 2")).toBeInTheDocument();
+    expect(screen.getByText("Seasoning 1")).toBeInTheDocument();
+    expect(screen.getByText("Line 10")).toBeInTheDocument();
+    expect(screen.getByText("Cleaning 2")).toBeInTheDocument();
+    // Stations run in this order down the day.
+    const labels = screen
+      .getAllByText(/^(Front of house|Expo|Seasoning|Line|Sides fryer|Fryer|Back prep|Cleaning) 1$/)
+      .map((element) => element.textContent);
+    expect(labels).toEqual([
+      "Front of house 1",
+      "Expo 1",
+      "Seasoning 1",
+      "Line 1",
+      "Sides fryer 1",
+      "Fryer 1",
+      "Back prep 1",
+      "Cleaning 1",
+    ]);
   });
 
   it("says nothing about hours on a day the store is closed", () => {

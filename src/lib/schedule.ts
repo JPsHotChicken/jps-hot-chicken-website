@@ -294,18 +294,26 @@ export function formatHours(hours: number): string {
 /* ---------------------------------------------------------------- positions */
 
 /**
- * The stations a day is divided into, and how many people can be on each one at
- * the same time. Every day has the same shape, so a row means the same job on
+ * The stations a day is divided into, in the order they are drawn, and the spots
+ * on each one. Every day has the same shape, so a row means the same job on
  * Monday as it does on Saturday.
+ *
+ * `rows` is the `row_index` each spot's shifts are saved under, one number per
+ * spot, in seat order. The numbers are permanent and say nothing about where a
+ * spot is drawn: that is what lets stations be reordered and spots added without
+ * anybody's saved shift moving. A new spot takes the next unused number (the
+ * database allows up to 29). Never give an existing number to a different spot —
+ * the shifts saved under it would go with it.
  */
 export const POSITION_GROUPS = [
-  { key: "front", label: "Front of house", seats: 2 },
-  { key: "expo", label: "Expo", seats: 1 },
-  { key: "sides", label: "Sides fryer", seats: 1 },
-  { key: "line", label: "Line", seats: 5 },
-  { key: "fryer", label: "Fryer", seats: 2 },
-  { key: "prep", label: "Back prep", seats: 2 },
-  { key: "cleaning", label: "Cleaning", seats: 1 },
+  { key: "front", label: "Front of house", rows: [0, 1, 14, 15] },
+  { key: "expo", label: "Expo", rows: [2, 16] },
+  { key: "seasoning", label: "Seasoning", rows: [17, 18] },
+  { key: "line", label: "Line", rows: [4, 5, 6, 7, 8, 19, 20, 21, 22, 23] },
+  { key: "sides", label: "Sides fryer", rows: [3, 24] },
+  { key: "fryer", label: "Fryer", rows: [9, 10, 25, 26] },
+  { key: "prep", label: "Back prep", rows: [11, 12, 27, 28] },
+  { key: "cleaning", label: "Cleaning", rows: [13, 29] },
 ] as const;
 
 export type PositionKey = (typeof POSITION_GROUPS)[number]["key"];
@@ -320,21 +328,38 @@ export type PositionRow = {
   seat: number;
   /** True for the first spot on a station, which is where its heading goes. */
   firstOfGroup: boolean;
+  /** The `row_index` this spot's shifts are saved under — see `POSITION_GROUPS`. */
+  storedIndex: number;
 };
 
 /** One entry per grid row, in the order the rows are drawn. */
-export const POSITION_ROWS: PositionRow[] = POSITION_GROUPS.flatMap((group) =>
-  Array.from({ length: group.seats }, (_, index) => ({
+export const POSITION_ROWS: PositionRow[] = POSITION_GROUPS.flatMap((group) => {
+  // Widened from the literal tuple, which knows no station has one spot today.
+  const rows: readonly number[] = group.rows;
+  return rows.map((storedIndex, index) => ({
     key: group.key,
     group: group.label,
-    label: group.seats === 1 ? group.label : `${group.label} ${index + 1}`,
+    label: rows.length === 1 ? group.label : `${group.label} ${index + 1}`,
     seat: index + 1,
     firstOfGroup: index === 0,
-  })),
-);
+    storedIndex,
+  }));
+});
 
 /** The grid is exactly as tall as the stations need — no more, no fewer. */
 export const ROW_COUNT = POSITION_ROWS.length;
+
+const ROW_BY_STORED_INDEX = new Map(
+  POSITION_ROWS.map((position, rowIndex) => [position.storedIndex, rowIndex]),
+);
+
+/**
+ * Which grid row a saved `row_index` is drawn on, or `undefined` for a number no
+ * spot owns (left over from an older layout), which is simply not shown.
+ */
+export function rowForStoredIndex(storedIndex: number): number | undefined {
+  return ROW_BY_STORED_INDEX.get(storedIndex);
+}
 
 /** "Line 3", or "Row 15" for a stray row left over from an older layout. */
 export function positionLabel(rowIndex: number): string {

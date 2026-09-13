@@ -295,9 +295,9 @@ export function DayGrid({
         </p>
       ) : (
         // Scrolls on both axes so the pinned hour header and position column
-        // have a scrollport of their own to stay put against. The cap is high
-        // enough that a whole day fits outright on a normal screen, and only
-        // short ones scroll the day inside its own card.
+        // have a scrollport of their own to stay put against. A whole day of
+        // stations is taller than most screens, so the cap keeps each day
+        // scrolling inside its own card instead of stretching the page.
         <div className="max-h-[80vh] overflow-auto">
           {/* select-none so dragging across cells doesn't smear a text selection. */}
           <div className="min-w-max py-2 select-none">
@@ -363,9 +363,9 @@ export function DayGrid({
               <div
                 key={position.label}
                 className={`grid ${
-                  // A hairline between stations, so the five line spots read as
-                  // one block rather than running into the fryers below them.
-                  position.firstOfGroup && rowIndex > 0 ? "mt-1 border-t border-border pt-1" : ""
+                  // A blank band between stations, so the spots on one station
+                  // read as a block rather than running into the next station's.
+                  position.firstOfGroup && rowIndex > 0 ? "mt-3" : ""
                 }`}
                 style={{ gridTemplateColumns: COLUMNS }}
               >

@@ -3,7 +3,7 @@ import "server-only";
 import { getDb } from "@/lib/supabase/server";
 import {
   DAY_KEYS,
-  ROW_COUNT,
+  POSITION_ROWS,
   SLOT_COUNT,
   addDays,
   compareDeletedTimeOff,
@@ -11,6 +11,7 @@ import {
   fromISODate,
   makeEmptyWeek,
   minuteSlot,
+  rowForStoredIndex,
   slotMinute,
   toISODate,
   type DayKey,
@@ -29,7 +30,8 @@ import {
  * The grid is stored one row per filled half-hour cell keyed by real calendar
  * date, while the UI thinks in (week, weekday, rowIndex, slotIndex). Translating
  * between the two is this module's job — nothing above it needs to know the
- * table shape. `start_minute` is minutes past midnight, so 480 is 8:00 AM and
+ * table shape. `row_index` is a position's permanent number, not where it is
+ * drawn (see `POSITION_GROUPS`). `start_minute` is minutes past midnight, so 480 is 8:00 AM and
  * 510 is the 8:30 half.
  */
 
@@ -141,10 +143,11 @@ export async function loadWeek(weekStartISO: string): Promise<WeekSchedule> {
   for (const row of data) {
     const day = dayOf(weekStartISO, row.shift_date);
     const slotIndex = minuteSlot(row.start_minute);
-    // Rows past the last position (left over from an older, taller grid) and
-    // times outside the open hours are simply not shown.
-    if (!day || row.row_index >= ROW_COUNT || slotIndex < 0 || slotIndex >= SLOT_COUNT) continue;
-    week[day][row.row_index][slotIndex] = row.employee_id;
+    const rowIndex = rowForStoredIndex(row.row_index);
+    // Rows no position owns (left over from an older, taller grid) and times
+    // outside the open hours are simply not shown.
+    if (!day || rowIndex === undefined || slotIndex < 0 || slotIndex >= SLOT_COUNT) continue;
+    week[day][rowIndex][slotIndex] = row.employee_id;
   }
   return week;
 }
@@ -193,14 +196,18 @@ export async function assignBlock(
 ): Promise<void> {
   const db = getDb();
   const date = dateFor(weekStartISO, day);
+  // Rows next to each other on the grid aren't saved under neighbouring numbers,
+  // so the block is cleared by its exact list rather than a range.
+  const storedIndexes = POSITION_ROWS.slice(block.rowStart, block.rowEnd + 1).map(
+    (position) => position.storedIndex,
+  );
 
   // Clear first either way: assigning replaces whoever was there.
   const { error } = await db
     .from("shift_assignments")
     .delete()
     .eq("shift_date", date)
-    .gte("row_index", block.rowStart)
-    .lte("row_index", block.rowEnd)
+    .in("row_index", storedIndexes)
     .gte("start_minute", slotMinute(block.slotStart))
     .lte("start_minute", slotMinute(block.slotEnd));
   if (error) fail("clearing a block of shifts", error);
@@ -208,11 +215,11 @@ export async function assignBlock(
   if (!employeeId) return;
 
   const rows = [];
-  for (let rowIndex = block.rowStart; rowIndex <= block.rowEnd; rowIndex++) {
+  for (const storedIndex of storedIndexes) {
     for (let slotIndex = block.slotStart; slotIndex <= block.slotEnd; slotIndex++) {
       rows.push({
         shift_date: date,
-        row_index: rowIndex,
+        row_index: storedIndex,
         start_minute: slotMinute(slotIndex),
         employee_id: employeeId,
       });

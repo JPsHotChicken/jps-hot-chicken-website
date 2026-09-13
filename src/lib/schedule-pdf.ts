@@ -4,6 +4,7 @@ import {
   DAY_KEYS,
   DAY_LABELS,
   HOURS,
+  POSITION_GROUPS,
   POSITION_ROWS,
   ROW_COUNT,
   SLOTS,
@@ -34,6 +35,9 @@ const FILL: [number, number, number] = [248, 236, 229];
 const CLOSED_FILL: [number, number, number] = [240, 240, 240];
 
 const MARGIN = 28;
+
+/** Blank band between one station and the next in a day's block. */
+const STATION_GAP = 4;
 
 /** Shrink text until it fits `maxWidth`, preferring "First L." over an ellipsis. */
 function fitText(doc: jsPDF, text: string, maxWidth: number): string {
@@ -101,14 +105,28 @@ function drawWeekOverview(
   const headerHeight = 16;
 
   // Closed days collapse to a single band instead of a block of empty rows.
-  const totalBodyRows = DAY_KEYS.reduce(
-    (total, day) => total + (isClosedDay(day) ? 1 : ROW_COUNT),
-    0,
-  );
+  const openDays = DAY_KEYS.filter((day) => !isClosedDay(day)).length;
+  const totalBodyRows = DAY_KEYS.length - openDays + openDays * ROW_COUNT;
+  const stationGaps = POSITION_GROUPS.length - 1;
   // A day is one block of positions and is never split across a page, so the
-  // sheet runs to two pages rather than squeezing 85 rows onto one.
-  const available = pageHeight - tableTop - MARGIN - headerHeight - 6;
+  // sheet runs over several pages rather than squeezing every row onto one.
+  const available =
+    pageHeight - tableTop - MARGIN - headerHeight - 6 - openDays * stationGaps * STATION_GAP;
   const rowHeight = Math.max(9, Math.min(18, available / totalBodyRows));
+
+  // Where each row, and each station's run of rows, sits below the top of a
+  // day's block — every station after the first is pushed down by a gap.
+  const rowTops: number[] = [];
+  const stations: { top: number; bottom: number }[] = [];
+  let gapsAbove = 0;
+  POSITION_ROWS.forEach((position, rowIndex) => {
+    if (position.firstOfGroup && rowIndex > 0) gapsAbove++;
+    const top = rowIndex * rowHeight + gapsAbove * STATION_GAP;
+    rowTops.push(top);
+    if (position.firstOfGroup) stations.push({ top, bottom: top + rowHeight });
+    else stations[stations.length - 1].bottom = top + rowHeight;
+  });
+  const openBlockHeight = stations[stations.length - 1].bottom;
 
   let y = tableTop;
 
@@ -132,10 +150,9 @@ function drawWeekOverview(
 
   DAY_KEYS.forEach((day) => {
     const closed = isClosedDay(day);
-    const blockRows = closed ? 1 : ROW_COUNT;
     // A closed day is one band, but never shorter than its own label — position
     // rows are only ~9pt tall, and the day name would sit below the band.
-    const blockHeight = closed ? Math.max(rowHeight, 20) : blockRows * rowHeight;
+    const blockHeight = closed ? Math.max(rowHeight, 20) : openBlockHeight;
 
     // Start a new page if this day's block would run off the bottom.
     if (y + blockHeight > pageHeight - MARGIN) {
@@ -188,28 +205,42 @@ function drawWeekOverview(
       );
     } else {
       // Ruled first, so a shift laid over the top reads as one unbroken bar
-      // instead of being struck through by the hour lines.
-      doc.setDrawColor(228, 228, 228);
-      doc.setLineWidth(0.3);
-      SLOTS.forEach((_, slotIndex) => {
-        if (slotIndex % SLOTS_PER_HOUR === 0) return;
-        const x = gridLeft + slotIndex * slotWidth;
-        doc.line(x, blockTop, x, blockBottom);
+      // instead of being struck through by the hour lines. Each station is ruled
+      // on its own, so the gap between two stations stays blank.
+      stations.forEach((station) => {
+        const top = blockTop + station.top;
+        const bottom = blockTop + station.bottom;
+
+        doc.setDrawColor(228, 228, 228);
+        doc.setLineWidth(0.3);
+        SLOTS.forEach((_, slotIndex) => {
+          if (slotIndex % SLOTS_PER_HOUR === 0) return;
+          const x = gridLeft + slotIndex * slotWidth;
+          doc.line(x, top, x, bottom);
+        });
+
+        doc.setDrawColor(...LINE);
+        doc.setLineWidth(0.4);
+        for (let i = 0; i <= HOURS.length; i++) {
+          const x = gridLeft + i * hourColWidth;
+          doc.line(x, top, x, bottom);
+        }
       });
 
-      doc.setDrawColor(...LINE);
-      doc.setLineWidth(0.4);
-      for (let i = 0; i <= HOURS.length; i++) {
-        const x = gridLeft + i * hourColWidth;
-        doc.line(x, blockTop, x, blockBottom);
-      }
-      for (let i = 1; i < blockRows; i++) {
-        const lineY = blockTop + i * rowHeight;
+      // A line above every row but the first — the block's top edge belongs to
+      // the day above — and, where a row starts a station, one closing off the
+      // station before it on the far side of the gap.
+      POSITION_ROWS.forEach((position, rowIndex) => {
+        if (rowIndex === 0) return;
+        const lineY = blockTop + rowTops[rowIndex];
         doc.line(MARGIN + dayColWidth, lineY, pageWidth - MARGIN, lineY);
-      }
+        if (position.firstOfGroup) {
+          doc.line(MARGIN + dayColWidth, lineY - STATION_GAP, pageWidth - MARGIN, lineY - STATION_GAP);
+        }
+      });
 
       POSITION_ROWS.forEach((position, rowIndex) => {
-        const rowY = blockTop + rowIndex * rowHeight;
+        const rowY = blockTop + rowTops[rowIndex];
 
         doc.setTextColor(...MUTED);
         doc.setFont("helvetica", "normal");

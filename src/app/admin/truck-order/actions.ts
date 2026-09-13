@@ -216,6 +216,8 @@ export type GuideImportSummary = repo.ImportResult & {
 export type InvoiceImportSummary = repo.InvoiceImportResult & {
   kind: "invoice";
   skipped: number;
+  /** Credit lines on the export, which are returns and so aren't imported. */
+  credits: number;
   /** Dates of the invoices that were read, newest first, for the message. */
   dates: string[];
 };
@@ -247,10 +249,14 @@ export async function importFileAction(csv: string, supplier: string): Promise<I
 }
 
 async function importInvoices(csv: string): Promise<InvoiceImportSummary> {
-  const { invoices, skipped } = parseInvoiceExport(csv);
+  const { invoices, skipped, credits } = parseInvoiceExport(csv);
 
   if (invoices.length === 0) {
-    throw new Error("That looks like an invoice export, but there were no product lines on it.");
+    throw new Error(
+      credits > 0
+        ? "Every line on that export is a credit, so there is no delivery to add."
+        : "That looks like an invoice export, but there were no product lines on it.",
+    );
   }
 
   const lineCount = invoices.reduce((sum, invoice) => sum + invoice.lines.length, 0);
@@ -278,6 +284,7 @@ async function importInvoices(csv: string): Promise<InvoiceImportSummary> {
     ...result,
     kind: "invoice",
     skipped,
+    credits,
     dates: checked.map((invoice) => invoice.invoiceDate),
   };
 }

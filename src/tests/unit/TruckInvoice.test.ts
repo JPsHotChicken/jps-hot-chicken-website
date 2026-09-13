@@ -45,6 +45,14 @@ const CHEESE =
   `${head("8/7/2026", "6877296", "6944.40", "7434.15")},7700,MULLINS CHEESE INC,10837,DAIRY PROD & SUBS,` +
   `90745080000207,930624,,CHEESE CHED WHI MILD BLOCK,,MULLINS,1/40 LB,CS,11,2.0699,1,1,43.88/lb,2.0699,90.83`;
 
+// A credit memo: its own invoice number, negative quantities, negative total.
+// Verbatim from the export, down to the "CRED" route.
+const CREDIT =
+  `Performance Foodservice Nashville,56853046,JP'S HOT CHICKEN TRENTON,2670 TRENTON RD,CLARKSVILLE,TN,37040,` +
+  `8/24/2026,6891615,6097049,Credit,,CRED,0,-72.73,0.00,0.00,-4.91,-77.64,-1,-1,86599,MCCAIN FOODS USA INC,` +
+  `11810266,FROZEN FOOD PROCESS,10806795013860,998661,,APTZ POPPER JALAPENO STFD CHED,,ENTICE,4/3 LB,CS,21,` +
+  `72.73,-1,-1,,72.73,-72.73`;
+
 const invoice = (...rows: string[]) => [HEADER, ...rows].join("\n");
 
 describe("recognising the file", () => {
@@ -177,6 +185,24 @@ describe("reading an invoice export", () => {
     const { invoices, skipped } = parseInvoiceExport(invoice(SODA, trailing));
     expect(invoices[0].lines).toHaveLength(1);
     expect(skipped).toBe(1);
+  });
+
+  it("passes over a credit memo and still reads the deliveries around it", () => {
+    const { invoices, credits } = parseInvoiceExport(invoice(SODA, CREDIT, TENDERS));
+    expect(credits).toBe(1);
+    // Only invoice 6883267 — the credit's own number never becomes an order.
+    expect(invoices.map((one) => one.invoiceNumber)).toEqual(["6883267"]);
+    expect(invoices[0].lines).toHaveLength(2);
+  });
+
+  it("passes over a credited line sitting on an ordinary invoice", () => {
+    // Same delivery, one line returned: no type column to go on, only the sign.
+    const returned = `${head("8/14/2026", "6883267", "4757.76", "5095.85")},13225,COCA COLA NORTH AMERICA,` +
+      `95600100,BEVERAGE,00049000980776,2204,,SODA SYRUP LEMON LIME BNB,,SPRITE,1/5 GA,CS,1,125.16,-1,-1,,125.16,-125.16`;
+    const { invoices, credits } = parseInvoiceExport(invoice(SODA, returned));
+    expect(credits).toBe(1);
+    expect(invoices[0].lines).toHaveLength(1);
+    expect(invoices[0].lines[0].quantity).toBe(1);
   });
 
   it("finds nothing in a file with only a header", () => {

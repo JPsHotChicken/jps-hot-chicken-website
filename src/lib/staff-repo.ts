@@ -8,12 +8,12 @@ import {
 } from "@/lib/staff-auth";
 import {
   DAY_KEYS,
-  ROW_COUNT,
   SLOT_COUNT,
   addDays,
   fromISODate,
   makeEmptyWeek,
   minuteSlot,
+  rowForStoredIndex,
   toISODate,
   type DayKey,
   type Employee,
@@ -235,8 +235,9 @@ export async function loadPublishedWeek(weekStartISO: string): Promise<WeekSched
   for (const row of data) {
     const day = dayOf(weekStartISO, row.shift_date);
     const slotIndex = minuteSlot(row.start_minute);
-    if (!day || row.row_index >= ROW_COUNT || slotIndex < 0 || slotIndex >= SLOT_COUNT) continue;
-    week[day][row.row_index][slotIndex] = row.employee_id;
+    const rowIndex = rowForStoredIndex(row.row_index);
+    if (!day || rowIndex === undefined || slotIndex < 0 || slotIndex >= SLOT_COUNT) continue;
+    week[day][rowIndex][slotIndex] = row.employee_id;
   }
   return week;
 }
