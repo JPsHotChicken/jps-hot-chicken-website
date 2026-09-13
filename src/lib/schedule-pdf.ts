@@ -33,10 +33,11 @@ const MUTED: [number, number, number] = [120, 120, 120];
 const LINE: [number, number, number] = [205, 205, 205];
 const FILL: [number, number, number] = [248, 236, 229];
 const CLOSED_FILL: [number, number, number] = [240, 240, 240];
+const SPACER_FILL: [number, number, number] = [226, 226, 226];
 
 const MARGIN = 28;
 
-/** Blank band between one station and the next in a day's block. */
+/** Gray band between one station and the next in a day's block. */
 const STATION_GAP = 4;
 
 /** Shrink text until it fits `maxWidth`, preferring "First L." over an ellipsis. */
@@ -206,7 +207,7 @@ function drawWeekOverview(
     } else {
       // Ruled first, so a shift laid over the top reads as one unbroken bar
       // instead of being struck through by the hour lines. Each station is ruled
-      // on its own, so the gap between two stations stays blank.
+      // on its own, so the gap between two stations is just the gray band.
       stations.forEach((station) => {
         const top = blockTop + station.top;
         const bottom = blockTop + station.bottom;
@@ -228,15 +229,23 @@ function drawWeekOverview(
       });
 
       // A line above every row but the first — the block's top edge belongs to
-      // the day above — and, where a row starts a station, one closing off the
-      // station before it on the far side of the gap.
+      // the day above — and, where a row starts a station, the gray band that
+      // closes off the station before it.
       POSITION_ROWS.forEach((position, rowIndex) => {
         if (rowIndex === 0) return;
         const lineY = blockTop + rowTops[rowIndex];
-        doc.line(MARGIN + dayColWidth, lineY, pageWidth - MARGIN, lineY);
         if (position.firstOfGroup) {
+          doc.setFillColor(...SPACER_FILL);
+          doc.rect(
+            MARGIN + dayColWidth,
+            lineY - STATION_GAP,
+            pageWidth - MARGIN * 2 - dayColWidth,
+            STATION_GAP,
+            "F",
+          );
           doc.line(MARGIN + dayColWidth, lineY - STATION_GAP, pageWidth - MARGIN, lineY - STATION_GAP);
         }
+        doc.line(MARGIN + dayColWidth, lineY, pageWidth - MARGIN, lineY);
       });
 
       POSITION_ROWS.forEach((position, rowIndex) => {

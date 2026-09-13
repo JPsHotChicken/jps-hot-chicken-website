@@ -363,9 +363,9 @@ export function DayGrid({
               <div
                 key={position.label}
                 className={`grid ${
-                  // A blank band between stations, so the spots on one station
+                  // A gray band between stations, so the spots on one station
                   // read as a block rather than running into the next station's.
-                  position.firstOfGroup && rowIndex > 0 ? "mt-3" : ""
+                  position.firstOfGroup && rowIndex > 0 ? "border-t-12 border-neutral-200" : ""
                 }`}
                 style={{ gridTemplateColumns: COLUMNS }}
               >
