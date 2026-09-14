@@ -8,6 +8,7 @@ import {
   formatSlotBlock,
   type DayOff,
   type DaySchedule,
+  type Employee,
 } from "@/lib/schedule";
 
 function buildDay(): DaySchedule {
@@ -27,13 +28,13 @@ const employees = [
   { id: "e2", name: "Bo", group: "night" as const },
 ];
 
-function renderDay(off: DayOff[] = []) {
+function renderDay(off: DayOff[] = [], roster: Employee[] = employees, schedule = buildDay()) {
   render(
     <DayGrid
       day="monday"
       date={new Date(2026, 7, 17)}
-      schedule={buildDay()}
-      employees={employees}
+      schedule={schedule}
+      employees={roster}
       off={off}
       peak={2}
       selection={null}
@@ -152,5 +153,54 @@ describe("DayGrid time-off badges", () => {
     renderDay();
 
     expect(screen.queryByRole("list", { name: "Off on Monday" })).toBeNull();
+  });
+});
+
+describe("DayGrid not-scheduled badges", () => {
+  const roster: Employee[] = [
+    ...employees,
+    { id: "e3", name: "Cy", group: "other" },
+    { id: "e4", name: "Di", group: "morning" },
+  ];
+
+  it("names everybody left off the day who isn't off, apart from the off badges", () => {
+    renderDay([{ employee: roster[2], kind: "pending", reason: "" }], roster);
+
+    const notOn = screen.getByRole("list", { name: "Not scheduled on Monday" });
+    expect(within(notOn).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      "Di",
+    ]);
+    // Cy is off, so Cy is only in the off rail.
+    const off = screen.getByRole("list", { name: "Off on Monday" });
+    expect(within(off).getByText("Cy")).toBeInTheDocument();
+  });
+
+  it("draws them differently from an off badge", () => {
+    renderDay([{ employee: roster[2], kind: "approved", reason: "" }], roster);
+
+    const notOnBadge = within(
+      screen.getByRole("list", { name: "Not scheduled on Monday" }),
+    ).getByRole("listitem");
+    const offBadge = within(screen.getByRole("list", { name: "Off on Monday" })).getByRole(
+      "listitem",
+    );
+    expect(notOnBadge.className).toContain("border-dashed");
+    expect(offBadge.className).not.toContain("border-dashed");
+  });
+
+  it("draws no row once everybody is on or off", () => {
+    renderDay();
+
+    expect(screen.queryByRole("list", { name: "Not scheduled on Monday" })).toBeNull();
+  });
+
+  it("says nobody is scheduled yet instead of listing the whole roster on an empty day", () => {
+    const empty: DaySchedule = Array.from({ length: ROW_COUNT }, () =>
+      Array.from({ length: SLOT_COUNT }, () => null),
+    );
+    renderDay([], roster, empty);
+
+    expect(screen.getByText("Nobody scheduled yet")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Not scheduled on Monday" })).toBeNull();
   });
 });

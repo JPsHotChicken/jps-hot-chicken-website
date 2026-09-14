@@ -184,6 +184,30 @@ export function offOnDay(
   );
 }
 
+/**
+ * Everybody with no shift anywhere on a day — the people who aren't working it
+ * because nobody put them on, rather than because they asked to be away.
+ *
+ * Whoever is already listed in `off` is left out, so a person is only ever
+ * named once in the day's header: being off is the better explanation for an
+ * empty day than not having been scheduled.
+ */
+export function unscheduledOnDay(
+  employees: Employee[],
+  day: DaySchedule,
+  off: DayOff[],
+): Employee[] {
+  const working = new Set<string>();
+  for (const row of day) {
+    for (const employeeId of row ?? []) if (employeeId) working.add(employeeId);
+  }
+  const away = new Set(off.map((entry) => entry.employee.id));
+
+  return employees
+    .filter((employee) => !working.has(employee.id) && !away.has(employee.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /* -------------------------------------------------------------------- hours */
 
 /** First hour block on the grid (8 AM). */

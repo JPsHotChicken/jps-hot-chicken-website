@@ -19,6 +19,7 @@ import {
   formatShortDate,
   formatSlotBlock,
   isClosedDay,
+  unscheduledOnDay,
   type DayKey,
   type DayOff,
   type DayOffKind,
@@ -201,6 +202,8 @@ export function DayGrid({
   const employeeById = new Map(employees.map((e) => [e.id, e]));
   const colorById = employeeColors(employees);
   const coverage = coverageBySlot(schedule);
+  const anyoneOn = coverage.some((count) => count > 0);
+  const unscheduled = unscheduledOnDay(employees, schedule, off);
 
   // Finish the drag wherever the pointer is released — including outside the
   // grid, so a stray release can't leave the day stuck in selection mode.
@@ -287,6 +290,46 @@ export function DayGrid({
             </ul>
           )
         )}
+
+        {!closed &&
+          (anyoneOn ? (
+            // Everyone on or off is the goal, so a finished day draws no row.
+            unscheduled.length > 0 && (
+              <div className="flex basis-full flex-wrap items-center gap-1.5">
+                <span className="mr-0.5 text-xs font-semibold text-muted-foreground">
+                  Not scheduled
+                </span>
+                <ul
+                  aria-label={`Not scheduled on ${DAY_LABELS[day]}`}
+                  className="flex flex-wrap items-center gap-1.5"
+                >
+                  {unscheduled.map((employee) => (
+                    // Outlined and dashed where an off badge is filled: nothing
+                    // is keeping this person away, they just aren't on yet.
+                    <li
+                      key={employee.id}
+                      title={`Not on the schedule on ${DAY_LABELS[day]}`}
+                      className="flex max-w-44 items-center gap-1.5 rounded-full border border-dashed border-muted-foreground/50 bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+                    >
+                      <span
+                        aria-hidden
+                        className={`size-1.5 shrink-0 rounded-full ${
+                          colorById.get(employee.id)?.dot ?? "bg-muted-foreground"
+                        }`}
+                      />
+                      <span className="truncate">{employee.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          ) : (
+            // Before a day is started every name would be listed, which says
+            // nothing the empty grid doesn't.
+            employees.length > 0 && (
+              <p className="basis-full text-xs text-muted-foreground">Nobody scheduled yet</p>
+            )
+          ))}
       </header>
 
       {closed ? (

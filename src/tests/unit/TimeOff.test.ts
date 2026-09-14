@@ -5,8 +5,10 @@ import {
   coversDate,
   coversWeek,
   formatDateRange,
+  makeEmptyDay,
   offOnDay,
   requestDayCount,
+  unscheduledOnDay,
   type Employee,
   type RecurringTimeOff,
   type TimeOffRequest,
@@ -179,5 +181,40 @@ describe("who is off on a day", () => {
     );
 
     expect(off).toEqual([]);
+  });
+});
+
+describe("who isn't on the schedule on a day", () => {
+  const employees: Employee[] = [
+    { id: "e1", name: "Ann", group: "morning" },
+    { id: "e2", name: "Bo", group: "night" },
+    { id: "e3", name: "Cy", group: "other" },
+    { id: "e4", name: "Di", group: "morning" },
+  ];
+
+  it("lists everybody with no shift anywhere on the day, by name", () => {
+    const day = makeEmptyDay();
+    // Ann on one half hour of one position is enough to count as working.
+    day[3][10] = "e1";
+
+    expect(unscheduledOnDay(employees, day, []).map((e) => e.name)).toEqual(["Bo", "Cy", "Di"]);
+  });
+
+  it("leaves out somebody already shown as off, so nobody is named twice", () => {
+    const day = makeEmptyDay();
+    day[0][0] = "e1";
+
+    const off = [{ employee: employees[2], kind: "approved" as const, reason: "" }];
+    expect(unscheduledOnDay(employees, day, off).map((e) => e.name)).toEqual(["Bo", "Di"]);
+  });
+
+  it("is empty once everybody is either on or off", () => {
+    const day = makeEmptyDay();
+    day[0][0] = "e1";
+    day[5][4] = "e2";
+    day[29][27] = "e4";
+
+    const off = [{ employee: employees[2], kind: "recurring" as const, reason: "" }];
+    expect(unscheduledOnDay(employees, day, off)).toEqual([]);
   });
 });
