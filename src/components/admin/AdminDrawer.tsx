@@ -10,6 +10,7 @@ import {
   FileBarChart,
   FileText,
   HandCoins,
+  NotebookPen,
   Truck,
   Users,
   X,
@@ -23,6 +24,7 @@ export type AdminView =
   | "truck"
   | "tips"
   | "items"
+  | "menuDescriptions"
   | "applications"
   | "performance"
   | "payStubs"
@@ -76,6 +78,13 @@ const TABS: {
     icon: <Database className="size-4" />,
     hint: "Every item, what it costs, what it is made of",
     href: "/admin/items",
+  },
+  {
+    view: "menuDescriptions",
+    label: "Menu descriptions",
+    icon: <NotebookPen className="size-4" />,
+    hint: "Write menu copy from what's in each dish",
+    href: "/admin/menu-descriptions",
   },
   {
     view: "reports",

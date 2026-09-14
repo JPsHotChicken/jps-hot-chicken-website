@@ -1187,12 +1187,169 @@ export type Database = {
         };
         Relationships: [];
       };
+      ingredients: {
+        Row: {
+          allergens: string[];
+          category: string;
+          created_at: string;
+          flavor_tags: string[];
+          id: string;
+          intensity: number;
+          name: string;
+          notes: string;
+          texture_tags: string[];
+          updated_at: string;
+        };
+        Insert: {
+          allergens?: string[];
+          category?: string;
+          created_at?: string;
+          flavor_tags?: string[];
+          id?: string;
+          intensity?: number;
+          name: string;
+          notes?: string;
+          texture_tags?: string[];
+          updated_at?: string;
+        };
+        Update: {
+          allergens?: string[];
+          category?: string;
+          created_at?: string;
+          flavor_tags?: string[];
+          id?: string;
+          intensity?: number;
+          name?: string;
+          notes?: string;
+          texture_tags?: string[];
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      recipe_components: {
+        Row: {
+          amount: number;
+          child_recipe_id: string | null;
+          id: string;
+          ingredient_id: string | null;
+          prep_note: string;
+          recipe_id: string;
+          sort_order: number;
+          unit: string;
+        };
+        Insert: {
+          amount: number;
+          child_recipe_id?: string | null;
+          id?: string;
+          ingredient_id?: string | null;
+          prep_note?: string;
+          recipe_id: string;
+          sort_order?: number;
+          unit: string;
+        };
+        Update: {
+          amount?: number;
+          child_recipe_id?: string | null;
+          id?: string;
+          ingredient_id?: string | null;
+          prep_note?: string;
+          recipe_id?: string;
+          sort_order?: number;
+          unit?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "recipe_components_child_recipe_id_fkey";
+            columns: ["child_recipe_id"];
+            isOneToOne: false;
+            referencedRelation: "recipes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "recipe_components_ingredient_id_fkey";
+            columns: ["ingredient_id"];
+            isOneToOne: false;
+            referencedRelation: "ingredients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "recipe_components_recipe_id_fkey";
+            columns: ["recipe_id"];
+            isOneToOne: false;
+            referencedRelation: "recipes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      recipes: {
+        Row: {
+          created_at: string;
+          description_is_stale: boolean;
+          generated_at: string | null;
+          generated_description: string | null;
+          generated_description_short: string | null;
+          generated_pairs_with: string[] | null;
+          generated_taste_profile: Json | null;
+          generated_texture_notes: string[] | null;
+          id: string;
+          is_menu_item: boolean;
+          name: string;
+          updated_at: string;
+          yield_amount: number | null;
+          yield_unit: string;
+        };
+        Insert: {
+          created_at?: string;
+          description_is_stale?: boolean;
+          generated_at?: string | null;
+          generated_description?: string | null;
+          generated_description_short?: string | null;
+          generated_pairs_with?: string[] | null;
+          generated_taste_profile?: Json | null;
+          generated_texture_notes?: string[] | null;
+          id?: string;
+          is_menu_item?: boolean;
+          name: string;
+          updated_at?: string;
+          yield_amount?: number | null;
+          yield_unit?: string;
+        };
+        Update: {
+          created_at?: string;
+          description_is_stale?: boolean;
+          generated_at?: string | null;
+          generated_description?: string | null;
+          generated_description_short?: string | null;
+          generated_pairs_with?: string[] | null;
+          generated_taste_profile?: Json | null;
+          generated_texture_notes?: string[] | null;
+          id?: string;
+          is_menu_item?: boolean;
+          name?: string;
+          updated_at?: string;
+          yield_amount?: number | null;
+          yield_unit?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      save_recipe: {
+        Args: {
+          p_components: Json;
+          p_description: string;
+          p_description_short: string;
+          p_id: string | null;
+          p_is_menu_item: boolean;
+          p_name: string;
+          p_yield_amount: number | null;
+          p_yield_unit: string;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       application_status: "new" | "contacted" | "interview" | "hired" | "passed";

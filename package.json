@@ -13,6 +13,7 @@
     "gen:images": "node scripts/gen-placeholders.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "@base-ui/react": "^1.6.0",
     "@next/third-parties": "^16.2.9",
     "@supabase/supabase-js": "^2.112.3",
