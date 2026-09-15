@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 
 import {
   GenerationFormatError,
+  NotASpecSheetError,
   RecipeLoopError,
+  normaliseCategory,
+  parseSpecSheet,
   ingredientContentKey,
   parseGeneration,
   pickFrom,
@@ -312,5 +315,64 @@ describe("parseGeneration", () => {
 describe("pickFrom", () => {
   it("drops values off the list and keeps the list's order", () => {
     expect(pickFrom(["smoky", "made-up", "sweet"], FLAVOR_TAGS)).toEqual(["sweet", "smoky"]);
+  });
+});
+
+describe("parseSpecSheet", () => {
+  const CATEGORIES = ["produce", "frozen", "other"];
+  const SHEET = {
+    is_food_product: true,
+    name: "  Breaded dill pickle chips ",
+    category: "frozen",
+    flavor_tags: ["tangy", "salty", "sour"],
+    texture_tags: ["crunchy", "crispy"],
+    intensity: 3,
+    allergens: ["gluten"],
+    cross_contact: "Processed on shared equipment with shrimp and fish.",
+    notes: "Crinkle-cut dill pickle slices, battered and breaded.",
+  };
+
+  it("reads a well-formed reply, putting tags in the vocabulary's order", () => {
+    const { ingredient, crossContact } = parseSpecSheet(JSON.stringify(SHEET), CATEGORIES);
+    expect(ingredient).toEqual({
+      name: "Breaded dill pickle chips",
+      category: "frozen",
+      flavorTags: ["salty", "sour", "tangy"],
+      textureTags: ["crispy", "crunchy"],
+      intensity: 3,
+      allergens: ["gluten"],
+      notes: "Crinkle-cut dill pickle slices, battered and breaded.",
+    });
+    expect(crossContact).toMatch(/shrimp and fish/);
+  });
+
+  it("holds every value to what the form can save", () => {
+    const loose = {
+      ...SHEET,
+      category: "Deleted since",
+      flavor_tags: ["salty", "pickled"],
+      allergens: ["gluten", "mustard"],
+      intensity: 9,
+    };
+    const { ingredient } = parseSpecSheet(JSON.stringify(loose), CATEGORIES);
+    expect(ingredient.category).toBe("other");
+    expect(ingredient.flavorTags).toEqual(["salty"]);
+    expect(ingredient.allergens).toEqual(["gluten"]);
+    expect(ingredient.intensity).toBe(5);
+    expect(parseSpecSheet(JSON.stringify(loose), ["produce"]).ingredient.category).toBe("produce");
+  });
+
+  it("refuses a document that isn't a food spec sheet, and a reply with no name", () => {
+    expect(() =>
+      parseSpecSheet(JSON.stringify({ ...SHEET, is_food_product: false }), CATEGORIES),
+    ).toThrow(NotASpecSheetError);
+    expect(() => parseSpecSheet(JSON.stringify({ ...SHEET, name: " " }), CATEGORIES)).toThrow(/name/);
+    expect(() => parseSpecSheet("not json", CATEGORIES)).toThrow(GenerationFormatError);
+  });
+});
+
+describe("normaliseCategory", () => {
+  it("trims, single-spaces and lower-cases", () => {
+    expect(normaliseCategory("  Frozen   Apps ")).toBe("frozen apps");
   });
 });

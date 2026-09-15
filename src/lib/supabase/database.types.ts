@@ -1187,6 +1187,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      ingredient_categories: {
+        Row: {
+          created_at: string;
+          name: string;
+          sort_order: number;
+        };
+        Insert: {
+          created_at?: string;
+          name: string;
+          sort_order?: number;
+        };
+        Update: {
+          created_at?: string;
+          name?: string;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
       ingredients: {
         Row: {
           allergens: string[];
@@ -1202,7 +1220,7 @@ export type Database = {
         };
         Insert: {
           allergens?: string[];
-          category?: string;
+          category: string;
           created_at?: string;
           flavor_tags?: string[];
           id?: string;
@@ -1224,7 +1242,15 @@ export type Database = {
           texture_tags?: string[];
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "ingredients_category_fkey";
+            columns: ["category"];
+            isOneToOne: false;
+            referencedRelation: "ingredient_categories";
+            referencedColumns: ["name"];
+          },
+        ];
       };
       recipe_components: {
         Row: {

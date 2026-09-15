@@ -21,17 +21,14 @@ export const MENU_DESCRIPTIONS_PATH = "/admin/menu-descriptions";
 /* --------------------------------------------------------------- vocabulary */
 
 // Fixed lists by design. Changing one is a code change, not a settings screen.
+// Ingredient categories are the exception: they live in `ingredient_categories`
+// and the owner edits them on the Ingredients tab.
 
-export const INGREDIENT_CATEGORIES = [
-  "protein",
-  "produce",
-  "dairy",
-  "bread",
-  "spice",
-  "condiment",
-  "oil",
-  "other",
-] as const;
+/** Longest category name the table accepts. */
+export const MAX_CATEGORY_LENGTH = 40;
+
+/** A category as stored: trimmed, single-spaced, lower-case. "Frozen  Apps " → "frozen apps". */
+export const normaliseCategory = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
 
 export const FLAVOR_TAGS = [
   "sweet",
@@ -100,7 +97,6 @@ export const TASTE_DIMENSIONS = [
   "richness",
 ] as const;
 
-export type IngredientCategory = (typeof INGREDIENT_CATEGORIES)[number];
 export type FlavorTag = (typeof FLAVOR_TAGS)[number];
 export type TextureTag = (typeof TEXTURE_TAGS)[number];
 export type Allergen = (typeof ALLERGENS)[number];
@@ -123,7 +119,8 @@ export const isOneOf = <T extends string>(value: string, allowed: readonly T[]):
 export type Ingredient = {
   id: string;
   name: string;
-  category: IngredientCategory;
+  /** One of the names in `ingredient_categories`. */
+  category: string;
   flavorTags: FlavorTag[];
   textureTags: TextureTag[];
   intensity: number;
@@ -328,7 +325,7 @@ export type ResolvedIngredient = {
   amount: number;
   unit: string;
   prep_note?: string;
-  category: IngredientCategory;
+  category: string;
   /** 1 (barely noticeable) to 5 (dominates the dish). */
   intensity: number;
   flavor_tags: FlavorTag[];
@@ -457,15 +454,8 @@ const requiredText = (value: unknown, field: string): string => {
   return value.trim();
 };
 
-/**
- * Parse and check the model's reply.
- *
- * Structured output makes a malformed reply rare, but a reply cut off at the
- * token limit or wrapped in a code fence is still possible, and nothing
- * unchecked goes into the database. Scores are rounded and pinned to 0–5 rather
- * than rejected: a 5.5 is a slightly loud "5", not a failed generation.
- */
-export function parseGeneration(text: string): Generation {
+/** The reply as a JSON object, tolerating a markdown fence around it. */
+function readReplyObject(text: string): Record<string, unknown> {
   const unfenced = text
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
@@ -480,8 +470,19 @@ export function parseGeneration(text: string): Generation {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new GenerationFormatError("not a JSON object");
   }
+  return data as Record<string, unknown>;
+}
 
-  const reply = data as Record<string, unknown>;
+/**
+ * Parse and check the model's reply.
+ *
+ * Structured output makes a malformed reply rare, but a reply cut off at the
+ * token limit or wrapped in a code fence is still possible, and nothing
+ * unchecked goes into the database. Scores are rounded and pinned to 0–5 rather
+ * than rejected: a 5.5 is a slightly loud "5", not a failed generation.
+ */
+export function parseGeneration(text: string): Generation {
+  const reply = readReplyObject(text);
   const scores = reply.taste_profile;
   if (!scores || typeof scores !== "object" || Array.isArray(scores)) {
     throw new GenerationFormatError("taste_profile is missing");
@@ -514,6 +515,74 @@ export function toTasteProfile(value: unknown): TasteProfile | null {
     profile[dimension] = typeof score === "number" && Number.isFinite(score) ? score : 0;
   }
   return profile;
+}
+
+/* ------------------------------------------------------ reading a spec sheet */
+
+/** An ingredient read off a supplier's spec sheet, for the owner to check before saving. */
+export type SpecSheetReading = {
+  ingredient: Omit<Ingredient, "id">;
+  /**
+   * "May contain" and shared-equipment warnings. Shown to the owner when the
+   * sheet is read but never saved: the allergen list means "contains", and the
+   * notes are sent to the description writer, which shouldn't talk allergens.
+   */
+  crossContact: string;
+};
+
+/** Raised when the PDF isn't a food product's spec sheet or label. */
+export class NotASpecSheetError extends Error {
+  constructor() {
+    super("That PDF doesn't look like a food product's spec sheet or label.");
+    this.name = "NotASpecSheetError";
+  }
+}
+
+const clip = (value: unknown, max: number) =>
+  typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max).trim() : "";
+
+/**
+ * Parse and check what the model read off a spec sheet.
+ *
+ * Every value is forced back onto the lists the ingredient form accepts — a
+ * category the owner has since deleted falls back to "other" (or the first
+ * category), an off-list tag is dropped, an intensity is rounded into 1–5 — so
+ * the form never opens holding something it can't save.
+ */
+export function parseSpecSheet(text: string, categories: readonly string[]): SpecSheetReading {
+  const reply = readReplyObject(text);
+  if (reply.is_food_product === false) throw new NotASpecSheetError();
+
+  const name = clip(reply.name, 80);
+  if (!name) throw new GenerationFormatError("name is missing");
+
+  const list = (field: string) => {
+    const value = reply[field];
+    if (!Array.isArray(value)) throw new GenerationFormatError(`${field} is not a list`);
+    return value.filter((entry): entry is string => typeof entry === "string");
+  };
+
+  const category = typeof reply.category === "string" ? normaliseCategory(reply.category) : "";
+  const intensity = Number(reply.intensity);
+
+  return {
+    ingredient: {
+      name,
+      category: categories.includes(category)
+        ? category
+        : categories.includes("other")
+          ? "other"
+          : (categories[0] ?? ""),
+      flavorTags: pickFrom(list("flavor_tags"), FLAVOR_TAGS),
+      textureTags: pickFrom(list("texture_tags"), TEXTURE_TAGS),
+      intensity: Number.isFinite(intensity)
+        ? Math.min(MAX_INTENSITY, Math.max(1, Math.round(intensity)))
+        : 3,
+      allergens: pickFrom(list("allergens"), ALLERGENS),
+      notes: clip(reply.notes, 500),
+    },
+    crossContact: clip(reply.cross_contact, 300),
+  };
 }
 
 /* -------------------------------------------------------------------- display */

@@ -4,9 +4,7 @@ import { getDb } from "@/lib/supabase/server";
 import {
   ALLERGENS,
   FLAVOR_TAGS,
-  INGREDIENT_CATEGORIES,
   TEXTURE_TAGS,
-  isOneOf,
   pickFrom,
   toTasteProfile,
   type Generation,
@@ -82,7 +80,8 @@ export async function loadLibrary(): Promise<Library> {
       (row): Ingredient => ({
         id: row.id,
         name: row.name,
-        category: isOneOf(row.category, INGREDIENT_CATEGORIES) ? row.category : "other",
+        // A foreign key keeps this one of `ingredient_categories`.
+        category: row.category,
         flavorTags: pickFrom(row.flavor_tags ?? [], FLAVOR_TAGS),
         textureTags: pickFrom(row.texture_tags ?? [], TEXTURE_TAGS),
         intensity: row.intensity,
@@ -150,6 +149,62 @@ export async function deleteIngredient(id: string): Promise<void> {
     throw new LibraryError("A recipe still uses this ingredient. Take it out of the recipe first.");
   }
   if (error) fail("deleting an ingredient", error);
+}
+
+/* -------------------------------------------------------------- categories */
+
+/** Category names in the owner's order. Names are the key: ingredients point at them. */
+export async function loadCategories(): Promise<string[]> {
+  const { data, error } = await getDb()
+    .from("ingredient_categories")
+    .select("name")
+    .order("sort_order")
+    .order("name");
+  if (error) fail("loading categories", error);
+  return (data ?? []).map((row) => row.name);
+}
+
+const duplicateCategory = (name: string) =>
+  new LibraryError(`There's already a category called "${name}".`);
+
+/** Adds a category to the end of the list. `name` must already be normalised. */
+export async function createCategory(name: string): Promise<void> {
+  const db = getDb();
+  const last = await db
+    .from("ingredient_categories")
+    .select("sort_order")
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  if (last.error) fail("adding a category", last.error);
+
+  const { error } = await db
+    .from("ingredient_categories")
+    .insert({ name, sort_order: (last.data?.[0]?.sort_order ?? 0) + 1 });
+  if (error?.code === "23505") throw duplicateCategory(name);
+  if (error) fail("adding a category", error);
+}
+
+/** Renames a category; the foreign key carries the new name onto every ingredient in it. */
+export async function renameCategory(from: string, to: string): Promise<void> {
+  const { data, error } = await getDb()
+    .from("ingredient_categories")
+    .update({ name: to })
+    .eq("name", from)
+    .select("name");
+  if (error?.code === "23505") throw duplicateCategory(to);
+  if (error) fail("renaming a category", error);
+  if (!data?.length) throw new LibraryError("That category no longer exists.");
+}
+
+/** Refused by the database while any ingredient is still in the category. */
+export async function deleteCategory(name: string): Promise<void> {
+  const { error } = await getDb().from("ingredient_categories").delete().eq("name", name);
+  if (error?.code === "23503") {
+    throw new LibraryError(
+      `Some ingredients are still in "${name}". Move them to another category first.`,
+    );
+  }
+  if (error) fail("deleting a category", error);
 }
 
 /* ----------------------------------------------------------------- recipes */

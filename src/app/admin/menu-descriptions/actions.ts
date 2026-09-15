@@ -9,7 +9,7 @@ import {
   ALLERGENS,
   COMPONENT_UNITS,
   FLAVOR_TAGS,
-  INGREDIENT_CATEGORIES,
+  MAX_CATEGORY_LENGTH,
   MAX_INTENSITY,
   MENU_DESCRIPTIONS_PATH,
   RecipeLoopError,
@@ -17,6 +17,7 @@ import {
   YIELD_UNITS,
   ingredientContentKey,
   isOneOf,
+  normaliseCategory,
   recipeAndDependents,
   recipeContentKey,
   recipesUsingIngredient,
@@ -96,12 +97,15 @@ export type IngredientInput = {
   notes: string;
 };
 
-function toIngredientDraft(input: IngredientInput): repo.IngredientDraft {
+async function toIngredientDraft(input: IngredientInput): Promise<repo.IngredientDraft> {
   const intensity = Number(input.intensity);
   if (!Number.isInteger(intensity) || intensity < 1 || intensity > MAX_INTENSITY) {
     throw new InputError(`Intensity must be a whole number from 1 to ${MAX_INTENSITY}.`);
   }
-  if (!isOneOf(input.category, INGREDIENT_CATEGORIES)) throw new InputError("Pick a category.");
+  const categories = await repo.loadCategories();
+  if (typeof input.category !== "string" || !categories.includes(input.category)) {
+    throw new InputError("Pick a category.");
+  }
 
   return {
     name: text(input.name, "Name", { max: 80, required: true }),
@@ -116,7 +120,7 @@ function toIngredientDraft(input: IngredientInput): repo.IngredientDraft {
 
 export async function createIngredientAction(input: IngredientInput): Promise<ActionResult> {
   return attempt(async () => {
-    await repo.createIngredient(toIngredientDraft(input));
+    await repo.createIngredient(await toIngredientDraft(input));
     revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
     return undefined;
   });
@@ -133,21 +137,17 @@ export async function updateIngredientAction(
 ): Promise<ActionResult<{ staleCount: number }>> {
   return attempt(async () => {
     assertUuid(id, "Ingredient");
-    const draft = toIngredientDraft(input);
+    const draft = await toIngredientDraft(input);
     const library = await repo.loadLibrary();
     const before = library.ingredients.find((ingredient) => ingredient.id === id);
     if (!before) throw new InputError("That ingredient no longer exists.");
 
     await repo.updateIngredient(id, draft);
 
-    let staleCount = 0;
-    if (ingredientContentKey(before) !== ingredientContentKey(draft)) {
-      const affected = recipesUsingIngredient(id, library.recipes);
-      await repo.markStale(affected);
-      staleCount = library.recipes.filter(
-        (recipe) => affected.includes(recipe.id) && recipe.generatedAt && !recipe.isStale,
-      ).length;
-    }
+    const staleCount =
+      ingredientContentKey(before) === ingredientContentKey(draft)
+        ? 0
+        : await markIngredientsChanged([id], library);
 
     revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
     return { staleCount };
@@ -158,6 +158,76 @@ export async function deleteIngredientAction(id: string): Promise<ActionResult> 
   return attempt(async () => {
     assertUuid(id, "Ingredient");
     await repo.deleteIngredient(id);
+    revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
+    return undefined;
+  });
+}
+
+/**
+ * Mark stale every description written from these ingredients, directly or
+ * through a sub-recipe. Returns how many were fresh until now, for the notice.
+ */
+async function markIngredientsChanged(ingredientIds: string[], library: Library): Promise<number> {
+  const affected = new Set(ingredientIds.flatMap((id) => recipesUsingIngredient(id, library.recipes)));
+  await repo.markStale([...affected]);
+  return library.recipes.filter(
+    (recipe) => affected.has(recipe.id) && recipe.generatedAt && !recipe.isStale,
+  ).length;
+}
+
+/* -------------------------------------------------------------- categories */
+
+function categoryName(value: unknown): string {
+  const name = normaliseCategory(typeof value === "string" ? value : "");
+  if (!name) throw new InputError("Give the category a name.");
+  if (name.length > MAX_CATEGORY_LENGTH) {
+    throw new InputError(`A category name must be ${MAX_CATEGORY_LENGTH} characters or fewer.`);
+  }
+  return name;
+}
+
+export async function createCategoryAction(name: string): Promise<ActionResult> {
+  return attempt(async () => {
+    await repo.createCategory(categoryName(name));
+    revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
+    return undefined;
+  });
+}
+
+/**
+ * Rename a category. Every ingredient in it moves with it, and since the model
+ * is told each ingredient's category, descriptions written from them go out of
+ * date — the count comes back for the notice, as with an ingredient edit.
+ */
+export async function renameCategoryAction(
+  from: string,
+  to: string,
+): Promise<ActionResult<{ staleCount: number }>> {
+  return attempt(async () => {
+    const current = typeof from === "string" ? from : "";
+    const next = categoryName(to);
+    if (next === current) return { staleCount: 0 };
+
+    const library = await repo.loadLibrary();
+    await repo.renameCategory(current, next);
+    const moved = library.ingredients.filter((ingredient) => ingredient.category === current);
+    const staleCount = await markIngredientsChanged(
+      moved.map((ingredient) => ingredient.id),
+      library,
+    );
+
+    revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
+    return { staleCount };
+  });
+}
+
+/** Refused while an ingredient is still in the category, and for the last one left. */
+export async function deleteCategoryAction(name: string): Promise<ActionResult> {
+  return attempt(async () => {
+    const categories = await repo.loadCategories();
+    if (!categories.includes(name)) throw new InputError("That category no longer exists.");
+    if (categories.length === 1) throw new InputError("Keep at least one category.");
+    await repo.deleteCategory(name);
     revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
     return undefined;
   });

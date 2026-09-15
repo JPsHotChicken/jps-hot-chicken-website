@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Check, FileUp, LoaderCircle, Pencil, Plus, Search, Tags, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { FIELD_CLASS, LABEL_CLASS } from "@/components/admin/field";
@@ -15,26 +15,29 @@ import {
 import {
   ALLERGENS,
   FLAVOR_TAGS,
-  INGREDIENT_CATEGORIES,
   MAX_INTENSITY,
   TEXTURE_TAGS,
   capitalise,
   type Ingredient,
+  type SpecSheetReading,
 } from "@/lib/menu-descriptions";
+import { CategoriesPanel } from "./CategoriesPanel";
 import { Notice, type NoticeState } from "./Notice";
 import { TagToggles } from "./TagToggles";
 
-const BLANK: IngredientInput = {
+const SPEC_SHEET_URL = "/api/admin/menu-descriptions/spec-sheet";
+
+const blank = (categories: string[]): IngredientInput => ({
   name: "",
-  category: "other",
+  category: categories.includes("other") ? "other" : (categories[0] ?? ""),
   flavorTags: [],
   textureTags: [],
   intensity: 3,
   allergens: [],
   notes: "",
-};
+});
 
-const toInput = (ingredient: Ingredient): IngredientInput => ({
+const toInput = (ingredient: Omit<Ingredient, "id">): IngredientInput => ({
   name: ingredient.name,
   category: ingredient.category,
   flavorTags: [...ingredient.flavorTags],
@@ -44,8 +47,28 @@ const toInput = (ingredient: Ingredient): IngredientInput => ({
   notes: ingredient.notes,
 });
 
-/** Which row is open for editing: a new one, an existing one by id, or none. */
-type Editing = { kind: "new" } | { kind: "existing"; id: string } | null;
+/**
+ * Which row is open for editing: a new one, an existing one by id, or none. A
+ * new row read from a spec sheet opens holding what was read; `version` gives
+ * each such row a fresh form.
+ */
+type Editing =
+  | { kind: "new"; initial: IngredientInput; version: number }
+  | { kind: "existing"; id: string }
+  | null;
+
+/** Reads a spec sheet into ingredient details, or says what went wrong. */
+async function postSpecSheet(file: File): Promise<SpecSheetReading> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch(SPEC_SHEET_URL, { method: "POST", body });
+  // A platform timeout answers with a page, not JSON.
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ingredient) {
+    throw new Error(result.error ?? "That PDF couldn't be read. Try again.");
+  }
+  return result as SpecSheetReading;
+}
 
 const COLUMNS = 8;
 
@@ -55,13 +78,55 @@ const COLUMNS = 8;
  * One row is open at a time. Saving an edit to an ingredient that a generated
  * description was written from marks that description out of date, and the
  * notice says how many — nothing is regenerated.
+ *
+ * An ingredient can also be filled in from a supplier's spec sheet PDF. The
+ * model's reading only ever fills the form; the owner checks it and saves.
  */
-export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] }) {
+export function IngredientsTable({
+  ingredients,
+  categories,
+}: {
+  ingredients: Ingredient[];
+  categories: string[];
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Editing>(null);
   const [notice, setNotice] = useState<NoticeState>(null);
   const [pending, startTransition] = useTransition();
+  const [showCategories, setShowCategories] = useState(false);
+  /** The name of the PDF being read, while it is. */
+  const [reading, setReading] = useState<string | null>(null);
+  const version = useRef(0);
+  const pdfInput = useRef<HTMLInputElement>(null);
+
+  const openNew = (initial: IngredientInput) => {
+    version.current += 1;
+    setEditing({ kind: "new", initial, version: version.current });
+  };
+
+  /** Read a PDF, saying what to check on success and what went wrong otherwise. */
+  const readSheet = async (file: File): Promise<SpecSheetReading | null> => {
+    setNotice(null);
+    setReading(file.name);
+    try {
+      const sheet = await postSpecSheet(file);
+      setNotice({
+        tone: "info",
+        message:
+          `Filled in from ${file.name}. Check it over, allergens especially, then save.` +
+          (sheet.crossContact ? ` The sheet also warns: ${sheet.crossContact}` : ""),
+      });
+      return sheet;
+    } catch (problem) {
+      setNotice({ tone: "error", message: (problem as Error).message });
+      return null;
+    } finally {
+      setReading(null);
+    }
+  };
+
+  const busy = pending || reading !== null;
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -111,7 +176,7 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1 basis-full sm:basis-0">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
@@ -122,17 +187,62 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
           />
         </div>
         <Button
+          variant="outline"
           size="lg"
-          disabled={editing?.kind === "new"}
+          aria-expanded={showCategories}
+          onClick={() => setShowCategories((open) => !open)}
+        >
+          <Tags data-icon="inline-start" />
+          Categories
+        </Button>
+        <input
+          ref={pdfInput}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="sr-only"
+          tabIndex={-1}
+          aria-label="Spec sheet PDF"
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            const sheet = await readSheet(file);
+            if (sheet) openNew(toInput(sheet.ingredient));
+          }}
+        />
+        <Button
+          variant="outline"
+          size="lg"
+          disabled={busy || editing?.kind === "new"}
+          onClick={() => pdfInput.current?.click()}
+        >
+          {reading !== null && editing?.kind !== "new" ? (
+            <LoaderCircle data-icon="inline-start" className="animate-spin" />
+          ) : (
+            <FileUp data-icon="inline-start" />
+          )}
+          {reading !== null && editing?.kind !== "new" ? "Reading the PDF…" : "Add from PDF"}
+        </Button>
+        <Button
+          size="lg"
+          disabled={busy || editing?.kind === "new"}
           onClick={() => {
             setNotice(null);
-            setEditing({ kind: "new" });
+            openNew(blank(categories));
           }}
         >
           <Plus data-icon="inline-start" />
           Add ingredient
         </Button>
       </div>
+
+      {showCategories && (
+        <CategoriesPanel
+          categories={categories}
+          ingredients={ingredients}
+          onClose={() => setShowCategories(false)}
+        />
+      )}
 
       <Notice notice={notice} onDismiss={() => setNotice(null)} />
 
@@ -155,8 +265,12 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
           <tbody className="divide-y divide-border">
             {editing?.kind === "new" && (
               <EditorRow
-                initial={BLANK}
+                key={editing.version}
+                initial={editing.initial}
+                categories={categories}
                 pending={pending}
+                reading={reading}
+                onReadSheet={readSheet}
                 onSave={save}
                 onCancel={() => setEditing(null)}
               />
@@ -167,7 +281,10 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
                 <EditorRow
                   key={ingredient.id}
                   initial={toInput(ingredient)}
+                  categories={categories}
                   pending={pending}
+                  reading={reading}
+                  onReadSheet={readSheet}
                   onSave={save}
                   onCancel={() => setEditing(null)}
                 />
@@ -237,18 +354,36 @@ export function IngredientsTable({ ingredients }: { ingredients: Ingredient[] })
 
 function EditorRow({
   initial,
+  categories,
   pending,
+  reading,
+  onReadSheet,
   onSave,
   onCancel,
 }: {
   initial: IngredientInput;
+  categories: string[];
   pending: boolean;
+  /** The name of a PDF being read, anywhere on the table. */
+  reading: string | null;
+  onReadSheet: (file: File) => Promise<SpecSheetReading | null>;
   onSave: (input: IngredientInput) => void;
   onCancel: () => void;
 }) {
   const [form, setForm] = useState(initial);
+  const pdfInput = useRef<HTMLInputElement>(null);
   const set = <K extends keyof IngredientInput>(key: K, value: IngredientInput[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  // A name already typed is kept; everything else is replaced by the sheet.
+  const fillFrom = async (file: File) => {
+    const sheet = await onReadSheet(file);
+    if (!sheet) return;
+    setForm((current) => ({
+      ...toInput(sheet.ingredient),
+      name: current.name.trim() ? current.name : sheet.ingredient.name,
+    }));
+  };
 
   return (
     <tr className="bg-muted/40">
@@ -265,6 +400,41 @@ function EditorRow({
             if (event.key === "Escape") onCancel();
           }}
         >
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-background px-3 py-2">
+            <p className="mr-auto text-xs text-muted-foreground">
+              {reading !== null
+                ? `Reading ${reading}… this can take up to a minute.`
+                : "Have the supplier's spec sheet? Fill this in from the PDF."}
+            </p>
+            <input
+              ref={pdfInput}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="sr-only"
+              tabIndex={-1}
+              aria-label="Spec sheet PDF for this ingredient"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void fillFrom(file);
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending || reading !== null}
+              onClick={() => pdfInput.current?.click()}
+            >
+              {reading !== null ? (
+                <LoaderCircle data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <FileUp data-icon="inline-start" />
+              )}
+              {reading !== null ? "Reading…" : "Fill from PDF"}
+            </Button>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
             <label className="block">
               <span className={LABEL_CLASS}>Name</span>
@@ -284,7 +454,7 @@ function EditorRow({
                 onChange={(event) => set("category", event.target.value)}
                 className={`${FIELD_CLASS} mt-1`}
               >
-                {INGREDIENT_CATEGORIES.map((category) => (
+                {categories.map((category) => (
                   <option key={category} value={category}>
                     {capitalise(category)}
                   </option>
@@ -349,7 +519,7 @@ function EditorRow({
           </label>
 
           <div className="flex gap-2">
-            <Button type="submit" size="lg" disabled={pending || !form.name.trim()}>
+            <Button type="submit" size="lg" disabled={pending || reading !== null || !form.name.trim()}>
               <Check data-icon="inline-start" />
               {pending ? "Saving…" : "Save"}
             </Button>

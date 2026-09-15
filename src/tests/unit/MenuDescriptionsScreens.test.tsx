@@ -12,6 +12,9 @@ const actions = vi.hoisted(() => ({
   createIngredientAction: vi.fn(async () => ({ ok: true, value: undefined })),
   updateIngredientAction: vi.fn(async () => ({ ok: true, value: { staleCount: 0 } })),
   deleteIngredientAction: vi.fn(async () => ({ ok: true, value: undefined })),
+  createCategoryAction: vi.fn(async () => ({ ok: true, value: undefined })),
+  renameCategoryAction: vi.fn(async () => ({ ok: true, value: { staleCount: 0 } })),
+  deleteCategoryAction: vi.fn(async () => ({ ok: true, value: undefined })),
   saveRecipeAction: vi.fn(async () => ({ ok: true, value: { id: "sandwich" } })),
   deleteRecipeAction: vi.fn(async () => ({ ok: true, value: undefined })),
   generateDescriptionAction: vi.fn(async () => ({ ok: true, value: undefined })),
@@ -230,11 +233,13 @@ describe("RecipeBuilder", () => {
 
 /* -------------------------------------------------------------- ingredients */
 
+const CATEGORIES = ["protein", "produce", "bread", "spice", "condiment", "frozen", "other"];
+
 describe("IngredientsTable", () => {
   const rows = () => library().ingredients;
 
   it("filters by name", () => {
-    render(<IngredientsTable ingredients={rows()} />);
+    render(<IngredientsTable ingredients={rows()} categories={CATEGORIES} />);
     fireEvent.change(screen.getByLabelText("Search ingredients by name"), { target: { value: "BUN" } });
     expect(screen.getByText("Brioche bun")).toBeInTheDocument();
     expect(screen.queryByText("Chicken breast")).not.toBeInTheDocument();
@@ -242,7 +247,7 @@ describe("IngredientsTable", () => {
 
   it("edits a row in place and says how many descriptions went out of date", async () => {
     actions.updateIngredientAction.mockResolvedValueOnce({ ok: true, value: { staleCount: 2 } });
-    render(<IngredientsTable ingredients={rows()} />);
+    render(<IngredientsTable ingredients={rows()} categories={CATEGORIES} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Cayenne pepper" }));
     fireEvent.click(screen.getByRole("button", { name: "smoky" }));
@@ -263,7 +268,7 @@ describe("IngredientsTable", () => {
       ok: false,
       error: 'There\'s already an ingredient called "Brioche bun".',
     } as never);
-    render(<IngredientsTable ingredients={rows()} />);
+    render(<IngredientsTable ingredients={rows()} categories={CATEGORIES} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Add ingredient" }));
     fireEvent.change(screen.getByPlaceholderText("Duke's mayonnaise"), { target: { value: "Brioche bun" } });
@@ -271,5 +276,122 @@ describe("IngredientsTable", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("already an ingredient");
     expect(screen.getByPlaceholderText("Duke's mayonnaise")).toHaveValue("Brioche bun");
+  });
+
+  it("offers the owner's categories, not a fixed list", () => {
+    render(<IngredientsTable ingredients={rows()} categories={CATEGORIES} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add ingredient" }));
+    const select = screen.getByRole("combobox", { name: "Category" });
+    expect(within(select).getByRole("option", { name: "Frozen" })).toBeInTheDocument();
+    expect(within(select).queryByRole("option", { name: "Dairy" })).not.toBeInTheDocument();
+    expect(select).toHaveValue("other");
+  });
+});
+
+describe("IngredientsTable — spec sheets", () => {
+  const rows = () => library().ingredients;
+  const pdf = () => new File(["%PDF-1.7"], "873671.pdf", { type: "application/pdf" });
+  const READING = {
+    ingredient: {
+      name: "Breaded dill pickle chips",
+      category: "frozen",
+      flavorTags: ["salty", "sour", "tangy"],
+      textureTags: ["crispy", "crunchy"],
+      intensity: 3,
+      allergens: ["gluten"],
+      notes: "Crinkle-cut dill pickle slices, battered and breaded. West Creek #873671.",
+    },
+    crossContact: "Processed on shared equipment with shrimp and fish.",
+  };
+
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("opens a new row filled in from the PDF, with the cross-contact warning, and saves only on Save", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(READING), { status: 200 }));
+    render(<IngredientsTable ingredients={rows()} categories={CATEGORIES} />);
+
+    fireEvent.change(screen.getByLabelText("Spec sheet PDF"), { target: { files: [pdf()] } });
+
+    expect(await screen.findByPlaceholderText("Duke's mayonnaise")).toHaveValue("Breaded dill pickle chips");
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/menu-descriptions/spec-sheet", expect.anything());
+    expect(screen.getByRole("status")).toHaveTextContent("shared equipment with shrimp and fish");
+    expect(screen.getByRole("combobox", { name: "Category" })).toHaveValue("frozen");
+    expect(screen.getByRole("button", { name: "gluten" })).toHaveAttribute("aria-pressed", "true");
+    expect(actions.createIngredientAction).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(actions.createIngredientAction).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Breaded dill pickle chips", allergens: ["gluten"], intensity: 3 }),
+      ),
+    );
+  });
+
+  it("fills an open row from a PDF but keeps a name already typed", async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(READING), { status: 200 }));
+    render(<IngredientsTable ingredients={rows()} categories={CATEGORIES} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Cayenne pepper" }));
+    fireEvent.change(screen.getByLabelText("Spec sheet PDF for this ingredient"), {
+      target: { files: [pdf()] },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "crunchy" })).toHaveAttribute("aria-pressed", "true"),
+    );
+    expect(screen.getByPlaceholderText("Duke's mayonnaise")).toHaveValue("Cayenne pepper");
+  });
+
+  it("says why a PDF couldn't be read, and opens nothing", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "That file isn't a PDF." }), { status: 415 }),
+    );
+    render(<IngredientsTable ingredients={rows()} categories={CATEGORIES} />);
+
+    fireEvent.change(screen.getByLabelText("Spec sheet PDF"), { target: { files: [pdf()] } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("isn't a PDF");
+    expect(screen.queryByPlaceholderText("Duke's mayonnaise")).not.toBeInTheDocument();
+  });
+});
+
+describe("CategoriesPanel", () => {
+  const open = () => {
+    render(<IngredientsTable ingredients={library().ingredients} categories={CATEGORIES} />);
+    fireEvent.click(screen.getByRole("button", { name: "Categories" }));
+    return screen.getByRole("region", { name: "Categories" });
+  };
+
+  it("lists each category with how many ingredients are in it", () => {
+    const panel = open();
+    expect(within(panel).getByText("Spice").nextSibling).toHaveTextContent("1 ingredient");
+    expect(within(panel).getByText("Frozen").nextSibling).toHaveTextContent("0 ingredients");
+  });
+
+  it("adds and renames", async () => {
+    const panel = open();
+    fireEvent.change(within(panel).getByLabelText("New category name"), { target: { value: "Sauces" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Add category" }));
+    await waitFor(() => expect(actions.createCategoryAction).toHaveBeenCalledWith("Sauces"));
+    await waitFor(() => expect(within(panel).getByLabelText("New category name")).toHaveValue(""));
+
+    actions.renameCategoryAction.mockResolvedValueOnce({ ok: true, value: { staleCount: 1 } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Rename spice" }));
+    fireEvent.change(within(panel).getByLabelText("New name for spice"), { target: { value: "spices" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(actions.renameCategoryAction).toHaveBeenCalledWith("spice", "spices"));
+    expect(await within(panel).findByRole("status")).toHaveTextContent("1 description is now out of date");
+  });
+
+  it("won't delete a category that still has ingredients", () => {
+    const panel = open();
+    fireEvent.click(within(panel).getByRole("button", { name: "Delete spice" }));
+    expect(within(panel).getByRole("alert")).toHaveTextContent("Move the 1 ingredient in Spice");
+    expect(actions.deleteCategoryAction).not.toHaveBeenCalled();
   });
 });

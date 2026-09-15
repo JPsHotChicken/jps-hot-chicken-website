@@ -16,7 +16,8 @@ setting is the Claude API key:
 |---|---|
 | `ANTHROPIC_API_KEY` | `.env.local`, and Vercel → Project Settings → Environment Variables |
 
-Without it, everything works except Generate, and the builder says why.
+Without it, everything works except Generate and reading spec sheets, and the
+page says why.
 
 ## Screens
 
@@ -24,6 +25,10 @@ Without it, everything works except Generate, and the builder says why.
   inside something else) in two lists, with when each was last generated and an
   **Out of date** badge.
 - **Ingredients** — one table, search by name, add / edit / delete in place.
+  **Categories** opens the category list: add, rename, delete. **Add from PDF**
+  reads a supplier's spec sheet and opens a new ingredient already filled in;
+  **Fill from PDF** inside an open row does the same for that row, keeping any
+  name already typed.
 - **Recipe builder** — name, menu-item switch, yield, and component lines. Each
   line is an ingredient *or* another recipe, with an amount, unit and prep note.
   Allergens roll up live from every line, including what's inside sub-recipes.
@@ -43,9 +48,14 @@ Without it, everything works except Generate, and the builder says why.
 - **Generate works from the saved recipe.** With unsaved changes the button reads
   "Save & generate". A brand-new recipe has to be saved once before it can be
   generated.
-- The flavour, texture, allergen, category and unit lists are **fixed in code**
-  (`src/lib/menu-descriptions.ts`). There is deliberately no screen for editing
-  them.
+- **Categories are the owner's; the other lists aren't.** Categories live in
+  the `ingredient_categories` table. Renaming one moves every ingredient in it
+  (a foreign key with `on update cascade`) and marks their descriptions out of
+  date, since the model is told each ingredient's category. One still in use
+  can't be deleted, and the last one can't either. The flavour, texture,
+  allergen and unit lists stay **fixed in code** (`src/lib/menu-descriptions.ts`).
+- **A spec sheet only fills the form.** Nothing is saved until Save is pressed,
+  so the owner checks what was read, allergens especially.
 
 ## How generation works
 
@@ -58,17 +68,40 @@ If Claude declines a request, the API retries it on a fallback model automatical
 
 Allergens are **not** sent — the copy isn't meant to mention them.
 
+## How reading a spec sheet works
+
+The PDF is posted to `/api/admin/menu-descriptions/spec-sheet` (a route, not a
+Server Action, because actions have a 1 MB body limit; the route caps files at
+4 MB, under Vercel's 4.5 MB). It checks the session, checks the file really is a
+PDF, and sends it to Claude with the owner's current category list.
+`readSpecSheet` in `src/lib/menu-descriptions-ai.ts` holds the instructions;
+the reply's shape is constrained to the form's own lists and checked again by
+`parseSpecSheet`.
+
+- **Allergens are what the product contains.** Rows marked "free from" are left
+  out, with names mapped onto this tool's list (milk → dairy, wheat → gluten,
+  crustacean → shellfish).
+- **"May contain" and shared-equipment warnings are shown, not saved.** They
+  appear in the notice after reading. They aren't put in the allergen list,
+  which means "contains", or in notes, which the description writer reads.
+- **Notes hold only what the sheet says**: what the product is, how it's made,
+  brand and item number. There's no guessing at how the kitchen serves it.
+
+Tested against a PFG sheet (West Creek breaded dill pickle chips, #873671): one
+call, about six seconds.
+
 ## Tables
 
 | Table | Holds |
 |---|---|
+| `ingredient_categories` | The category names, in the owner's order. `ingredients.category` points here. |
 | `ingredients` | Name, category, flavour and texture tags, intensity 1–5, allergens, notes. |
 | `recipes` | Name, menu-item flag, yield, and the stored generation: both descriptions, taste profile, texture notes, pairings, when it was generated, and whether it's out of date. |
 | `recipe_components` | One line per part. Exactly one of `ingredient_id` / `child_recipe_id` is set — a check constraint enforces it. |
 
 `save_recipe(...)` saves a recipe's details and replaces its lines in one
 transaction, so a line the loop trigger rejects never leaves half a recipe.
-Like every other table, all three have RLS on with no policies and are reached
+Like every other table, all four have RLS on with no policies and are reached
 only through the service role.
 
 This is separate from the items database on purpose: that one is about cost and
