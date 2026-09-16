@@ -70,10 +70,18 @@ function toIngredients(graph: ItemGraph): Ingredient[] {
 }
 
 export async function loadLibrary(): Promise<Library> {
+  const [graph, recipes] = await Promise.all([loadGraph(), loadRecipes()]);
+  return { ingredients: toIngredients(graph), recipes };
+}
+
+/**
+ * Every recipe with its lines, without the catalogue — for a caller that
+ * already has the item graph in hand, like the allergen lookup.
+ */
+export async function loadRecipes(): Promise<Recipe[]> {
   const db = getDb();
 
-  const [graph, recipes, components] = await Promise.all([
-    loadGraph(),
+  const [recipes, components] = await Promise.all([
     db
       .from("recipes")
       .select(
@@ -104,27 +112,24 @@ export async function loadLibrary(): Promise<Library> {
     linesByRecipe.set(row.recipe_id, lines);
   }
 
-  return {
-    ingredients: toIngredients(graph),
-    recipes: (recipes.data ?? []).map(
-      (row): Recipe => ({
-        id: row.id,
-        name: row.name,
-        isMenuItem: row.is_menu_item,
-        yieldAmount: row.yield_amount === null ? null : Number(row.yield_amount),
-        yieldUnit: row.yield_unit,
-        components: linesByRecipe.get(row.id) ?? [],
-        description: row.generated_description,
-        descriptionShort: row.generated_description_short,
-        tasteProfile: toTasteProfile(row.generated_taste_profile),
-        textureNotes: row.generated_texture_notes ?? [],
-        pairsWith: row.generated_pairs_with ?? [],
-        generatedAt: row.generated_at,
-        isStale: row.description_is_stale,
-        updatedAt: row.updated_at,
-      }),
-    ),
-  };
+  return (recipes.data ?? []).map(
+    (row): Recipe => ({
+      id: row.id,
+      name: row.name,
+      isMenuItem: row.is_menu_item,
+      yieldAmount: row.yield_amount === null ? null : Number(row.yield_amount),
+      yieldUnit: row.yield_unit,
+      components: linesByRecipe.get(row.id) ?? [],
+      description: row.generated_description,
+      descriptionShort: row.generated_description_short,
+      tasteProfile: toTasteProfile(row.generated_taste_profile),
+      textureNotes: row.generated_texture_notes ?? [],
+      pairsWith: row.generated_pairs_with ?? [],
+      generatedAt: row.generated_at,
+      isStale: row.description_is_stale,
+      updatedAt: row.updated_at,
+    }),
+  );
 }
 
 /* ----------------------------------------------------------------- recipes */

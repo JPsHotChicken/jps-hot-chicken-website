@@ -1,4 +1,4 @@
-import { Banknote, Database } from "lucide-react";
+import { Banknote, Database, Wheat } from "lucide-react";
 
 /**
  * The sections of the operations area — the tools the crew uses to run a shift.
@@ -30,6 +30,13 @@ export const OPERATIONS_SECTIONS: OperationsSection[] = [
     label: "Items database",
     hint: "Look up any item, its cost, and what it is made of",
     icon: <Database className="size-5" />,
+    ready: true,
+  },
+  {
+    slug: "allergens",
+    label: "Allergen lookup",
+    hint: "See what contains an allergen, or every allergen in a dish",
+    icon: <Wheat className="size-5" />,
     ready: true,
   },
 ];
