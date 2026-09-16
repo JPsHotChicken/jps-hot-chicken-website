@@ -3,6 +3,8 @@ import { GoogleAnalytics } from "@next/third-parties/google";
 
 import { buildOrganizationJsonLd, serializeJsonLd } from "@/lib/jsonld";
 import { Nav } from "@/components/Nav";
+import { AttributionCapture } from "@/components/AttributionCapture";
+import { GoogleAdsTag } from "@/components/GoogleAdsTag";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Footer } from "@/components/Footer";
 
@@ -44,6 +46,11 @@ export default function SiteLayout({
       <Footer />
       <Analytics />
       {gaId && <GoogleAnalytics gaId={gaId} />}
+      {/* Google Ads conversion tag. Dormant until NEXT_PUBLIC_GOOGLE_ADS_ID is set. */}
+      <GoogleAdsTag />
+      {/* Stashes gclid / gbraid / wbraid + UTMs so a conversion can be attributed
+          to the click that earned it, even several pages later. */}
+      <AttributionCapture />
     </>
   );
 }

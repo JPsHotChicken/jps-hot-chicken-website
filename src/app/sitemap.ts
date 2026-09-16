@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { siteConfig } from "@/data/site";
+import { LANDING_PAGES } from "@/data/landing";
 
 // Every indexable route. /careers/apply is intentionally absent (noindex).
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -18,6 +19,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...siteConfig.locations.map((loc) => ({
       path: `/order/${loc.slug}`,
       priority: 0.7,
+      changeFrequency: "monthly" as const,
+    })),
+    // Paid search landing pages. Indexable on purpose: Google's landing page
+    // experience score reads the live page, and a page it cannot crawl scores
+    // worse, which raises what we pay per click.
+    ...LANDING_PAGES.map((page) => ({
+      path: `/${page.slug}`,
+      priority: 0.8,
       changeFrequency: "monthly" as const,
     })),
     { path: "/about", priority: 0.6, changeFrequency: "monthly" },

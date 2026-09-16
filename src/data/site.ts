@@ -3,12 +3,12 @@
 //
 // ⚠️ MISSING BUSINESS DATA (owner to provide). These fields are *omitted* — never
 // faked — so no placeholder can reach the live site, Google, or the structured data:
-//   - Clarksville: phone, uberEatsUrl (the CTA and phone line appear automatically
-//     once these are set)
+//   - Clarksville: uberEatsUrl (the CTA appears automatically once it is set)
 //   - socials: real Instagram / Facebook page URLs (published as schema.org sameAs)
 //   - googleBusinessUrl per location: Google Business Profile / Maps listing link
 // ✏️ CONFIRM with the owner:
 //   - Oak Grove phone number
+//   - Clarksville phone 931-266-0025 (supplied by the owner 2026-09-16)
 //   - lat/lng (geocoded from each address — check they pin the right storefront;
 //     Oak Grove matched at street level, Clarksville matched the exact address)
 
@@ -92,8 +92,9 @@ const locations: readonly RestaurantLocation[] = [
     zip: "37040",
     lat: 36.57885,
     lng: -87.31505,
-    // phone / uberEatsUrl: pending — see header note. Uber Eats stays omitted until
-    // this store has its own listing; Oak Grove's link would misroute orders here.
+    phone: "931-266-0025",
+    // uberEatsUrl: pending — see header note. Uber Eats stays omitted until this
+    // store has its own listing; Oak Grove's link would misroute orders here.
     orderingUrl: "https://jpshotchicken.toast.site/",
     doordashUrl:
       "https://www.doordash.com/store/jp's-hot-chicken-clarksville-47994625/116482960/?event_type=autocomplete&pickup=false",
