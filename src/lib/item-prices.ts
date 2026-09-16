@@ -20,7 +20,7 @@
  */
 
 import { parseInvoiceExport, type ParsedInvoice } from "@/lib/truck";
-import type { Item } from "@/lib/items";
+import { readPackSize, type Item } from "@/lib/items";
 
 /* ------------------------------------------------------------ what was paid */
 
@@ -491,19 +491,12 @@ const unitName = (value: string): string =>
 
 /** What a pack holds, in its own unit: "4/10 LB" is 40 lb; "2/100 CT" is 200 ct. */
 export function packContents(packSize: string): { quantity: number; unit: string } | null {
-  const match = /^\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)?\s*(.*)$/.exec(packSize);
-  if (!match) return null;
+  const pack = readPackSize(packSize);
+  if (!pack) return null;
 
-  const [, countText, sizeText, unitText] = match;
-  const unit = unitName((unitText ?? "").replace(/\s+/g, " "));
-  if (!unit) return null;
-
-  const count = Number(countText);
   // "6/#10 CN" has no number to multiply by — six cans is all it says.
-  const size = sizeText === undefined ? 1 : Number(sizeText);
-  if (!Number.isFinite(count) || !Number.isFinite(size) || count <= 0 || size <= 0) return null;
-
-  return { quantity: Math.round(count * size * 10_000) / 10_000, unit };
+  const quantity = pack.count * (pack.size ?? 1);
+  return { quantity: Math.round(quantity * 10_000) / 10_000, unit: unitName(pack.unit) };
 }
 
 /**

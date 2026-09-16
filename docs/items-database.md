@@ -156,6 +156,40 @@ Anything unknown stays **unknown**, never zero — a recipe missing one price
 reads as "we don't know yet" and names the item that is missing, rather than
 showing a confidently wrong number.
 
+### Cost at every level
+
+Every record also shows what one of everything it comes in costs, biggest
+first. Nothing extra is entered for it: `costLadder` in
+[`src/lib/items.ts`](../src/lib/items.ts) reads the pack size, the stock
+conversion and the portion conversion together.
+
+| A case of… | Breaks down to |
+|---|---|
+| Sauce, `4 / 1 ga` | case → gal → fl oz (= 1 serving) |
+| Packets, `1000 / 9 gm` | case → oz → packet → g |
+| Clamshells, `2 / 100 ct` | case → pack → each |
+| Cheese, `6 / 5 lb` | case → pack → lb → oz |
+
+The rules behind it:
+
+- **Packaging, smallware and marketing are only ever broken into packs and
+  pieces.** A price per ounce of a cup means nothing.
+- **A bare "oz" on something counted by volume is fluid ounces**, as it is on
+  every invoice for a jug of sauce.
+- **Cups and tablespoons are never read as measures** off a pack size or stock
+  unit — a "cup" is as often a portion cup of honey as eight fluid ounces. They
+  still show when they are the portion unit, priced from the portion conversion.
+- **Two levels that come to the same amount are one line.** A gallon jug in a
+  case of four gallons is "gal", and a serving that is exactly a fluid ounce
+  reads "fl oz = 1 serving".
+- **When the pack size and the stock conversion disagree, the stock conversion
+  wins** — it is what every recipe is costed on — and the record says so, so
+  whichever is wrong gets fixed rather than two prices for the same ounce being
+  shown.
+- **A bought item is priced as invoiced**, with an *After yield* column when any
+  of it is trimmed or lost. An assembled item starts from one build and is
+  already after yield, so its lines always match the roll-up.
+
 ## Data integrity
 
 These are enforced in the database, not just the UI:

@@ -10,6 +10,8 @@ import {
   canBeIngredient,
   parseItemSheet,
   costAll,
+  costLadder,
+  readPackSize,
   costOf,
   filterItems,
   foodCostPercent,
@@ -238,6 +240,206 @@ describe("cost roll-up", () => {
     expect(foodCostPercent(2.25, 10)).toBeCloseTo(0.225, 10);
     expect(foodCostPercent(null, 10)).toBeNull();
     expect(foodCostPercent(2, 0)).toBeNull();
+  });
+});
+
+describe("cost at every level", () => {
+  /** Each rung as "unit count cost", which is how the table reads. */
+  function rungs(item: Item, cost = costOf(item.id, buildGraph([item], new Map()))) {
+    return costLadder(item, cost).levels.map((level) => ({
+      unit: level.unit,
+      count: Number(level.count.toFixed(4)),
+      cost: level.cost === null ? null : Number(level.cost.toFixed(4)),
+    }));
+  }
+
+  it("breaks a case of sauce into jugs and ounces", () => {
+    // RAW-0063, off a real invoice: 4 one-gallon jugs for $59.16.
+    const sauce = makeItem("RAW-0063", "raw", {
+      purchaseUnit: "case",
+      packSize: "4 / 1 ga",
+      purchaseCost: 59.16,
+      stockUnit: "gal",
+      stockPerPurchaseUnit: 4,
+      portionUnit: "serving",
+      portionsPerStockUnit: 128,
+    });
+
+    expect(rungs(sauce)).toEqual([
+      { unit: "case", count: 1, cost: 59.16 },
+      // The jug and the gallon are the same thing, so they are one line.
+      { unit: "gal", count: 4, cost: 14.79 },
+      { unit: "fl oz", count: 512, cost: 0.1155 },
+    ]);
+    expect(costLadder(sauce, costOf(sauce.id, buildGraph([sauce], new Map()))).levels[2].alsoCalled)
+      .toEqual(["serving"]);
+  });
+
+  it("reads a bare oz on a liquid as fluid ounces", () => {
+    const sauce = makeItem("RAW-0073", "raw", {
+      purchaseUnit: "case",
+      packSize: "4 / 64 oz",
+      purchaseCost: 49.61,
+      stockUnit: "fl oz",
+      stockPerPurchaseUnit: 256,
+    });
+
+    const ladder = costLadder(sauce, costOf(sauce.id, buildGraph([sauce], new Map())));
+    expect(ladder.mismatch).toBeNull();
+    expect(ladder.levels.map((level) => [level.unit, level.size])).toEqual([
+      ["case", "4 / 64 oz"],
+      ["pack", "64 fl oz"],
+      ["fl oz", ""],
+    ]);
+  });
+
+  it("prices a packet and the ounce inside it", () => {
+    // RAW-0089: 1000 packets of 9 g for $28.31.
+    const ketchup = makeItem("RAW-0089", "raw", {
+      purchaseUnit: "case",
+      packSize: "1000 / 9 gm",
+      purchaseCost: 28.31,
+      stockUnit: "each",
+      stockPerPurchaseUnit: 1000,
+      portionUnit: "packet",
+      portionsPerStockUnit: 1,
+    });
+
+    expect(rungs(ketchup)).toEqual([
+      { unit: "case", count: 1, cost: 28.31 },
+      // An ounce is bigger than a 9 g packet, so it comes first.
+      { unit: "oz", count: 317.4657, cost: 0.0892 },
+      { unit: "packet", count: 1000, cost: 0.0283 },
+      { unit: "g", count: 9000, cost: 0.0031 },
+    ]);
+    expect(costLadder(ketchup, costOf(ketchup.id, buildGraph([ketchup], new Map()))).levels[2].size)
+      .toBe("9 g");
+  });
+
+  it("gives packaging a case, a sleeve and a piece — never an ounce", () => {
+    const clamshell = makeItem("PKG-0003", "packaging", {
+      purchaseUnit: "case",
+      packSize: "2 / 100 ct",
+      purchaseCost: 50,
+      stockUnit: "each",
+      stockPerPurchaseUnit: 200,
+    });
+
+    expect(rungs(clamshell)).toEqual([
+      { unit: "case", count: 1, cost: 50 },
+      { unit: "pack", count: 2, cost: 25 },
+      { unit: "each", count: 200, cost: 0.25 },
+    ]);
+  });
+
+  it("goes by the stock conversion and says so when the pack size disagrees", () => {
+    // PKG-0004 as it stands: a pack size copied off honey cups onto a sleeve of 1000 cups.
+    const cup = makeItem("PKG-0004", "packaging", {
+      purchaseUnit: "case",
+      packSize: "200 / .5 oz",
+      purchaseCost: 42.95,
+      stockUnit: "each",
+      stockPerPurchaseUnit: 1000,
+    });
+
+    const ladder = costLadder(cup, costOf(cup.id, buildGraph([cup], new Map())));
+    expect(ladder.mismatch).toMatch(/200 \/ \.5 oz/);
+    expect(rungs(cup)).toEqual([
+      { unit: "case", count: 1, cost: 42.95 },
+      { unit: "each", count: 1000, cost: 0.043 },
+    ]);
+  });
+
+  it("forgives a stock conversion rounded to two places", () => {
+    // Six 55 oz cans is 20.625 lb; the record says 20.63.
+    const beans = makeItem("RAW-0062", "raw", {
+      purchaseUnit: "case",
+      packSize: "6 / 55 oz",
+      purchaseCost: 30,
+      stockUnit: "lb",
+      stockPerPurchaseUnit: 20.63,
+    });
+    const ladder = costLadder(beans, costOf(beans.id, buildGraph([beans], new Map())));
+    expect(ladder.mismatch).toBeNull();
+    expect(ladder.levels.map((level) => level.unit)).toEqual(["case", "pack", "lb", "oz"]);
+  });
+
+  it("adds a column after yield that agrees with the headline cost", () => {
+    const chicken = makeItem("RAW-0001", "raw", {
+      purchaseUnit: "case",
+      packSize: "1 / 40 lb",
+      purchaseCost: 119.6,
+      stockUnit: "lb",
+      stockPerPurchaseUnit: 40,
+      yieldFactor: 0.8,
+    });
+    const cost = costOf(chicken.id, buildGraph([chicken], new Map()));
+    const [caseLevel, pound] = costLadder(chicken, cost).levels;
+
+    // The case is what the invoice says; the loss is charged to the pound.
+    expect(caseLevel.usableCost).toBeNull();
+    expect(pound.cost).toBeCloseTo(2.99, 10);
+    expect(pound.usableCost).toBeCloseTo(cost.perStockUnit!, 10);
+  });
+
+  it("starts an assembled item from one build", () => {
+    const flour = makeItem("RAW-0002", "raw", { purchaseCost: 12, stockPerPurchaseUnit: 24 });
+    const dredge = makeItem("PRP-0001", "prepped", {
+      batchYieldQuantity: 4,
+      portionUnit: "cup",
+      portionsPerStockUnit: 3.6,
+    });
+    const graph = buildGraph(
+      [flour, dredge],
+      new Map([["PRP-0001", [makeComponent("RAW-0002", 8)]]]),
+    );
+
+    // $4.00 a build over 4 lb: $1.00 a pound, as the roll-up says.
+    expect(rungs(dredge, costOf("PRP-0001", graph))).toEqual([
+      { unit: "build", count: 1, cost: 4 },
+      { unit: "lb", count: 4, cost: 1 },
+      { unit: "cup", count: 14.4, cost: 0.2778 },
+      { unit: "oz", count: 64, cost: 0.0625 },
+    ]);
+  });
+
+  it("calls a pack by its portion name when the two are the same amount", () => {
+    // RAW-0084: counted in pounds, but the thing in the case is a half-ounce cup.
+    const honey = makeItem("RAW-0084", "raw", {
+      purchaseUnit: "case",
+      packSize: "200 / 0.5 oz",
+      stockUnit: "lb",
+      stockPerPurchaseUnit: 6.25,
+      portionUnit: "cup",
+      portionsPerStockUnit: 32,
+    });
+    const last = costLadder(honey, costOf(honey.id, buildGraph([honey], new Map()))).levels.at(-1)!;
+    expect(last).toMatchObject({ unit: "cup", alsoCalled: [], size: "0.5 oz", count: 200 });
+  });
+
+  it("lays out the levels with no price, rather than pricing them at zero", () => {
+    const honey = makeItem("RAW-0071", "raw", {
+      purchaseUnit: "case",
+      packSize: "200 / .5 oz",
+      stockUnit: "each",
+      stockPerPurchaseUnit: 200,
+      portionUnit: "cup",
+      portionsPerStockUnit: 1,
+    });
+
+    expect(rungs(honey)).toEqual([
+      { unit: "case", count: 1, cost: null },
+      { unit: "oz", count: 100, cost: null },
+      { unit: "cup", count: 200, cost: null },
+    ]);
+  });
+
+  it("reads a pack size apart", () => {
+    expect(readPackSize("6 / 5 lb")).toEqual({ count: 6, size: 5, unit: "lb" });
+    expect(readPackSize("200 / .5 oz")).toEqual({ count: 200, size: 0.5, unit: "oz" });
+    expect(readPackSize("6/#10 CN")).toEqual({ count: 6, size: null, unit: "#10 cn" });
+    expect(readPackSize("bag")).toBeNull();
+    expect(readPackSize("4 / 0 lb")).toBeNull();
   });
 });
 

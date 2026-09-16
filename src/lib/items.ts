@@ -599,6 +599,333 @@ export function foodCostPercent(cost: number | null, menuPrice: number | null): 
   return cost / menuPrice;
 }
 
+/* ------------------------------------------------------ cost at every level */
+
+/** A unit something is weighed or measured in. */
+type Measure = {
+  family: "weight" | "volume";
+  /** How it is written on screen. */
+  name: string;
+  /** One of it, in the family's ounce — a weight ounce or a fluid ounce. */
+  inOunces: number;
+};
+
+const GRAMS_PER_OUNCE = 28.349523125;
+const MILLILITRES_PER_FLUID_OUNCE = 29.5735295625;
+
+/**
+ * Kitchen measures — cups, tablespoons — are left off on purpose. A "cup" on a
+ * record is as often a portion cup of honey as eight fluid ounces, and reading
+ * the container as the measure would price it wrong by whatever the cup holds.
+ */
+const MEASURES: [Measure, string[]][] = [
+  [{ family: "weight", name: "oz", inOunces: 1 }, ["oz", "ounce", "ounces"]],
+  [{ family: "weight", name: "lb", inOunces: 16 }, ["lb", "lbs", "pound", "pounds"]],
+  [
+    { family: "weight", name: "g", inOunces: 1 / GRAMS_PER_OUNCE },
+    ["g", "gm", "gr", "gram", "grams"],
+  ],
+  [
+    { family: "weight", name: "kg", inOunces: 1000 / GRAMS_PER_OUNCE },
+    ["kg", "kilo", "kilos", "kilogram", "kilograms"],
+  ],
+  [{ family: "volume", name: "fl oz", inOunces: 1 }, ["fl oz", "floz", "fluid ounce", "fluid ounces"]],
+  [{ family: "volume", name: "pt", inOunces: 16 }, ["pt", "pint", "pints"]],
+  [{ family: "volume", name: "qt", inOunces: 32 }, ["qt", "quart", "quarts"]],
+  [{ family: "volume", name: "gal", inOunces: 128 }, ["gal", "ga", "gallon", "gallons"]],
+  [
+    { family: "volume", name: "ml", inOunces: 1 / MILLILITRES_PER_FLUID_OUNCE },
+    ["ml", "millilitre", "millilitres", "milliliter", "milliliters"],
+  ],
+  [
+    { family: "volume", name: "l", inOunces: 1000 / MILLILITRES_PER_FLUID_OUNCE },
+    ["l", "lt", "litre", "litres", "liter", "liters"],
+  ],
+];
+
+const MEASURE_BY_SPELLING = new Map(
+  MEASURES.flatMap(([measure, spellings]) =>
+    spellings.map((spelling) => [spelling, measure] as const),
+  ),
+);
+
+const OUNCE: Record<Measure["family"], Measure> = {
+  weight: MEASURE_BY_SPELLING.get("oz")!,
+  volume: MEASURE_BY_SPELLING.get("fl oz")!,
+};
+
+const COUNT_WORDS = new Set(["ct", "count", "ea", "each", "pc", "pcs", "piece", "pieces"]);
+
+const spelling = (unit: string): string =>
+  unit.trim().toLowerCase().replace(/\./g, "").replace(/\s+/g, " ");
+
+/**
+ * The measure a unit names, if it names one.
+ *
+ * A bare "oz" is a weight — unless the item is counted by volume, where "4 / 64
+ * oz" on a jug of sauce means fluid ounces, as it always does on an invoice.
+ */
+function measureOf(unit: string, family?: Measure["family"]): Measure | null {
+  const measure = MEASURE_BY_SPELLING.get(spelling(unit)) ?? null;
+  return measure === OUNCE.weight && family === "volume" ? OUNCE.volume : measure;
+}
+
+const isCountWord = (unit: string): boolean => COUNT_WORDS.has(spelling(unit));
+
+/** A distributor pack size read apart: "6 / 5 lb" is six packs of five pounds. */
+export type PackSize = {
+  /** How many packs one purchase unit holds. */
+  count: number;
+  /** What one pack holds — null when it only says what a pack is, as "6 / #10 cn" does. */
+  size: number | null;
+  /** What `size` is in, or what a pack is when there is no size. Lower case. */
+  unit: string;
+};
+
+export function readPackSize(packSize: string): PackSize | null {
+  const match = /^\s*(\d*\.?\d+)\s*\/\s*(\d*\.?\d+)?\s*(.*?)\s*$/.exec(packSize);
+  if (!match) return null;
+
+  const [, countText, sizeText, unitText] = match;
+  const unit = unitText.toLowerCase().replace(/\s+/g, " ");
+  const count = Number(countText);
+  const size = sizeText === undefined ? null : Number(sizeText);
+  if (!unit || !(count > 0) || (size !== null && !(size > 0))) return null;
+
+  return { count, size, unit };
+}
+
+/** One rung of the ladder: what one of something costs. */
+export type CostLevel = {
+  /** What one is called: "case", "pack", "packet", "oz". */
+  unit: string;
+  /** Other names for exactly the same amount — a serving that is one fluid ounce. */
+  alsoCalled: string[];
+  /** What one holds, where the pack size says: "5 lb", "9 g". */
+  size: string;
+  /** How many of it one purchase unit, or one build, comes to. */
+  count: number;
+  cost: number | null;
+  /**
+   * The cost once trim and cook loss are charged to what is left. Null where
+   * nothing is lost, which on most records is everywhere.
+   */
+  usableCost: number | null;
+};
+
+export type CostLadder = {
+  /** What the counts are counted in: the purchase unit, or "build". */
+  per: string;
+  /** Biggest first. */
+  levels: CostLevel[];
+  /** Set when the pack size and the stock conversion disagree about what a case holds. */
+  mismatch: string | null;
+};
+
+/**
+ * Items handled whole. A price per ounce of a clamshell means nothing, so they
+ * are only ever broken down into packs and pieces.
+ */
+const countedByThePiece = (type: ItemType): boolean =>
+  type === "packaging" || type === "smallware" || type === "marketing";
+
+/**
+ * Which name wins when two rungs turn out to be the same amount. Lower wins: a
+ * case is a case, a ketchup "each" is better called a packet, a gallon jug is
+ * better called a gallon, and a half-ounce pack of honey is better called a cup.
+ */
+const RANK = { top: 0, pieceName: 1, stock: 2, measure: 3, portion: 4, pack: 5, build: 6 };
+
+type Rung = {
+  unit: string;
+  size: string;
+  count: number;
+  rank: number;
+  /** Whether trim and cook loss apply — to what gets used, not to the box it came in. */
+  used: boolean;
+};
+
+/** Within a rounded stock conversion of each other: 20.63 lb is six 55 oz cans. */
+const roughly = (a: number, b: number, tolerance = 0.01): boolean =>
+  Math.abs(a - b) <= Math.abs(b) * tolerance;
+
+const positive = (value: number | null): number | null =>
+  value !== null && value > 0 ? value : null;
+
+/**
+ * What one of everything an item comes in costs — the case, the pack inside
+ * it, the pound or gallon, the ounce, the packet, the piece, the portion.
+ *
+ * Nothing new is entered for it. The pack size, the stock conversion and the
+ * portion conversion already say how a case breaks down; this reads them
+ * together. Where the pack size and the stock conversion disagree, the stock
+ * conversion wins — it is what every recipe is costed on — and the ladder says
+ * so rather than quietly printing two different prices for an ounce.
+ *
+ * A bought item is costed as invoiced, with a second column after yield where
+ * there is any loss. An assembled item starts from one build, and its costs are
+ * already after yield, exactly as `costOf` works them out.
+ */
+export function costLadder(item: Item, cost: ItemCost): CostLadder {
+  return isAssembled(item.type) ? buildLadder(item, cost) : purchaseLadder(item);
+}
+
+function purchaseLadder(item: Item): CostLadder {
+  const per = item.purchaseUnit.trim() || "purchase unit";
+  const measured = !countedByThePiece(item.type);
+  const stockUnit = item.stockUnit.trim();
+  const stock = measured ? measureOf(stockUnit) : null;
+  let stockCount = positive(item.stockPerPurchaseUnit);
+  let pack = readPackSize(item.packSize);
+  let mismatch: string | null = null;
+
+  if (pack && stockUnit && stockCount !== null && !packAgrees(pack, stock, stockCount)) {
+    mismatch =
+      `The pack size (${item.packSize.trim()}) doesn't come to ${formatQuantity(stockCount)} ` +
+      `${stockUnit} a ${per}, so it is left out. Fix whichever of the two is wrong.`;
+    pack = null;
+  }
+
+  const packMeasure =
+    measured && pack?.size != null ? measureOf(pack.unit, stock?.family) : null;
+  const packOunces =
+    pack?.size != null && packMeasure ? pack.count * pack.size * packMeasure.inOunces : null;
+
+  // No conversion on the record, but a pack size in the same kind of unit says it.
+  if (stockCount === null && stock && packOunces !== null && packMeasure?.family === stock.family) {
+    stockCount = packOunces / stock.inOunces;
+  }
+
+  const rungs: Rung[] = [
+    { unit: per, size: item.packSize.trim(), count: 1, rank: RANK.top, used: false },
+  ];
+
+  if (pack && pack.count > 1) {
+    rungs.push({
+      unit: pack.size === null ? pack.unit : "pack",
+      size: pack.size === null ? "" : `${formatQuantity(pack.size)} ${packMeasure?.name ?? pack.unit}`,
+      count: pack.count,
+      rank: RANK.pack,
+      used: false,
+    });
+  }
+
+  if (stock && stockCount !== null) {
+    const named = packMeasure?.family === stock.family ? [stock, packMeasure] : [stock];
+    rungs.push(...measureRungs(stockCount * stock.inOunces, named));
+  } else {
+    if (stockUnit && stockCount !== null) {
+      rungs.push({ unit: stockUnit, size: "", count: stockCount, rank: RANK.stock, used: true });
+    }
+    if (packMeasure && packOunces !== null) rungs.push(...measureRungs(packOunces, [packMeasure]));
+  }
+
+  const portion = portionRung(item, stockCount);
+  if (portion) rungs.push(portion);
+
+  return { per, levels: settle(rungs, item.purchaseCost, item.yieldFactor), mismatch };
+}
+
+function buildLadder(item: Item, cost: ItemCost): CostLadder {
+  // The same guards `costOf` divides by, so the two can never disagree.
+  const loss = item.yieldFactor > 0 ? item.yieldFactor : 1;
+  const makes = (item.batchYieldQuantity > 0 ? item.batchYieldQuantity : 1) * loss;
+  const stockUnit = item.stockUnit.trim() || "unit";
+  const stock = measureOf(stockUnit);
+
+  const rungs: Rung[] = [{ unit: "build", size: "", count: 1, rank: RANK.build, used: false }];
+  if (stock) rungs.push(...measureRungs(makes * stock.inOunces, [stock]));
+  else rungs.push({ unit: stockUnit, size: "", count: makes, rank: RANK.stock, used: true });
+
+  const portion = portionRung(item, makes);
+  if (portion) rungs.push(portion);
+
+  // Already after yield: the loss is in `makes`, so there is no second column.
+  return { per: "build", levels: settle(rungs, cost.perBatch, 1), mismatch: null };
+}
+
+/**
+ * Whether a pack size describes the amount the stock conversion does.
+ *
+ * Only checked where the two can be compared — a pack of cans against a stock
+ * conversion in pounds says nothing either way, and is taken on trust.
+ */
+function packAgrees(pack: PackSize, stock: Measure | null, stockCount: number): boolean {
+  if (stock) {
+    const inner = pack.size === null ? null : measureOf(pack.unit, stock.family);
+    if (!inner || inner.family !== stock.family) return true;
+    return roughly(pack.count * pack.size! * inner.inOunces, stockCount * stock.inOunces);
+  }
+  // Counted in pieces: one stock unit is either one pack, or one of what a pack holds.
+  if (roughly(pack.count, stockCount)) return true;
+  return pack.size !== null && isCountWord(pack.unit) && roughly(pack.count * pack.size, stockCount);
+}
+
+/**
+ * A rung per unit worth pricing: whatever the record itself counts in, and
+ * always the ounce, which is the one every sauce and packet gets compared by.
+ */
+function measureRungs(ounces: number, named: Measure[]): Rung[] {
+  const family = named[0].family;
+  return [...new Set([...named, OUNCE[family]])].map((measure) => ({
+    unit: measure.name,
+    size: "",
+    count: ounces / measure.inOunces,
+    rank: RANK.measure,
+    used: true,
+  }));
+}
+
+function portionRung(item: Item, stockCount: number | null): Rung | null {
+  const unit = item.portionUnit.trim();
+  const portions = positive(item.portionsPerStockUnit);
+  if (!unit || portions === null || stockCount === null) return null;
+  return {
+    unit,
+    size: "",
+    count: stockCount * portions,
+    // One "packet" per "each" is just a better name for the each.
+    rank: portions === 1 && isCountWord(item.stockUnit) ? RANK.pieceName : RANK.portion,
+    used: true,
+  };
+}
+
+/**
+ * Put the rungs biggest first and fold together any that are the same amount,
+ * so a gallon jug in a case of four gallons is one line, not two saying the
+ * same price.
+ */
+function settle(rungs: Rung[], topCost: number | null, yieldFactor: number): CostLevel[] {
+  const loss = yieldFactor > 0 ? yieldFactor : 1;
+  const groups: Rung[][] = [];
+
+  for (const rung of [...rungs].sort((a, b) => a.count - b.count || a.rank - b.rank)) {
+    const last = groups.at(-1);
+    if (last && roughly(rung.count, last[0].count, 0.0001)) last.push(rung);
+    else groups.push([rung]);
+  }
+
+  return groups.map((group) => {
+    const byRank = [...group].sort((a, b) => a.rank - b.rank);
+    const [named] = byRank;
+    const cost = topCost === null ? null : topCost / named.count;
+    const used = group.some((rung) => rung.used) && !group.some((rung) => rung.rank === RANK.top);
+
+    return {
+      unit: named.unit,
+      alsoCalled: group
+        .filter((rung) => rung.rank === RANK.portion && rung !== named)
+        .map((rung) => rung.unit)
+        .filter((unit) => unit.toLowerCase() !== named.unit.toLowerCase()),
+      // "gal" needs no "1 gal" beside it; a packet does need its "9 g".
+      size: named.rank === RANK.measure ? "" : (byRank.find((rung) => rung.size)?.size ?? ""),
+      count: named.count,
+      cost,
+      usableCost: cost !== null && used && loss < 1 ? cost / loss : null,
+    };
+  });
+}
+
 /* -------------------------------------------------------------- where used */
 
 /**
@@ -765,6 +1092,10 @@ export function formatMoney(value: number | null, digits = 2): string {
 
 /** Costs per unit are often fractions of a cent, so they get more places. */
 export const formatUnitCost = (value: number | null): string => formatMoney(value, 4);
+
+/** A price at any level: a case to the cent, an ounce to a hundredth of one. */
+export const formatCost = (value: number | null): string =>
+  value !== null && Math.abs(value) >= 1 ? formatMoney(value) : formatUnitCost(value);
 
 export function formatPercent(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "—";

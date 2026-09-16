@@ -333,6 +333,8 @@ describe("reading a pack size", () => {
     expect(packContents("2/100 CT")).toEqual({ quantity: 200, unit: "ct" });
     expect(packContents("96/2.8 OZ")).toEqual({ quantity: 268.8, unit: "oz" });
     expect(packContents("1/5 GA")).toEqual({ quantity: 5, unit: "gal" });
+    // A size with no leading zero, as the honey cups are printed.
+    expect(packContents("200/.5 OZ")).toEqual({ quantity: 100, unit: "oz" });
   });
 
   it("counts a pack with no size as its count", () => {

@@ -37,12 +37,15 @@ import {
   STORAGE_ZONES,
   STORAGE_ZONE_LABELS,
   TEXTURE_TAGS,
+  costLadder,
   foodCostPercent,
+  formatCost,
   formatMoney,
   formatPercent,
   formatQuantity,
   formatUnitCost,
   hasGroup,
+  type CostLadder,
   type Gap,
   type Item,
   type ItemCost,
@@ -163,6 +166,7 @@ export function ItemRecord({
 
   const groups = FIELD_GROUPS[form.type as ItemType];
   const margin = foodCostPercent(cost.perStockUnit, item.menuPrice);
+  const ladder = costLadder(item, cost);
 
   const run = (work: () => Promise<unknown>) => {
     setError(null);
@@ -323,6 +327,9 @@ export function ItemRecord({
             </p>
           )}
         </section>
+
+        {/* One line is just the headline figure again. */}
+        {ladder.levels.length > 1 && <LevelsPanel ladder={ladder} />}
 
         {/* ------------------------------------------------------ missing data */}
         {gaps.length > 0 && (
@@ -911,6 +918,69 @@ export function ItemRecord({
         <AdminDrawer open={menuOpen} view="items" onOpenChange={setMenuOpen} />
       )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------ cost at every level */
+
+function LevelsPanel({ ladder }: { ladder: CostLadder }) {
+  const afterYield = ladder.levels.some((level) => level.usableCost !== null);
+  const priced = ladder.levels.some((level) => level.cost !== null);
+
+  return (
+    <Panel
+      title="Cost at every level"
+      hint={`What one of each costs, from a whole ${ladder.per} down. Worked out from the pack size and conversions — change those and this follows.`}
+    >
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs text-muted-foreground">
+            <th className="pb-2 font-semibold">One</th>
+            <th className="pb-2 text-right font-semibold">In a {ladder.per}</th>
+            <th className="pb-2 text-right font-semibold">Cost</th>
+            {afterYield && <th className="pb-2 text-right font-semibold">After yield</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {ladder.levels.map((level) => (
+            <tr key={`${level.unit}-${level.count}`}>
+              <td className="py-2">
+                <span className="font-semibold">{level.unit}</span>
+                {level.alsoCalled.map((name) => (
+                  <span key={name} className="text-muted-foreground">
+                    {" "}
+                    = 1 {name}
+                  </span>
+                ))}
+                {level.size && (
+                  <span className="block text-xs text-muted-foreground">{level.size}</span>
+                )}
+              </td>
+              <td className="py-2 text-right tabular-nums">{formatQuantity(level.count)}</td>
+              <td className="py-2 text-right font-mono tabular-nums">{formatCost(level.cost)}</td>
+              {afterYield && (
+                <td className="py-2 text-right font-mono tabular-nums">
+                  {formatCost(level.usableCost)}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {!priced && ladder.per !== "build" && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          No price per {ladder.per} yet, so there is nothing to divide.
+        </p>
+      )}
+
+      {ladder.mismatch && (
+        <p className="mt-2 flex items-start gap-2 text-xs text-amber-700">
+          <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+          <span>{ladder.mismatch}</span>
+        </p>
+      )}
+    </Panel>
   );
 }
 
