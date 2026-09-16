@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { logout } from "@/app/admin/actions";
 import { ItemsBrowser } from "./ItemsBrowser";
+import { PriceImport } from "./PriceImport";
+import type { SupplierLink } from "@/lib/item-prices";
 import type { CatalogueRow } from "@/lib/items";
 
 /**
@@ -18,9 +20,12 @@ import type { CatalogueRow } from "@/lib/items";
 export function ItemsDashboard({
   rows,
   categories,
+  supplierLinks,
 }: {
   rows: CatalogueRow[];
   categories: string[];
+  /** Supplier part numbers already on file, for matching an invoice's prices. */
+  supplierLinks: SupplierLink[];
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const incomplete = rows.filter((row) => row.gaps > 0).length;
@@ -60,6 +65,7 @@ export function ItemsDashboard({
       </header>
 
       <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 p-4 sm:px-6">
+        <PriceImport items={rows.map((row) => row.item)} links={supplierLinks} />
         <ItemsBrowser rows={rows} categories={categories} canEdit basePath="/admin/items" />
       </main>
 

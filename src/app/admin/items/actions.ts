@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { assertText, assertUuid, requireAdmin } from "@/lib/admin-guard";
+import { assertISODate, assertText, assertUuid, requireAdmin } from "@/lib/admin-guard";
+import { changesFor, patchFor, type PricedProduct } from "@/lib/item-prices";
 import * as repo from "@/lib/items-repo";
 import { markStaleForItems } from "@/lib/menu-descriptions-repo";
 import { MENU_DESCRIPTIONS_PATH, itemContentKey } from "@/lib/menu-descriptions";
@@ -306,6 +307,163 @@ export async function removeComponentAction(id: string): Promise<void> {
   const parentId = await repo.removeComponent(id);
   await markDescriptionsStale([parentId]);
   revalidatePath("/operations/items");
+}
+
+/* ------------------------------------------------- prices from an invoice */
+
+/** One decision the owner made on the import screen: this product is that item. */
+export type PriceImportRow = {
+  itemId: string;
+  product: PricedProduct;
+};
+
+export type PriceImportResult = {
+  /** Items whose record was changed. */
+  updated: number;
+  /** Items that already said what the invoice says, so nothing was written. */
+  unchanged: number;
+  /** Product numbers written onto an item, so the next import matches outright. */
+  linked: number;
+  /** Items that couldn't be saved, by code, with nothing half-written. */
+  failed: string[];
+};
+
+/** A month of invoices is a few hundred products; past that it isn't one. */
+const MAX_PRICE_ROWS = 1000;
+
+/** The same checks a hand-typed price gets. The file came from outside. */
+function checkedProduct(product: PricedProduct): PricedProduct {
+  return {
+    partNumber: assertText(product.partNumber, "Product number", { required: true, max: 60 }),
+    description: assertText(product.description, "Product description", { max: 200 }),
+    brand: assertText(product.brand, "Brand", { max: 60 }),
+    packSize: assertText(product.packSize, "Pack size", { max: 40 }),
+    purchaseUnit: assertText(product.purchaseUnit, "Purchase unit", { max: 40 }),
+    cost: requiredNumber(product.cost, "Cost", { min: 0, max: 1_000_000 }),
+    invoiceNumber: assertText(product.invoiceNumber, "Invoice number", { max: 40 }),
+    invoiceDate: assertISODate(product.invoiceDate, "Invoice date"),
+  };
+}
+
+/**
+ * Write invoiced prices onto the items the owner matched them to.
+ *
+ * The rows arriving here are decisions, not guesses: the page did the matching,
+ * the owner settled it, and anything they left unmatched never gets this far.
+ * What is written is worked out again on this side with `patchFor`, from the
+ * item as the database currently holds it — so a record edited in another tab
+ * while the import screen sat open is costed off its real stock unit rather
+ * than the one the browser remembered.
+ *
+ * Each item is saved the ordinary way, which means each one gets a version and
+ * a history entry naming the invoice the price came off. The product number is
+ * written onto the item's approved-supplier row at the same time: that is what
+ * makes next month's import exact rather than another round of guessing.
+ */
+export async function importPricesAction(
+  rows: PriceImportRow[],
+  supplierName: string,
+): Promise<PriceImportResult> {
+  await requireEditor();
+
+  if (rows.length === 0) return { updated: 0, unchanged: 0, linked: 0, failed: [] };
+  if (rows.length > MAX_PRICE_ROWS) {
+    throw new Error(`That is ${rows.length} products — more than one import will take.`);
+  }
+
+  const checked = rows.map((row) => ({
+    itemId: assertUuid(row.itemId, "Item"),
+    product: checkedProduct(row.product),
+  }));
+
+  // One item twice would have the two prices race each other, and the loser
+  // would still be on the record. The last decision wins, as it reads on screen.
+  const byItem = new Map(checked.map((row) => [row.itemId, row]));
+
+  const supplier = await repo.findOrCreateSupplier(
+    assertText(supplierName, "Supplier", { required: true, max: 120 }),
+  );
+  const links = await repo.loadSupplierLinks();
+
+  const decisions = [...byItem.values()];
+  const results = await Promise.allSettled(
+    decisions.map((row) => applyPrice(row, supplier.id, links)),
+  );
+
+  const failed: string[] = [];
+  let updated = 0;
+  let unchanged = 0;
+  let linked = 0;
+
+  for (const [index, result] of results.entries()) {
+    if (result.status === "rejected") {
+      console.error("[items] a price could not be saved:", result.reason);
+      failed.push(decisions[index].product.description);
+      continue;
+    }
+    if (result.value.changed) updated++;
+    else unchanged++;
+    if (result.value.linked) linked++;
+  }
+
+  revalidatePath("/admin/items");
+  revalidatePath("/operations/items");
+  return { updated, unchanged, linked, failed };
+}
+
+/** One item: its price, its pack, and the product number that found it. */
+async function applyPrice(
+  row: PriceImportRow,
+  supplierId: string,
+  links: repo.SupplierLinkRow[],
+): Promise<{ changed: boolean; linked: boolean }> {
+  const item = await repo.findItemById(row.itemId);
+  if (!item) throw new Error(`Item ${row.itemId} is no longer there.`);
+
+  const patch = patchFor(row.product, item);
+  // The same rule the preview drew its list of changes from, so an item saved
+  // here and an item shown as unchanged there can never mean different things.
+  const changed = changesFor(row.product, item).length > 0;
+
+  if (changed) {
+    // The record as it stands, with these fields moved and nothing else touched.
+    // `updateItem` reads only the draft fields, so the identity and audit
+    // columns that come along with the spread are ignored rather than written.
+    await repo.updateItem(
+      row.itemId,
+      {
+        ...item,
+        purchaseCost: patch.purchaseCost,
+        purchaseUnit: patch.purchaseUnit,
+        packSize: patch.packSize,
+        // Null means the pack size couldn't be read in this item's stock unit,
+        // which is a reason to leave the conversion alone, not to clear it.
+        stockPerPurchaseUnit: patch.stockPerPurchaseUnit ?? item.stockPerPurchaseUnit,
+      },
+      AUTHOR,
+      `Price from invoice ${row.product.invoiceNumber} (${row.product.invoiceDate})`,
+    );
+    revalidatePath(`/operations/items/${item.code}`);
+  }
+
+  // Keep whichever supplier the item already buys from as its primary; an item
+  // that has never had one takes this invoice's supplier.
+  const held = links.find(
+    (link) => link.itemId === row.itemId && link.supplierId === supplierId,
+  );
+  const hasPrimary = links.some((link) => link.itemId === row.itemId && link.isPrimary);
+
+  await repo.setItemSupplier({
+    itemId: row.itemId,
+    supplierId,
+    supplierPartNumber: row.product.partNumber,
+    purchaseUnit: patch.purchaseUnit,
+    packSize: patch.packSize,
+    cost: patch.purchaseCost,
+    isPrimary: held ? held.isPrimary : !hasPrimary,
+  });
+
+  return { changed, linked: held?.partNumber !== row.product.partNumber };
 }
 
 export async function createSupplierAction(name: string): Promise<void> {

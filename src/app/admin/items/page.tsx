@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
 import { catalogueRows, categoriesOf } from "@/lib/items";
-import { loadGraph } from "@/lib/items-repo";
+import { loadGraph, loadSupplierLinks } from "@/lib/items-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { SetupNotice } from "@/components/admin/SetupNotice";
 import { ItemsDashboard } from "@/components/items/ItemsDashboard";
@@ -35,12 +35,15 @@ export default async function AdminItemsPage() {
 
   if (!isSupabaseConfigured()) return <SetupNotice />;
 
-  const graph = await loadGraph();
+  // The part numbers come along with the catalogue because the price importer
+  // matches on them: a number confirmed once is never guessed at again.
+  const [graph, supplierLinks] = await Promise.all([loadGraph(), loadSupplierLinks()]);
 
   return (
     <ItemsDashboard
       rows={catalogueRows(graph)}
       categories={categoriesOf(graph.items)}
+      supplierLinks={supplierLinks}
     />
   );
 }

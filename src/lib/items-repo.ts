@@ -302,6 +302,82 @@ export async function listItemSuppliers(itemId: string): Promise<ItemSupplier[]>
     .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.supplierName.localeCompare(b.supplierName));
 }
 
+/** One item's link to one supplier, as the price importer needs to see it. */
+export type SupplierLinkRow = {
+  itemId: string;
+  supplierId: string;
+  /** Who issued the part number — a number means nothing without it. */
+  supplierName: string;
+  partNumber: string;
+  isPrimary: boolean;
+};
+
+/**
+ * Every supplier part number on file, for every item.
+ *
+ * This is what stops the price importer guessing twice at the same case: once
+ * the owner has confirmed that PFG's 158754 is the chicken tenderloin, the
+ * number is written onto the item and read back here on the next import.
+ * Numbers are what the join is really on; the name matching only exists to get
+ * the first one made.
+ */
+export async function loadSupplierLinks(): Promise<SupplierLinkRow[]> {
+  const db = getDb();
+  const { data, error } = await db
+    .from("item_suppliers")
+    .select("item_id, supplier_id, supplier_part_number, is_primary, suppliers(name)");
+
+  if (error) fail("loading supplier part numbers", error);
+
+  return (data ?? [])
+    .filter((row) => (row.supplier_part_number ?? "").trim() !== "")
+    .map((row) => {
+      const joined = row.suppliers as unknown as { name: string } | { name: string }[] | null;
+      return {
+        itemId: row.item_id,
+        supplierId: row.supplier_id,
+        supplierName: Array.isArray(joined) ? (joined[0]?.name ?? "") : (joined?.name ?? ""),
+        partNumber: row.supplier_part_number,
+        isPrimary: row.is_primary,
+      };
+    });
+}
+
+/**
+ * The supplier with this name, added if it is new.
+ *
+ * An invoice names the branch that billed it and nothing else; there is no
+ * sensible way for an import to stop and ask the owner to set up a supplier
+ * first. The name is matched case-insensitively so "Performance Foodservice
+ * Nashville" doesn't become a second record next to "PERFORMANCE FOODSERVICE
+ * NASHVILLE".
+ */
+export async function findOrCreateSupplier(name: string): Promise<Supplier> {
+  const db = getDb();
+  const wanted = name.trim();
+
+  const { data, error } = await db
+    .from("suppliers")
+    .select("id, name, account_number, contact, notes, active")
+    .ilike("name", wanted)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) fail("finding a supplier", error);
+  if (data) {
+    return {
+      id: data.id,
+      name: data.name,
+      accountNumber: data.account_number,
+      contact: data.contact,
+      notes: data.notes,
+      active: data.active,
+    };
+  }
+
+  return createSupplier(wanted);
+}
+
 export async function listItemLocations(itemId: string): Promise<string[]> {
   const db = getDb();
   const { data, error } = await db
