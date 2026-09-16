@@ -2,25 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { LogOut, Menu, NotebookPen } from "lucide-react";
+import { ArrowUpRight, LogOut, Menu, NotebookPen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { logout } from "@/app/admin/actions";
 import { MENU_DESCRIPTIONS_PATH } from "@/lib/menu-descriptions";
 
-type Tab = "recipes" | "ingredients";
-
 /**
- * The dashboard chrome around the generator's two lists: the drawer button, the
- * title, and a switch between recipes and ingredients.
+ * The dashboard chrome around the generator: the drawer button, the title, and
+ * a way back to the catalogue the ingredients come from.
+ *
+ * There is no ingredients list here any more. An ingredient is an item, and
+ * every item is edited in one place — the items database.
  */
 export function MenuDescriptionsShell({
-  tab,
   subtitle,
   children,
 }: {
-  tab: Tab;
   subtitle: string;
   children: React.ReactNode;
 }) {
@@ -58,27 +57,22 @@ export function MenuDescriptionsShell({
 
         <nav
           aria-label="Menu description sections"
-          className="mx-auto flex w-full max-w-5xl gap-1 px-4 sm:px-6"
+          className="mx-auto flex w-full max-w-5xl items-center gap-1 px-4 sm:px-6"
         >
-          {(
-            [
-              ["recipes", "Recipes", MENU_DESCRIPTIONS_PATH],
-              ["ingredients", "Ingredients", `${MENU_DESCRIPTIONS_PATH}/ingredients`],
-            ] as const
-          ).map(([key, label, href]) => (
-            <Link
-              key={key}
-              href={href}
-              aria-current={tab === key ? "page" : undefined}
-              className={`-mb-px border-b-2 px-3 pt-1 pb-2 text-sm font-semibold transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${
-                tab === key
-                  ? "border-brand text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {label}
-            </Link>
-          ))}
+          <Link
+            href={MENU_DESCRIPTIONS_PATH}
+            aria-current="page"
+            className="-mb-px border-b-2 border-brand px-3 pt-1 pb-2 text-sm font-semibold focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            Recipes
+          </Link>
+          <Link
+            href="/admin/items"
+            className="-mb-px flex items-center gap-1 border-b-2 border-transparent px-3 pt-1 pb-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            Ingredients
+            <ArrowUpRight className="size-3.5" />
+          </Link>
         </nav>
       </header>
 

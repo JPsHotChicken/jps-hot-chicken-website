@@ -1,9 +1,14 @@
 import { describe, it, expect } from "vitest";
 
+import { GenerationFormatError } from "@/lib/model-reply";
+
 import {
   ALLERGEN_NONE,
+  NotAProductSheetError,
   buildGraph,
   canBeComponent,
+  canBeIngredient,
+  parseItemSheet,
   costAll,
   costOf,
   filterItems,
@@ -48,6 +53,9 @@ function makeItem(code: string, type: ItemType, over: Partial<Item> = {}): Item 
     recipeUrl: "",
     menuPrice: null,
     allergens: [],
+    flavorTags: [],
+    textureTags: [],
+    intensity: 3,
     storageZone: "none",
     storageTemp: "",
     shelfLifeDays: null,
@@ -353,5 +361,134 @@ describe("filtering", () => {
     const gapsFor = (item: Item) => (item.type === "raw" ? 1 : 0);
     const found = filterItems(items, { ...EMPTY_FILTERS, incompleteOnly: true }, gapsFor);
     expect(found.map((item) => item.code)).toEqual(["RAW-0001"]);
+  });
+});
+
+/* ------------------------------------------------------ reading a spec sheet */
+
+describe("canBeIngredient", () => {
+  it("offers what goes in a dish, and nothing a dish is wrapped in", () => {
+    expect(canBeIngredient(makeItem("RAW-0001", "raw"))).toBe(true);
+    expect(canBeIngredient(makeItem("PRP-0001", "prepped"))).toBe(true);
+    expect(canBeIngredient(makeItem("PKG-0001", "packaging"))).toBe(false);
+    expect(canBeIngredient(makeItem("CHM-0001", "chemical"))).toBe(false);
+  });
+
+  it("leaves out a discontinued item, which is in nothing now", () => {
+    expect(canBeIngredient(makeItem("RAW-0009", "raw", { status: "discontinued" }))).toBe(false);
+  });
+
+  it("does not require the conversions a cost sheet needs", () => {
+    const uncosted = makeItem("RAW-0010", "raw", { stockUnit: "" });
+    expect(canBeComponent(uncosted)).toBe(false);
+    expect(canBeIngredient(uncosted)).toBe(true);
+  });
+});
+
+describe("parseItemSheet", () => {
+  const CATEGORIES = ["Produce", "Frozen", "Dry goods"];
+  const SHEET = {
+    is_product: true,
+    type: "raw",
+    internal_name: "  Breaded dill pickle chips ",
+    customer_name: "Fried pickles",
+    aliases: ["PICKLE CHIP BRD DILL"],
+    category: "frozen",
+    subcategory: "Appetizers",
+    purchase_unit: "case",
+    pack_size: "6 / 5 lb",
+    purchase_cost: "",
+    stock_unit: "lb",
+    stock_per_purchase_unit: "30",
+    portion_unit: "chip",
+    portions_per_stock_unit: "24",
+    allergens: ["Wheat"],
+    cross_contact: "Processed on shared equipment with shrimp and fish.",
+    flavor_tags: ["tangy", "salty", "sour"],
+    texture_tags: ["crunchy", "crispy"],
+    intensity: 4,
+    storage_zone: "frozen",
+    storage_temp: "0°F or below",
+    shelf_life_days: "365",
+    date_label_rule: "Use within 3 days of thawing",
+    notes: "Crinkle-cut dill pickle slices, battered and breaded.",
+  };
+
+  it("reads a well-formed reply, putting tags in the vocabulary's order", () => {
+    const { fields, crossContact } = parseItemSheet(JSON.stringify(SHEET), CATEGORIES);
+
+    expect(fields).toMatchObject({
+      type: "raw",
+      internalName: "Breaded dill pickle chips",
+      customerName: "Fried pickles",
+      aliases: ["PICKLE CHIP BRD DILL"],
+      purchaseUnit: "case",
+      packSize: "6 / 5 lb",
+      purchaseCost: null,
+      stockUnit: "lb",
+      stockPerPurchaseUnit: 30,
+      portionsPerStockUnit: 24,
+      allergens: ["Wheat"],
+      flavorTags: ["salty", "sour", "tangy"],
+      textureTags: ["crispy", "crunchy"],
+      intensity: 4,
+      storageZone: "frozen",
+      shelfLifeDays: 365,
+    });
+    expect(crossContact).toMatch(/shrimp and fish/);
+  });
+
+  it("snaps a category onto the spelling already in use", () => {
+    expect(parseItemSheet(JSON.stringify(SHEET), CATEGORIES).fields.category).toBe("Frozen");
+    // Nothing close enough to snap to is kept as read, for the owner to accept.
+    expect(parseItemSheet(JSON.stringify(SHEET), ["Produce"]).fields.category).toBe("frozen");
+  });
+
+  it("holds every value to what the record can save", () => {
+    const loose = {
+      ...SHEET,
+      type: "invented",
+      flavor_tags: ["salty", "pickled"],
+      allergens: ["Wheat", "Mustard"],
+      intensity: 9,
+      storage_zone: "cellar",
+      stock_per_purchase_unit: "about thirty",
+      shelf_life_days: "99999",
+    };
+    const { fields } = parseItemSheet(JSON.stringify(loose), CATEGORIES);
+
+    expect(fields.type).toBe("raw");
+    expect(fields.flavorTags).toEqual(["salty"]);
+    expect(fields.allergens).toEqual(["Wheat"]);
+    expect(fields.intensity).toBe(5);
+    expect(fields.storageZone).toBe("none");
+    // A number nobody can use is a blank box, never a zero.
+    expect(fields.stockPerPurchaseUnit).toBeNull();
+    expect(fields.shelfLifeDays).toBeNull();
+  });
+
+  it("keeps None only when it stands alone", () => {
+    const clear = { ...SHEET, allergens: [ALLERGEN_NONE] };
+    expect(parseItemSheet(JSON.stringify(clear), CATEGORIES).fields.allergens).toEqual([
+      ALLERGEN_NONE,
+    ]);
+
+    const muddled = { ...SHEET, allergens: [ALLERGEN_NONE, "Soy"] };
+    expect(parseItemSheet(JSON.stringify(muddled), CATEGORIES).fields.allergens).toEqual(["Soy"]);
+  });
+
+  it("refuses a document that isn't a product, and a reply with no name", () => {
+    expect(() =>
+      parseItemSheet(JSON.stringify({ ...SHEET, is_product: false }), CATEGORIES),
+    ).toThrow(NotAProductSheetError);
+    expect(() => parseItemSheet(JSON.stringify({ ...SHEET, internal_name: " " }), CATEGORIES)).toThrow(
+      /internal_name/,
+    );
+    expect(() => parseItemSheet("not json", CATEGORIES)).toThrow(GenerationFormatError);
+  });
+
+  it("tolerates a markdown fence around the JSON", () => {
+    const fenced = "```json\n" + JSON.stringify(SHEET) + "\n```";
+    expect(parseItemSheet(fenced, CATEGORIES).fields.internalName).toBe("Breaded dill pickle chips");
   });
 });

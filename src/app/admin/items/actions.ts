@@ -4,13 +4,20 @@ import { revalidatePath } from "next/cache";
 
 import { assertText, assertUuid, requireAdmin } from "@/lib/admin-guard";
 import * as repo from "@/lib/items-repo";
+import { markStaleForItems } from "@/lib/menu-descriptions-repo";
+import { MENU_DESCRIPTIONS_PATH, itemContentKey } from "@/lib/menu-descriptions";
 import {
+  FLAVOR_TAGS,
   ITEM_SCOPES,
   ITEM_STATUSES,
   ITEM_TYPES,
+  MAX_INTENSITY,
   STORAGE_ZONES,
+  TEXTURE_TAGS,
   isValidCode,
   normaliseCode,
+  pickFrom,
+  type Item,
   type ItemScope,
   type ItemStatus,
   type ItemType,
@@ -65,6 +72,15 @@ function requiredNumber(value: unknown, field: string, opts?: { min?: number; ma
   return parsed;
 }
 
+/** A whole number from a fixed range — the 1-to-5 buttons, not a typed box. */
+function wholeNumber(value: unknown, field: string, min: number, max: number): number {
+  const parsed = Math.round(Number(value));
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${field} must be a whole number from ${min} to ${max}.`);
+  }
+  return parsed;
+}
+
 /** The shape a form posts. Everything arrives as text or null. */
 export type ItemFormInput = {
   code: string;
@@ -89,6 +105,9 @@ export type ItemFormInput = {
   recipeUrl: string;
   menuPrice: string | null;
   allergens: string[];
+  flavorTags: string[];
+  textureTags: string[];
+  intensity: number;
   storageZone: string;
   storageTemp: string;
   shelfLifeDays: string | null;
@@ -139,6 +158,9 @@ function toDraft(input: ItemFormInput): repo.ItemDraft {
     menuPrice: optionalNumber(input.menuPrice, "Menu price"),
 
     allergens: input.allergens.filter((allergen) => allergen.trim()).slice(0, 20),
+    flavorTags: pickFrom(input.flavorTags ?? [], FLAVOR_TAGS),
+    textureTags: pickFrom(input.textureTags ?? [], TEXTURE_TAGS),
+    intensity: wholeNumber(input.intensity, "Intensity", 1, MAX_INTENSITY),
     storageZone: oneOf<StorageZone>(input.storageZone, STORAGE_ZONES, "Storage zone"),
     storageTemp: assertText(input.storageTemp, "Storage temperature", { max: 60 }),
     shelfLifeDays: shelfLife === null ? null : Math.round(shelfLife),
@@ -155,6 +177,44 @@ function toDraft(input: ItemFormInput): repo.ItemDraft {
   };
 }
 
+/* --------------------------------------------------- reaching menu copy */
+
+/**
+ * What the menu description writer reads off this item. Cost, pack size and par
+ * level aren't in it: they change often and change nothing about how a dish is
+ * described.
+ */
+const tasteKey = (item: Item) =>
+  itemContentKey({
+    name: item.internalName,
+    category: item.category,
+    flavorTags: item.flavorTags,
+    textureTags: item.textureTags,
+    intensity: item.intensity,
+    notes: item.notes,
+    // The build is compared separately: this is only called for field edits.
+    parts: [],
+  });
+
+/**
+ * Mark every generated description written from these items out of date, and
+ * say how many were fresh until now.
+ *
+ * Never worth losing an edit over: the catalogue is the record that matters,
+ * and a description left looking fresh is a smaller problem than a save that
+ * failed. A failure is logged and reported as "none".
+ */
+async function markDescriptionsStale(itemIds: string[]): Promise<number> {
+  try {
+    const count = await markStaleForItems(itemIds);
+    if (count > 0) revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
+    return count;
+  } catch (error) {
+    console.error("[items] could not mark descriptions out of date:", error);
+    return 0;
+  }
+}
+
 /* ---------------------------------------------------------------- actions */
 
 export async function createItemAction(input: ItemFormInput): Promise<string> {
@@ -164,22 +224,32 @@ export async function createItemAction(input: ItemFormInput): Promise<string> {
   return item.code;
 }
 
+/**
+ * Save an edit. Comes back with the item's code — which may have changed — and
+ * how many menu descriptions the edit put out of date, so the record can say so.
+ */
 export async function updateItemAction(
   id: string,
   input: ItemFormInput,
   summary: string,
-): Promise<string> {
+): Promise<{ code: string; staleCount: number }> {
   await requireEditor();
   assertUuid(id, "Item");
+
+  const before = await repo.findItemById(id);
   const item = await repo.updateItem(
     id,
     toDraft(input),
     AUTHOR,
     assertText(summary, "Change note", { max: 200 }) || "Edited",
   );
+
+  const staleCount =
+    before && tasteKey(before) === tasteKey(item) ? 0 : await markDescriptionsStale([id]);
+
   revalidatePath("/operations/items");
   revalidatePath(`/operations/items/${item.code}`);
-  return item.code;
+  return { code: item.code, staleCount };
 }
 
 export async function deleteItemAction(id: string): Promise<void> {
@@ -204,6 +274,8 @@ export async function addComponentAction(input: {
     requiredNumber(input.quantity, "Quantity", { min: 0.0001 }),
     oneOf<UnitBasis>(input.basis, ["stock", "portion"], "Unit"),
   );
+  // What an item is made of is part of how it is described.
+  await markDescriptionsStale([input.parentId]);
   revalidatePath("/operations/items");
 }
 
@@ -213,7 +285,7 @@ export async function updateComponentAction(
 ): Promise<void> {
   await requireEditor();
   assertUuid(id, "Component");
-  await repo.updateComponent(id, {
+  const parentId = await repo.updateComponent(id, {
     ...(patch.quantity !== undefined
       ? { quantity: requiredNumber(patch.quantity, "Quantity", { min: 0.0001 }) }
       : {}),
@@ -224,13 +296,15 @@ export async function updateComponentAction(
       ? { note: assertText(patch.note, "Note", { max: 200 }) }
       : {}),
   });
+  await markDescriptionsStale([parentId]);
   revalidatePath("/operations/items");
 }
 
 export async function removeComponentAction(id: string): Promise<void> {
   await requireEditor();
   assertUuid(id, "Component");
-  await repo.removeComponent(id);
+  const parentId = await repo.removeComponent(id);
+  await markDescriptionsStale([parentId]);
   revalidatePath("/operations/items");
 }
 

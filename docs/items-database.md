@@ -5,9 +5,15 @@ every physical and menu item in the operation. Handbooks, recipe cards, cost
 sheets, order guides and allergen matrices are meant to *point at* it rather
 than restate what it holds.
 
+It is also the **ingredient list** the
+[menu description generator](./menu-descriptions.md) writes from. One record
+holds what a thing costs *and* what it tastes like, so a product bought, costed
+and described is entered once.
+
 It uses the same Supabase project and the same environment variables as the
 scheduler — see [`scheduler-database-setup.md`](./scheduler-database-setup.md).
-Nothing extra needs configuring.
+Reading a spec sheet also needs `ANTHROPIC_API_KEY`; everything else works
+without it.
 
 ## The core idea
 
@@ -50,13 +56,51 @@ does not set it.
 
 Everything that changes a record is on `/admin/items`:
 
-- **New item** — identity first, then the record itself.
+- **New item** — from the supplier's paperwork, or identity first by hand.
 - **Edit** on any record — every field its type calls for.
 - **What's in it** — add and remove components, in stock or portion units.
+- **Taste & texture** — flavour and texture tags and an intensity of 1–5, which
+  is what the menu description generator reads.
 - **Approved suppliers** — approve a supplier, record their part number and price.
 - **Delete** — refused while anything is still built from the item.
 
 Each save bumps the version and writes a dated, attributed line to the history.
+A save that changes what the description generator reads — the name, category,
+tags, intensity, notes, or what the item is made of — marks every menu
+description written from it **out of date**, and the record says how many.
+
+## Starting an item from the paperwork
+
+On **New item**, upload a supplier's spec sheet, a case label, or a photo of one
+— PDF, JPEG or PNG, up to 4 MB each. Pick several and they are read one after
+another, each becoming a draft to check. Nothing is saved until **Create**.
+
+The file is posted to `/api/admin/items/spec-sheet` (a route, not a Server
+Action, because actions have a 1 MB body limit; the route caps files at 4 MB,
+under Vercel's 4.5 MB). It checks the session, checks what the file really is by
+its first bytes rather than its name, and sends it to Claude
+(`claude-opus-5`). The instructions live in
+[`src/lib/items-ai.ts`](../src/lib/items-ai.ts); the reply is constrained to a
+JSON schema and checked again by `parseItemSheet` in
+[`src/lib/items.ts`](../src/lib/items.ts), which forces every value back onto
+what the record can hold.
+
+What it fills in, and what it deliberately does not:
+
+- **Identity, purchasing, units, allergens, storage, taste and notes** are read
+  from the document. Pack size becomes the purchase → stock conversion where the
+  sheet says enough to be sure: a case of 6 × 5 lb is 30 lb.
+- **Par level, reorder point, menu price, yield after trim and where the item is
+  sold are never guessed at.** They are decisions about this operation, not facts
+  about the product.
+- **A price is only taken when the document states one.** Most spec sheets don't.
+- **"May contain" and shared-equipment warnings are shown, not saved.** The
+  allergen list means *contains*; a warning folded into it would make every
+  allergen matrix built on the item wrong.
+- **An empty field is left empty.** A blank is somebody's job to fill in; a wrong
+  value is nobody's, and it will be costed and served.
+- The category is snapped onto a spelling already in use, so "produce" doesn't
+  split the filter from "Produce".
 
 ## Item layers
 
@@ -67,10 +111,10 @@ Reached from the dashboard drawer, next to the truck order and labor summary.
 
 | Type | Code prefix | Field groups |
 |---|---|---|
-| Raw / purchased | `RAW-` | purchasing, units, allergens, storage |
-| Prepped / sub-recipe | `PRP-` | units, what's in it, allergens, storage |
-| Menu item | `MNU-` | what's in it, allergens, menu price |
-| Modifier / add-on | `MOD-` | what's in it, allergens, menu price |
+| Raw / purchased | `RAW-` | purchasing, units, taste, allergens, storage |
+| Prepped / sub-recipe | `PRP-` | units, what's in it, taste, allergens, storage |
+| Menu item | `MNU-` | what's in it, taste, allergens, menu price |
+| Modifier / add-on | `MOD-` | what's in it, taste, allergens, menu price |
 | Packaging | `PKG-` | purchasing, units |
 | Chemical / cleaning | `CHM-` | purchasing, units, storage |
 | Smallware / equipment | `SMW-` | purchasing |
@@ -132,7 +176,7 @@ These are enforced in the database, not just the UI:
 
 | Table | Holds |
 |---|---|
-| `items` | One row per physical or menu item. The spine. |
+| `items` | One row per physical or menu item. The spine — including `flavor_tags`, `texture_tags` and `intensity`, which the description generator reads. |
 | `item_components` | The bill of materials — one row per "X is made from Y". |
 | `suppliers` | Who the operation buys from. |
 | `item_suppliers` | Approved suppliers per item, with their part number and price. |
@@ -156,9 +200,18 @@ supplier charges. The quotes inform the cost; they do not silently become it.
 
 ## Sample data
 
-The catalogue currently holds **12 sample items with invented prices** — a
-working three-layer example (flour and cayenne → dredge → sandwich). Every one
-is marked **Test** so the product itself says so.
+The catalogue holds **12 sample items with invented prices** — a working
+three-layer example (flour and cayenne → dredge → sandwich). Every one is marked
+**Test** so the product itself says so. Their notes still read "Sample data —
+invented prices", and notes are one of the things the description generator
+reads, so clear them on any item you keep.
+
+Alongside them are the **33 rows that used to be the menu generator's own
+ingredient list**, moved in as `RAW-` items. Four of them (flour, cayenne,
+brioche bun, dill pickle chips) merged into the sample item of the same name;
+the rest were created fresh, carrying their flavour, texture, intensity and
+allergens, with purchasing, units and storage left blank — which is why they
+read as incomplete. Filling those in is what makes them costable.
 
 To clear them before entering real data:
 

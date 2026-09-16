@@ -6,26 +6,28 @@ import { ChevronDown } from "lucide-react";
 import { FIELD_CLASS } from "@/components/admin/field";
 
 export type PartOption = {
-  kind: "ingredient" | "recipe";
+  kind: "item" | "recipe";
   id: string;
   name: string;
-  /** A second line of context: an ingredient's category, or "Menu item". */
+  /** An item's code, so the catalogue and the recipe read the same way. */
+  code?: string;
+  /** A second line of context: an item's category, or "Menu item". */
   detail: string;
 };
 
-export type PartValue = { kind: "ingredient" | "recipe"; id: string } | null;
+export type PartValue = { kind: "item" | "recipe"; id: string } | null;
 
 const GROUPS = [
-  { kind: "ingredient", label: "Ingredients" },
+  { kind: "item", label: "Items" },
   { kind: "recipe", label: "Recipes" },
 ] as const;
 
 /**
- * A searchable dropdown over ingredients and recipes together, grouped.
+ * A searchable dropdown over the catalogue and the recipes together, grouped.
  *
- * Built on a plain input rather than a `<select>` because a few dozen
- * ingredients are unusable without typing to filter. Follows the ARIA combobox
- * pattern: arrows move, Enter picks, Escape puts the box back as it was.
+ * Built on a plain input rather than a `<select>` because a few dozen items are
+ * unusable without typing to filter. Follows the ARIA combobox pattern: arrows
+ * move, Enter picks, Escape puts the box back as it was.
  */
 export function PartPicker({
   options,
@@ -51,8 +53,11 @@ export function PartPicker({
   // Grouped for display, flattened for keyboard movement — one index covers both.
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    // Codes match too: somebody reading off a case label types RAW-0011.
     const found = needle
-      ? options.filter((option) => option.name.toLowerCase().includes(needle))
+      ? options.filter((option) =>
+          `${option.name} ${option.code ?? ""}`.toLowerCase().includes(needle),
+        )
       : options;
     return GROUPS.flatMap((group) => found.filter((option) => option.kind === group.kind));
   }, [options, query]);
@@ -84,7 +89,7 @@ export function PartPicker({
         aria-autocomplete="list"
         aria-activedescendant={open && matches[active] ? optionId(active) : undefined}
         value={open ? query : (selected?.name ?? "")}
-        placeholder={selected ? selected.name : "Choose an ingredient or recipe…"}
+        placeholder={selected ? selected.name : "Choose an item or recipe…"}
         onFocus={() => {
           setOpen(true);
           setQuery("");
@@ -170,6 +175,11 @@ export function PartPicker({
                           index === active ? "bg-muted" : ""
                         } ${isSelected ? "font-semibold" : ""}`}
                       >
+                        {option.code && (
+                          <code className="shrink-0 font-mono text-[0.7rem] text-muted-foreground">
+                            {option.code}
+                          </code>
+                        )}
                         <span className="min-w-0 flex-1 truncate">{option.name}</span>
                         <span className="shrink-0 text-xs text-muted-foreground">{option.detail}</span>
                       </div>

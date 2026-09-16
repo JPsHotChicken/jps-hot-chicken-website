@@ -2,8 +2,12 @@ import "server-only";
 
 import { getDb } from "@/lib/supabase/server";
 import {
+  DEFAULT_INTENSITY,
+  FLAVOR_TAGS,
+  TEXTURE_TAGS,
   buildGraph,
   normaliseCode,
+  pickFrom,
   type Component,
   type Item,
   type ItemGraph,
@@ -34,7 +38,8 @@ const ITEM_COLUMNS = `
   purchase_unit, pack_size, purchase_cost, par_level, reorder_point,
   stock_unit, portion_unit, stock_per_purchase_unit, portions_per_stock_unit, yield_factor,
   batch_yield_quantity, recipe_url, menu_price,
-  allergens, storage_zone, storage_temp, shelf_life_days, date_label_rule, nutrition,
+  allergens, flavor_tags, texture_tags, intensity,
+  storage_zone, storage_temp, shelf_life_days, date_label_rule, nutrition,
   photo_url, sop_links, notes,
   scope, available_everywhere, version, created_at, updated_at, updated_by
 `;
@@ -77,6 +82,9 @@ type ItemRow = {
   recipe_url: string;
   menu_price: number | null;
   allergens: string[];
+  flavor_tags: string[];
+  texture_tags: string[];
+  intensity: number;
   storage_zone: StorageZone;
   storage_temp: string;
   shelf_life_days: number | null;
@@ -141,6 +149,9 @@ function toItem(row: ItemRow): Item {
     recipeUrl: row.recipe_url,
     menuPrice: num(row.menu_price),
     allergens: row.allergens ?? [],
+    flavorTags: pickFrom(row.flavor_tags ?? [], FLAVOR_TAGS),
+    textureTags: pickFrom(row.texture_tags ?? [], TEXTURE_TAGS),
+    intensity: Number(row.intensity ?? DEFAULT_INTENSITY),
     storageZone: row.storage_zone,
     storageTemp: row.storage_temp,
     shelfLifeDays: row.shelf_life_days,
@@ -203,6 +214,14 @@ export async function loadGraph(): Promise<ItemGraph> {
   }
 
   return buildGraph(items, components);
+}
+
+export async function findItemById(id: string): Promise<Item | null> {
+  const db = getDb();
+  const { data, error } = await db.from("items").select(ITEM_COLUMNS).eq("id", id).maybeSingle();
+
+  if (error) fail("finding an item", error);
+  return data ? toItem(data as unknown as ItemRow) : null;
 }
 
 export async function findItemByCode(code: string): Promise<Item | null> {
@@ -346,6 +365,9 @@ function toRow(draft: ItemDraft) {
     recipe_url: draft.recipeUrl.trim(),
     menu_price: draft.menuPrice,
     allergens: draft.allergens,
+    flavor_tags: draft.flavorTags,
+    texture_tags: draft.textureTags,
+    intensity: draft.intensity,
     storage_zone: draft.storageZone,
     storage_temp: draft.storageTemp.trim(),
     shelf_life_days: draft.shelfLifeDays,
@@ -491,19 +513,33 @@ export async function addComponent(
   if (error) fail("adding a component", error);
 }
 
+/** Returns the id of the item whose build changed. */
 export async function updateComponent(
   id: string,
   patch: { quantity?: number; basis?: UnitBasis; note?: string },
-): Promise<void> {
+): Promise<string> {
   const db = getDb();
-  const { error } = await db.from("item_components").update(patch).eq("id", id);
+  const { data, error } = await db
+    .from("item_components")
+    .update(patch)
+    .eq("id", id)
+    .select("parent_id")
+    .single();
   if (error) fail("updating a component", error);
+  return data.parent_id;
 }
 
-export async function removeComponent(id: string): Promise<void> {
+/** Returns the id of the item whose build changed. */
+export async function removeComponent(id: string): Promise<string> {
   const db = getDb();
-  const { error } = await db.from("item_components").delete().eq("id", id);
+  const { data, error } = await db
+    .from("item_components")
+    .delete()
+    .eq("id", id)
+    .select("parent_id")
+    .single();
   if (error) fail("removing a component", error);
+  return data.parent_id;
 }
 
 /* --------------------------------------------------------------- suppliers */

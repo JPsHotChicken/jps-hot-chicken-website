@@ -1021,7 +1021,9 @@ export type Database = {
           created_at: string;
           customer_name: string;
           date_label_rule: string;
+          flavor_tags: string[];
           id: string;
+          intensity: number;
           internal_name: string;
           menu_price: number | null;
           notes: string;
@@ -1044,6 +1046,7 @@ export type Database = {
           storage_temp: string;
           storage_zone: Database["public"]["Enums"]["storage_zone"];
           subcategory: string;
+          texture_tags: string[];
           type: Database["public"]["Enums"]["item_type"];
           updated_at: string;
           updated_by: string;
@@ -1060,7 +1063,9 @@ export type Database = {
           created_at?: string;
           customer_name?: string;
           date_label_rule?: string;
+          flavor_tags?: string[];
           id?: string;
+          intensity?: number;
           internal_name: string;
           menu_price?: number | null;
           notes?: string;
@@ -1083,6 +1088,7 @@ export type Database = {
           storage_temp?: string;
           storage_zone?: Database["public"]["Enums"]["storage_zone"];
           subcategory?: string;
+          texture_tags?: string[];
           type: Database["public"]["Enums"]["item_type"];
           updated_at?: string;
           updated_by?: string;
@@ -1099,7 +1105,9 @@ export type Database = {
           created_at?: string;
           customer_name?: string;
           date_label_rule?: string;
+          flavor_tags?: string[];
           id?: string;
+          intensity?: number;
           internal_name?: string;
           menu_price?: number | null;
           notes?: string;
@@ -1122,6 +1130,7 @@ export type Database = {
           storage_temp?: string;
           storage_zone?: Database["public"]["Enums"]["storage_zone"];
           subcategory?: string;
+          texture_tags?: string[];
           type?: Database["public"]["Enums"]["item_type"];
           updated_at?: string;
           updated_by?: string;
@@ -1257,7 +1266,7 @@ export type Database = {
           amount: number;
           child_recipe_id: string | null;
           id: string;
-          ingredient_id: string | null;
+          item_id: string | null;
           prep_note: string;
           recipe_id: string;
           sort_order: number;
@@ -1267,7 +1276,7 @@ export type Database = {
           amount: number;
           child_recipe_id?: string | null;
           id?: string;
-          ingredient_id?: string | null;
+          item_id?: string | null;
           prep_note?: string;
           recipe_id: string;
           sort_order?: number;
@@ -1277,7 +1286,7 @@ export type Database = {
           amount?: number;
           child_recipe_id?: string | null;
           id?: string;
-          ingredient_id?: string | null;
+          item_id?: string | null;
           prep_note?: string;
           recipe_id?: string;
           sort_order?: number;
@@ -1292,10 +1301,10 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "recipe_components_ingredient_id_fkey";
-            columns: ["ingredient_id"];
+            foreignKeyName: "recipe_components_item_id_fkey";
+            columns: ["item_id"];
             isOneToOne: false;
-            referencedRelation: "ingredients";
+            referencedRelation: "items";
             referencedColumns: ["id"];
           },
           {

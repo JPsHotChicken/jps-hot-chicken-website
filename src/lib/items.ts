@@ -7,9 +7,23 @@
  * what lets one supplier price entered once ripple up through every recipe
  * built on it.
  *
+ * This is also the ingredient list the menu description generator writes from:
+ * an item carries how it tastes and how it eats alongside what it costs, so a
+ * thing bought, costed and described is one record rather than three.
+ *
  * Nothing in here touches the database. The repo loads rows, this works out
  * what they mean, and the components render it.
  */
+
+import {
+  GenerationError,
+  GenerationFormatError,
+  boundedInteger,
+  clip,
+  optionalNumber,
+  readReplyObject,
+  stringList,
+} from "@/lib/model-reply";
 
 /* --------------------------------------------------------------- vocabulary */
 
@@ -118,6 +132,63 @@ export const ALLERGENS = [
   "Sesame",
 ];
 
+/* ------------------------------------------------------------ how it tastes */
+
+/**
+ * What the menu description generator reads off an item. Fixed lists by design:
+ * adding a flavour is a code change, not a settings screen, because every
+ * description ever written was weighed against these same words.
+ */
+
+export const FLAVOR_TAGS = [
+  "sweet",
+  "salty",
+  "sour",
+  "bitter",
+  "umami",
+  "spicy",
+  "smoky",
+  "tangy",
+  "herbal",
+  "garlicky",
+  "oniony",
+  "creamy",
+  "nutty",
+  "earthy",
+  "citrusy",
+  "buttery",
+  "fermented",
+  "charred",
+  "peppery",
+] as const;
+
+export const TEXTURE_TAGS = [
+  "crispy",
+  "crunchy",
+  "creamy",
+  "tender",
+  "juicy",
+  "chewy",
+  "flaky",
+  "soft",
+  "firm",
+  "silky",
+  "crumbly",
+] as const;
+
+export type FlavorTag = (typeof FLAVOR_TAGS)[number];
+export type TextureTag = (typeof TEXTURE_TAGS)[number];
+
+/** How loudly an item reads in a dish: 1 barely there, 5 dominates. */
+export const MAX_INTENSITY = 5;
+export const DEFAULT_INTENSITY = 3;
+
+/** Keep only values that are on `allowed`, in the vocabulary's own order. */
+export function pickFrom<T extends string>(values: readonly string[], allowed: readonly T[]): T[] {
+  const chosen = new Set(values);
+  return allowed.filter((value) => chosen.has(value));
+}
+
 /* -------------------------------------------------------------------- shapes */
 
 export type Item = {
@@ -149,6 +220,9 @@ export type Item = {
   menuPrice: number | null;
 
   allergens: string[];
+  flavorTags: FlavorTag[];
+  textureTags: TextureTag[];
+  intensity: number;
   storageZone: StorageZone;
   storageTemp: string;
   shelfLifeDays: number | null;
@@ -262,16 +336,17 @@ export type FieldGroup =
   | "purchasing"
   | "units"
   | "recipe"
+  | "taste"
   | "allergens"
   | "storage"
   | "menu"
   | "assets";
 
 export const FIELD_GROUPS: Record<ItemType, FieldGroup[]> = {
-  raw: ["purchasing", "units", "allergens", "storage", "assets"],
-  prepped: ["units", "recipe", "allergens", "storage", "assets"],
-  menu: ["recipe", "allergens", "menu", "assets"],
-  modifier: ["recipe", "allergens", "menu", "assets"],
+  raw: ["purchasing", "units", "taste", "allergens", "storage", "assets"],
+  prepped: ["units", "recipe", "taste", "allergens", "storage", "assets"],
+  menu: ["recipe", "taste", "allergens", "menu", "assets"],
+  modifier: ["recipe", "taste", "allergens", "menu", "assets"],
   packaging: ["purchasing", "units", "assets"],
   chemical: ["purchasing", "units", "storage", "assets"],
   smallware: ["purchasing", "assets"],
@@ -282,6 +357,7 @@ export const FIELD_GROUP_LABELS: Record<FieldGroup, string> = {
   purchasing: "Purchasing",
   units: "Units & conversions",
   recipe: "What's in it",
+  taste: "Taste & texture",
   allergens: "Allergens",
   storage: "Storage & shelf life",
   menu: "Menu",
@@ -297,6 +373,16 @@ export const isConsumable = (type: ItemType): boolean =>
 
 /** Items built by reference from other items rather than bought. */
 export const isAssembled = (type: ItemType): boolean => hasGroup(type, "recipe");
+
+/**
+ * Whether an item may go on a line of a menu description recipe.
+ *
+ * Looser than `canBeComponent`, deliberately: describing what a dish tastes
+ * like needs no unit conversion, so an item nobody has costed yet can still be
+ * written about. A discontinued item is left out — it isn't in anything now.
+ */
+export const canBeIngredient = (item: Item): boolean =>
+  isConsumable(item.type) && item.status !== "discontinued";
 
 /* ------------------------------------------------------------------ costing */
 
@@ -714,6 +800,132 @@ export const normaliseCode = (code: string): string =>
 
 export function isValidCode(code: string): boolean {
   return /^[A-Z0-9][A-Z0-9-]{1,31}$/.test(normaliseCode(code));
+}
+
+/* ----------------------------------------------------- reading a spec sheet */
+
+/**
+ * What the model read off a supplier's spec sheet, label or product photo.
+ *
+ * Only fields a document can actually answer. Par levels, menu price, yield
+ * after trim and where the item is sold are decisions about this operation, not
+ * facts about the product, so they are never guessed at — the form leaves them
+ * alone for somebody to set.
+ */
+export type ItemSheetFields = {
+  type: ItemType;
+  internalName: string;
+  customerName: string;
+  aliases: string[];
+  category: string;
+  subcategory: string;
+
+  purchaseUnit: string;
+  packSize: string;
+  purchaseCost: number | null;
+
+  stockUnit: string;
+  portionUnit: string;
+  stockPerPurchaseUnit: number | null;
+  portionsPerStockUnit: number | null;
+
+  allergens: string[];
+  flavorTags: FlavorTag[];
+  textureTags: TextureTag[];
+  intensity: number;
+
+  storageZone: StorageZone;
+  storageTemp: string;
+  shelfLifeDays: number | null;
+  dateLabelRule: string;
+
+  notes: string;
+};
+
+export type ItemSheetReading = {
+  fields: ItemSheetFields;
+  /**
+   * "May contain" and shared-equipment warnings. Shown to the owner but never
+   * saved: the allergen list means "contains", and a warning quietly folded
+   * into it would make every allergen matrix built on this item wrong.
+   */
+  crossContact: string;
+};
+
+/** Raised when the file isn't a product's spec sheet, label or photo. */
+export class NotAProductSheetError extends GenerationError {
+  constructor() {
+    super("That file doesn't look like a product's spec sheet, label or photo.");
+    this.name = "NotAProductSheetError";
+  }
+}
+
+/**
+ * Parse and check what the model read off a sheet.
+ *
+ * Every value is forced back onto the lists the record accepts, so the form
+ * never opens holding something it can't save. A category that matches one
+ * already in use is snapped to that spelling — "produce" typed into a
+ * catalogue full of "Produce" would otherwise quietly split the filter in two.
+ */
+export function parseItemSheet(text: string, categories: readonly string[]): ItemSheetReading {
+  const reply = readReplyObject(text);
+  if (reply.is_product === false) throw new NotAProductSheetError();
+
+  const internalName = clip(reply.internal_name, 120);
+  if (!internalName) throw new GenerationFormatError("internal_name is missing");
+
+  const list = (field: string): string[] => {
+    const value = reply[field];
+    if (!Array.isArray(value)) return [];
+    return value.filter((entry): entry is string => typeof entry === "string");
+  };
+
+  const category = clip(reply.category, 60);
+  const known = categories.find((existing) => existing.toLowerCase() === category.toLowerCase());
+
+  const allergens = pickFrom(list("allergens"), ALLERGENS);
+
+  return {
+    fields: {
+      type: (ITEM_TYPES as string[]).includes(String(reply.type))
+        ? (reply.type as ItemType)
+        : "raw",
+      internalName,
+      customerName: clip(reply.customer_name, 120),
+      aliases: stringList(reply.aliases, "aliases", 5).map((alias) => alias.slice(0, 60)),
+      category: known ?? category,
+      subcategory: clip(reply.subcategory, 60),
+
+      purchaseUnit: clip(reply.purchase_unit, 40),
+      packSize: clip(reply.pack_size, 40),
+      purchaseCost: optionalNumber(reply.purchase_cost, { max: 100_000, places: 2 }),
+
+      stockUnit: clip(reply.stock_unit, 40),
+      portionUnit: clip(reply.portion_unit, 40),
+      stockPerPurchaseUnit: optionalNumber(reply.stock_per_purchase_unit, { min: 0.0001 }),
+      portionsPerStockUnit: optionalNumber(reply.portions_per_stock_unit, { min: 0.0001 }),
+
+      // "None" is a claim of its own — kept only when it stands alone.
+      allergens: allergens.length > 1 ? allergens.filter((name) => name !== ALLERGEN_NONE) : allergens,
+      flavorTags: pickFrom(list("flavor_tags"), FLAVOR_TAGS),
+      textureTags: pickFrom(list("texture_tags"), TEXTURE_TAGS),
+      intensity: boundedInteger(reply.intensity, 1, MAX_INTENSITY, DEFAULT_INTENSITY),
+
+      storageZone: (STORAGE_ZONES as string[]).includes(String(reply.storage_zone))
+        ? (reply.storage_zone as StorageZone)
+        : "none",
+      storageTemp: clip(reply.storage_temp, 60),
+      shelfLifeDays: (() => {
+        const days = optionalNumber(reply.shelf_life_days, { min: 1, max: 3650, places: 0 });
+        return days === null ? null : Math.round(days);
+      })(),
+      dateLabelRule: clip(reply.date_label_rule, 200),
+
+      notes: clip(reply.notes, 2000),
+    },
+    crossContact: clip(reply.cross_contact, 300),
+  };
 }
 
 /* ------------------------------------------------------------- list rows */

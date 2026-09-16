@@ -1,19 +1,30 @@
 /**
  * Menu description generator: vocabulary, shapes, and the walks over them.
  *
- * Ingredients carry what a dish tastes and feels like. Recipes are built from
- * ingredients and from other recipes — a house sauce is a recipe, and so is the
- * sandwich that uses it; `isMenuItem` is the only difference. A recipe's menu
- * copy is written by the model from the whole tree, sub-recipes included.
- *
- * This is deliberately separate from the items database (`src/lib/items.ts`):
- * that catalogue is about cost and purchasing, this one only about flavour,
- * texture and allergens.
+ * The ingredients are the items database (`src/lib/items.ts`) — one catalogue,
+ * where what a thing costs and what it tastes like are two halves of one
+ * record. Recipes are built from items and from other recipes: a house sauce is
+ * a recipe, and so is the sandwich that uses it; `isMenuItem` is the only
+ * difference. A recipe's menu copy is written by the model from the whole tree,
+ * sub-recipes expanded and any item's own bill of materials with them.
  *
  * Nothing in here touches the database or the network, so every rule — the
  * allergen roll-up, loop detection, which descriptions go stale, and reading
  * the model's reply — is testable with plain objects.
  */
+
+import {
+  ALLERGENS as ITEM_ALLERGENS,
+  ALLERGEN_NONE,
+  type FlavorTag,
+  type TextureTag,
+} from "@/lib/items";
+import {
+  GenerationFormatError,
+  readReplyObject,
+  requiredText,
+  stringList,
+} from "@/lib/model-reply";
 
 /** Where the generator lives on the dashboard. */
 export const MENU_DESCRIPTIONS_PATH = "/admin/menu-descriptions";
@@ -21,62 +32,15 @@ export const MENU_DESCRIPTIONS_PATH = "/admin/menu-descriptions";
 /* --------------------------------------------------------------- vocabulary */
 
 // Fixed lists by design. Changing one is a code change, not a settings screen.
-// Ingredient categories are the exception: they live in `ingredient_categories`
-// and the owner edits them on the Ingredients tab.
+// Flavour, texture, intensity and allergens are the item's own vocabulary and
+// live with the item; the units and taste axes below belong to the generator.
 
-/** Longest category name the table accepts. */
-export const MAX_CATEGORY_LENGTH = 40;
-
-/** A category as stored: trimmed, single-spaced, lower-case. "Frozen  Apps " → "frozen apps". */
-export const normaliseCategory = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
-
-export const FLAVOR_TAGS = [
-  "sweet",
-  "salty",
-  "sour",
-  "bitter",
-  "umami",
-  "spicy",
-  "smoky",
-  "tangy",
-  "herbal",
-  "garlicky",
-  "oniony",
-  "creamy",
-  "nutty",
-  "earthy",
-  "citrusy",
-  "buttery",
-  "fermented",
-  "charred",
-  "peppery",
-] as const;
-
-export const TEXTURE_TAGS = [
-  "crispy",
-  "crunchy",
-  "creamy",
-  "tender",
-  "juicy",
-  "chewy",
-  "flaky",
-  "soft",
-  "firm",
-  "silky",
-  "crumbly",
-] as const;
-
-export const ALLERGENS = [
-  "dairy",
-  "egg",
-  "gluten",
-  "soy",
-  "tree nut",
-  "peanut",
-  "shellfish",
-  "fish",
-  "sesame",
-] as const;
+/**
+ * The allergens a roll-up can report — the item list, less its "None" marker.
+ * "None" is a statement about a record ("checked, contains nothing"), not an
+ * allergen a dish can contain, so it never appears in a roll-up.
+ */
+export const ALLERGENS = ITEM_ALLERGENS.filter((allergen) => allergen !== ALLERGEN_NONE);
 
 /** Units a component line may be measured in. */
 export const COMPONENT_UNITS = ["oz", "each", "tbsp", "tsp", "cups", "g", "slices", "pinch"] as const;
@@ -97,40 +61,47 @@ export const TASTE_DIMENSIONS = [
   "richness",
 ] as const;
 
-export type FlavorTag = (typeof FLAVOR_TAGS)[number];
-export type TextureTag = (typeof TEXTURE_TAGS)[number];
-export type Allergen = (typeof ALLERGENS)[number];
 export type TasteDimension = (typeof TASTE_DIMENSIONS)[number];
 
-export const MAX_INTENSITY = 5;
 export const MAX_TASTE_SCORE = 5;
-
-/** Keep only values that are in `allowed`, in the vocabulary's own order. */
-export function pickFrom<T extends string>(values: readonly string[], allowed: readonly T[]): T[] {
-  const chosen = new Set(values);
-  return allowed.filter((value) => chosen.has(value));
-}
 
 export const isOneOf = <T extends string>(value: string, allowed: readonly T[]): value is T =>
   (allowed as readonly string[]).includes(value);
 
 /* -------------------------------------------------------------------- shapes */
 
+/**
+ * An item from the catalogue, as the generator reads it.
+ *
+ * Only the fields that bear on how a dish tastes — the cost and purchasing half
+ * of the record is no business of the description writer. `parts` is the item's
+ * own bill of materials, so a prepped item used in a recipe carries what it is
+ * made of without anybody typing it twice.
+ */
 export type Ingredient = {
   id: string;
+  code: string;
   name: string;
-  /** One of the names in `ingredient_categories`. */
   category: string;
   flavorTags: FlavorTag[];
   textureTags: TextureTag[];
   intensity: number;
-  allergens: Allergen[];
+  allergens: string[];
   notes: string;
+  parts: IngredientPart[];
 };
 
-/** One line of a recipe: exactly one of `ingredientId` and `childRecipeId` is set. */
+/** One line of an item's own bill of materials, with its unit already resolved. */
+export type IngredientPart = {
+  itemId: string;
+  quantity: number;
+  /** The component's stock or portion unit, whichever the line was written in. */
+  unit: string;
+};
+
+/** One line of a recipe: exactly one of `itemId` and `childRecipeId` is set. */
 export type RecipeComponent = {
-  ingredientId: string | null;
+  itemId: string | null;
   childRecipeId: string | null;
   amount: number;
   unit: string;
@@ -162,6 +133,7 @@ export type Recipe = {
 
 /** Everything the generator holds. Small enough to load whole. */
 export type Library = {
+  /** The items that may go on a recipe line, keyed on nothing — order is display order. */
   ingredients: Ingredient[];
   recipes: Recipe[];
 };
@@ -181,34 +153,49 @@ function indexLibrary(library: Library): Index {
 /* ------------------------------------------------------------------ allergens */
 
 export type AllergenSource = {
-  allergen: Allergen;
-  /** Where it comes from, e.g. "Brioche bun" or "House Comeback Sauce → Duke's mayonnaise". */
+  allergen: string;
+  /** Where it comes from, e.g. "Brioche bun" or "House sauce → Duke's mayonnaise". */
   sources: string[];
 };
 
 /**
- * Every allergen in a list of component lines, reaching into sub-recipes.
+ * Every allergen in a list of component lines, reaching into sub-recipes and
+ * into what each item is itself made of.
  *
  * Takes lines rather than a saved recipe so the builder can show the roll-up
- * for what is on screen before it is saved. Sub-recipes are read as saved. A
- * loop is impossible in saved data, but the walk still refuses to revisit a
- * recipe, so a bad row could never hang the page.
+ * for what is on screen before it is saved. Sub-recipes and item components are
+ * read as saved. A loop is impossible in saved data, but neither walk revisits
+ * anything, so a bad row could never hang the page.
  */
 export function rollUpAllergens(lines: RecipeComponent[], library: Library): AllergenSource[] {
   const index = indexLibrary(library);
-  const found = new Map<Allergen, string[]>();
+  const found = new Map<string, string[]>();
+
+  const record = (allergen: string, trail: string[]) => {
+    if (allergen === ALLERGEN_NONE) return;
+    const path = trail.join(" → ");
+    const sources = found.get(allergen) ?? [];
+    if (!sources.includes(path)) sources.push(path);
+    found.set(allergen, sources);
+  };
+
+  /** An item, then everything the catalogue says it is built from. */
+  const walkItem = (ingredient: Ingredient, trail: string[], visiting: Set<string>) => {
+    for (const allergen of ingredient.allergens) record(allergen, trail);
+    for (const part of ingredient.parts) {
+      if (visiting.has(part.itemId)) continue;
+      const below = index.ingredients.get(part.itemId);
+      if (!below) continue;
+      walkItem(below, [...trail, below.name], new Set(visiting).add(part.itemId));
+    }
+  };
 
   const walk = (parts: RecipeComponent[], trail: string[], visiting: Set<string>) => {
     for (const part of parts) {
-      if (part.ingredientId) {
-        const ingredient = index.ingredients.get(part.ingredientId);
+      if (part.itemId) {
+        const ingredient = index.ingredients.get(part.itemId);
         if (!ingredient) continue;
-        const path = [...trail, ingredient.name].join(" → ");
-        for (const allergen of ingredient.allergens) {
-          const sources = found.get(allergen) ?? [];
-          if (!sources.includes(path)) sources.push(path);
-          found.set(allergen, sources);
-        }
+        walkItem(ingredient, [...trail, ingredient.name], new Set([part.itemId]));
       } else if (part.childRecipeId && !visiting.has(part.childRecipeId)) {
         const child = index.recipes.get(part.childRecipeId);
         if (!child) continue;
@@ -261,17 +248,46 @@ export function wouldCreateLoop(parentId: string | null, childId: string, recipe
   return recipesContaining(parentId, recipes).has(childId);
 }
 
+/** The item itself plus every item built from it, however many layers up. */
+export function itemsContaining(itemId: string, ingredients: Ingredient[]): Set<string> {
+  const parentsOf = new Map<string, string[]>();
+  for (const ingredient of ingredients) {
+    for (const part of ingredient.parts) {
+      const list = parentsOf.get(part.itemId) ?? [];
+      list.push(ingredient.id);
+      parentsOf.set(part.itemId, list);
+    }
+  }
+
+  const found = new Set([itemId]);
+  const queue = [itemId];
+  while (queue.length > 0) {
+    for (const parent of parentsOf.get(queue.pop()!) ?? []) {
+      if (found.has(parent)) continue;
+      found.add(parent);
+      queue.push(parent);
+    }
+  }
+  return found;
+}
+
 /**
- * The recipes whose descriptions an ingredient edit makes stale: every recipe
- * that uses it directly, and every recipe those sit inside.
+ * The recipes whose descriptions an item edit makes stale.
+ *
+ * An edit to a raw item reaches further than the recipes naming it: a prepped
+ * item built from it is described in terms of what it contains, so every recipe
+ * using *that* is out of date too. The walk goes up the catalogue first, then
+ * up the recipes.
  */
-export function recipesUsingIngredient(ingredientId: string, recipes: Recipe[]): string[] {
-  const direct = recipes.filter((recipe) =>
-    recipe.components.some((part) => part.ingredientId === ingredientId),
+export function recipesUsingItem(itemId: string, library: Library): string[] {
+  const touched = itemsContaining(itemId, library.ingredients);
+  const direct = library.recipes.filter((recipe) =>
+    recipe.components.some((part) => part.itemId !== null && touched.has(part.itemId)),
   );
+
   const all = new Set(direct.map((recipe) => recipe.id));
   for (const recipe of direct) {
-    for (const parent of recipesContaining(recipe.id, recipes)) all.add(parent);
+    for (const parent of recipesContaining(recipe.id, library.recipes)) all.add(parent);
   }
   return [...all];
 }
@@ -295,7 +311,7 @@ export function recipeContentKey(recipe: Pick<Recipe, "name" | "yieldAmount" | "
     recipe.yieldAmount,
     recipe.yieldUnit,
     recipe.components.map((part) => [
-      part.ingredientId,
+      part.itemId,
       part.childRecipeId,
       part.amount,
       part.unit,
@@ -304,16 +320,21 @@ export function recipeContentKey(recipe: Pick<Recipe, "name" | "yieldAmount" | "
   ]);
 }
 
-/** Every field of an ingredient, flattened — any edit to one counts as a change. */
-export function ingredientContentKey(ingredient: Omit<Ingredient, "id">) {
+/**
+ * The part of an item the model reads, flattened the same way.
+ *
+ * Cost, pack size and par level are left out: they change often and change
+ * nothing about how the dish is described.
+ */
+export function itemContentKey(ingredient: Omit<Ingredient, "id" | "code" | "allergens">) {
   return JSON.stringify([
     ingredient.name.trim(),
-    ingredient.category,
+    ingredient.category.trim(),
     [...ingredient.flavorTags].sort(),
     [...ingredient.textureTags].sort(),
     ingredient.intensity,
-    [...ingredient.allergens].sort(),
     ingredient.notes.trim(),
+    ingredient.parts.map((part) => [part.itemId, part.quantity, part.unit]),
   ]);
 }
 
@@ -331,6 +352,8 @@ export type ResolvedIngredient = {
   flavor_tags: FlavorTag[];
   texture_tags: TextureTag[];
   notes?: string;
+  /** What the catalogue says this item is built from, for one batch of it. */
+  made_from?: ResolvedIngredient[];
 };
 
 export type ResolvedSubRecipe = {
@@ -364,35 +387,52 @@ const yieldOf = (recipe: Recipe) =>
   recipe.yieldAmount === null ? null : { amount: recipe.yieldAmount, unit: recipe.yieldUnit };
 
 /**
- * A recipe's full component tree, sub-recipes expanded, as the JSON the model
- * is given. Only what the prompt needs: allergens are left out, since the copy
- * isn't meant to mention them and a list of them invites it to.
+ * A recipe's full component tree, sub-recipes and item recipes expanded, as the
+ * JSON the model is given. Only what the prompt needs: allergens are left out,
+ * since the copy isn't meant to mention them and a list of them invites it to.
  */
 export function resolveRecipe(recipeId: string, library: Library): ResolvedRecipe {
   const index = indexLibrary(library);
   const root = index.recipes.get(recipeId);
   if (!root) throw new Error("That recipe no longer exists.");
 
+  /** An item and, beneath it, whatever the catalogue says it is made from. */
+  const expandItem = (
+    ingredient: Ingredient,
+    amount: number,
+    unit: string,
+    visiting: Set<string>,
+  ): ResolvedIngredient => {
+    const made = ingredient.parts.flatMap((part) => {
+      if (visiting.has(part.itemId)) return [];
+      const below = index.ingredients.get(part.itemId);
+      if (!below) return [];
+      return [expandItem(below, part.quantity, part.unit, new Set(visiting).add(part.itemId))];
+    });
+
+    return {
+      kind: "ingredient",
+      name: ingredient.name,
+      amount,
+      unit,
+      category: ingredient.category,
+      intensity: ingredient.intensity,
+      flavor_tags: ingredient.flavorTags,
+      texture_tags: ingredient.textureTags,
+      ...(ingredient.notes.trim() ? { notes: ingredient.notes.trim() } : {}),
+      ...(made.length > 0 ? { made_from: made } : {}),
+    };
+  };
+
   const expand = (recipe: Recipe, visiting: Set<string>): ResolvedPart[] =>
     recipe.components.flatMap((part): ResolvedPart[] => {
       const prep = part.prepNote.trim() ? { prep_note: part.prepNote.trim() } : {};
 
-      if (part.ingredientId) {
-        const ingredient = index.ingredients.get(part.ingredientId);
+      if (part.itemId) {
+        const ingredient = index.ingredients.get(part.itemId);
         if (!ingredient) return [];
         return [
-          {
-            kind: "ingredient",
-            name: ingredient.name,
-            amount: part.amount,
-            unit: part.unit,
-            ...prep,
-            category: ingredient.category,
-            intensity: ingredient.intensity,
-            flavor_tags: ingredient.flavorTags,
-            texture_tags: ingredient.textureTags,
-            ...(ingredient.notes.trim() ? { notes: ingredient.notes.trim() } : {}),
-          },
+          { ...expandItem(ingredient, part.amount, part.unit, new Set([part.itemId])), ...prep },
         ];
       }
 
@@ -430,48 +470,7 @@ export type Generation = {
   pairsWith: string[];
 };
 
-/** Raised when the model's reply isn't the JSON asked for. The caller retries once. */
-export class GenerationFormatError extends Error {
-  constructor(readonly detail: string) {
-    super(`The reply wasn't in the expected format: ${detail}`);
-    this.name = "GenerationFormatError";
-  }
-}
-
-const stringList = (value: unknown, field: string, max: number): string[] => {
-  if (!Array.isArray(value)) throw new GenerationFormatError(`${field} is not a list`);
-  return value
-    .filter((entry): entry is string => typeof entry === "string")
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .slice(0, max);
-};
-
-const requiredText = (value: unknown, field: string): string => {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new GenerationFormatError(`${field} is missing`);
-  }
-  return value.trim();
-};
-
-/** The reply as a JSON object, tolerating a markdown fence around it. */
-function readReplyObject(text: string): Record<string, unknown> {
-  const unfenced = text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "");
-
-  let data: unknown;
-  try {
-    data = JSON.parse(unfenced);
-  } catch {
-    throw new GenerationFormatError("not valid JSON");
-  }
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    throw new GenerationFormatError("not a JSON object");
-  }
-  return data as Record<string, unknown>;
-}
+export { GenerationFormatError };
 
 /**
  * Parse and check the model's reply.
@@ -515,74 +514,6 @@ export function toTasteProfile(value: unknown): TasteProfile | null {
     profile[dimension] = typeof score === "number" && Number.isFinite(score) ? score : 0;
   }
   return profile;
-}
-
-/* ------------------------------------------------------ reading a spec sheet */
-
-/** An ingredient read off a supplier's spec sheet, for the owner to check before saving. */
-export type SpecSheetReading = {
-  ingredient: Omit<Ingredient, "id">;
-  /**
-   * "May contain" and shared-equipment warnings. Shown to the owner when the
-   * sheet is read but never saved: the allergen list means "contains", and the
-   * notes are sent to the description writer, which shouldn't talk allergens.
-   */
-  crossContact: string;
-};
-
-/** Raised when the PDF isn't a food product's spec sheet or label. */
-export class NotASpecSheetError extends Error {
-  constructor() {
-    super("That PDF doesn't look like a food product's spec sheet or label.");
-    this.name = "NotASpecSheetError";
-  }
-}
-
-const clip = (value: unknown, max: number) =>
-  typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max).trim() : "";
-
-/**
- * Parse and check what the model read off a spec sheet.
- *
- * Every value is forced back onto the lists the ingredient form accepts — a
- * category the owner has since deleted falls back to "other" (or the first
- * category), an off-list tag is dropped, an intensity is rounded into 1–5 — so
- * the form never opens holding something it can't save.
- */
-export function parseSpecSheet(text: string, categories: readonly string[]): SpecSheetReading {
-  const reply = readReplyObject(text);
-  if (reply.is_food_product === false) throw new NotASpecSheetError();
-
-  const name = clip(reply.name, 80);
-  if (!name) throw new GenerationFormatError("name is missing");
-
-  const list = (field: string) => {
-    const value = reply[field];
-    if (!Array.isArray(value)) throw new GenerationFormatError(`${field} is not a list`);
-    return value.filter((entry): entry is string => typeof entry === "string");
-  };
-
-  const category = typeof reply.category === "string" ? normaliseCategory(reply.category) : "";
-  const intensity = Number(reply.intensity);
-
-  return {
-    ingredient: {
-      name,
-      category: categories.includes(category)
-        ? category
-        : categories.includes("other")
-          ? "other"
-          : (categories[0] ?? ""),
-      flavorTags: pickFrom(list("flavor_tags"), FLAVOR_TAGS),
-      textureTags: pickFrom(list("texture_tags"), TEXTURE_TAGS),
-      intensity: Number.isFinite(intensity)
-        ? Math.min(MAX_INTENSITY, Math.max(1, Math.round(intensity)))
-        : 3,
-      allergens: pickFrom(list("allergens"), ALLERGENS),
-      notes: clip(reply.notes, 500),
-    },
-    crossContact: clip(reply.cross_contact, 300),
-  };
 }
 
 /* -------------------------------------------------------------------- display */

@@ -88,8 +88,8 @@ function toForm(recipe: Recipe | null): Form {
     descriptionShort: recipe.descriptionShort ?? "",
     rows: recipe.components.map((part) => ({
       key: nextRowKey++,
-      part: part.ingredientId
-        ? { kind: "ingredient", id: part.ingredientId }
+      part: part.itemId
+        ? { kind: "item", id: part.itemId }
         : { kind: "recipe", id: part.childRecipeId! },
       amount: String(part.amount),
       unit: part.unit,
@@ -112,7 +112,7 @@ function toInput(form: Form): RecipeInput {
     components: form.rows
       .filter((row) => !isUntouched(row))
       .map((row) => ({
-        ingredientId: row.part?.kind === "ingredient" ? row.part.id : null,
+        itemId: row.part?.kind === "item" ? row.part.id : null,
         childRecipeId: row.part?.kind === "recipe" ? row.part.id : null,
         amount: row.amount,
         unit: row.unit,
@@ -186,10 +186,11 @@ function Builder({
   const options = useMemo<PartOption[]>(
     () => [
       ...library.ingredients.map((ingredient) => ({
-        kind: "ingredient" as const,
+        kind: "item" as const,
         id: ingredient.id,
+        code: ingredient.code,
         name: ingredient.name,
-        detail: capitalise(ingredient.category),
+        detail: ingredient.category,
       })),
       // A recipe that already contains this one would close a loop, so it
       // isn't offered. The database refuses it too.
@@ -210,7 +211,7 @@ function Builder({
       row.part
         ? [
             {
-              ingredientId: row.part.kind === "ingredient" ? row.part.id : null,
+              itemId: row.part.kind === "item" ? row.part.id : null,
               childRecipeId: row.part.kind === "recipe" ? row.part.id : null,
               amount: 0,
               unit: row.unit,
@@ -397,13 +398,13 @@ function Builder({
         {/* ---------------------------------------------------- components */}
         <Panel
           title="Components"
-          hint="Ingredients and other recipes. Amounts matter — the taste profile is weighted by them."
+          hint="Items from the catalogue and other recipes. Amounts matter — the taste profile is weighted by them."
         >
           <div
             aria-hidden
             className="mb-1.5 hidden gap-2 text-xs font-semibold text-muted-foreground sm:grid sm:grid-cols-[minmax(0,2.2fr)_5rem_5.5rem_minmax(0,1.6fr)_1.75rem]"
           >
-            <span>Ingredient or recipe</span>
+            <span>Item or recipe</span>
             <span>Amount</span>
             <span>Unit</span>
             <span>Prep note</span>
@@ -487,20 +488,20 @@ function Builder({
         {/* ------------------------------------------------------ allergens */}
         <Panel
           title="Allergens"
-          hint="Rolled up from every component, including what's inside sub-recipes."
+          hint="Rolled up from every component, including what's inside sub-recipes and what each item is made of."
         >
           {allergens.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {filledRows === 0
                 ? "Add components to see their allergens."
-                : "None of these components list an allergen."}
+                : "None of these components lists an allergen. Check the items themselves if that looks wrong."}
             </p>
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
               {allergens.map(({ allergen, sources }) => (
                 <li key={allergen} className="flex items-baseline gap-2 text-sm">
                   <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
-                    {capitalise(allergen)}
+                    {allergen}
                   </span>
                   <span className="text-xs text-muted-foreground">{sources.join(", ")}</span>
                 </li>

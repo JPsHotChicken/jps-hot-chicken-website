@@ -2,18 +2,14 @@ import { describe, it, expect } from "vitest";
 
 import {
   GenerationFormatError,
-  NotASpecSheetError,
   RecipeLoopError,
-  normaliseCategory,
-  parseSpecSheet,
-  ingredientContentKey,
+  itemContentKey,
+  itemsContaining,
   parseGeneration,
-  pickFrom,
-  FLAVOR_TAGS,
   recipeAndDependents,
   recipeContentKey,
   recipesContaining,
-  recipesUsingIngredient,
+  recipesUsingItem,
   resolveRecipe,
   rollUpAllergens,
   wouldCreateLoop,
@@ -25,22 +21,25 @@ import {
 
 /* ------------------------------------------------------------------ fixtures */
 
+/** An item as the generator reads it, so each test states only what it cares about. */
 function ingredient(id: string, over: Partial<Ingredient> = {}): Ingredient {
   return {
     id,
+    code: id.toUpperCase(),
     name: id,
-    category: "other",
+    category: "Other",
     flavorTags: [],
     textureTags: [],
     intensity: 3,
     allergens: [],
     notes: "",
+    parts: [],
     ...over,
   };
 }
 
-const uses = (ingredientId: string, amount = 1, unit = "oz", prepNote = ""): RecipeComponent => ({
-  ingredientId,
+const uses = (itemId: string, amount = 1, unit = "oz", prepNote = ""): RecipeComponent => ({
+  itemId,
   childRecipeId: null,
   amount,
   unit,
@@ -48,7 +47,7 @@ const uses = (ingredientId: string, amount = 1, unit = "oz", prepNote = ""): Rec
 });
 
 const contains = (childRecipeId: string, amount = 1, unit = "oz"): RecipeComponent => ({
-  ingredientId: null,
+  itemId: null,
   childRecipeId,
   amount,
   unit,
@@ -77,16 +76,26 @@ function recipe(id: string, components: RecipeComponent[], over: Partial<Recipe>
 
 /**
  * The seeded shape: a sandwich that uses a sauce that uses mayonnaise, plus a
- * second menu item that uses the same sauce.
+ * second menu item that uses the same sauce. The sandwich also carries a dredge
+ * — a prepped item with a bill of materials of its own.
  */
 function sandwichLibrary(): Library {
   return {
     ingredients: [
-      ingredient("mayo", { name: "Duke's mayonnaise", allergens: ["egg"], flavorTags: ["tangy", "creamy"] }),
-      ingredient("worcestershire", { name: "Worcestershire sauce", allergens: ["fish"] }),
-      ingredient("chicken", { name: "Chicken breast", category: "protein", intensity: 2 }),
-      ingredient("bun", { name: "Brioche bun", category: "bread", allergens: ["gluten", "egg", "dairy"] }),
-      ingredient("cayenne", { name: "Cayenne pepper", category: "spice", intensity: 5, flavorTags: ["spicy"] }),
+      ingredient("mayo", { name: "Duke's mayonnaise", allergens: ["Egg"], flavorTags: ["tangy", "creamy"] }),
+      ingredient("worcestershire", { name: "Worcestershire sauce", allergens: ["Fish"] }),
+      ingredient("chicken", { name: "Chicken breast", category: "Protein", intensity: 2 }),
+      ingredient("bun", { name: "Brioche bun", category: "Bakery", allergens: ["Wheat", "Egg", "Milk"] }),
+      ingredient("cayenne", { name: "Cayenne pepper", category: "Spices", intensity: 5, flavorTags: ["spicy"] }),
+      ingredient("flour", { name: "All-purpose flour", category: "Dry goods", allergens: ["Wheat"] }),
+      ingredient("dredge", {
+        name: "Nashville dredge",
+        category: "Prep",
+        parts: [
+          { itemId: "flour", quantity: 8, unit: "lb" },
+          { itemId: "cayenne", quantity: 2, unit: "lb" },
+        ],
+      }),
     ],
     recipes: [
       recipe("sauce", [uses("mayo", 20), uses("worcestershire", 1, "tbsp")], {
@@ -99,7 +108,7 @@ function sandwichLibrary(): Library {
         [uses("chicken", 6, "oz", "pounded to 1/2 inch"), uses("bun", 1, "each", "toasted"), contains("sauce", 1)],
         { name: "Nashville Hot Chicken Sandwich", isMenuItem: true },
       ),
-      recipe("tenders", [uses("chicken", 8), uses("cayenne", 1, "pinch"), contains("sauce", 2)], {
+      recipe("tenders", [uses("chicken", 8), uses("dredge", 1), contains("sauce", 2)], {
         name: "Tenders",
         isMenuItem: true,
       }),
@@ -117,14 +126,33 @@ describe("rollUpAllergens", () => {
     const rolled = rollUpAllergens(find(library, "sandwich").components, library);
 
     // In the vocabulary's order, not discovery order.
-    expect(rolled.map((entry) => entry.allergen)).toEqual(["dairy", "egg", "gluten", "fish"]);
-    expect(rolled.find((entry) => entry.allergen === "egg")!.sources).toEqual([
+    expect(rolled.map((entry) => entry.allergen)).toEqual(["Milk", "Egg", "Fish", "Wheat"]);
+    expect(rolled.find((entry) => entry.allergen === "Egg")!.sources).toEqual([
       "Brioche bun",
       "House Comeback Sauce → Duke's mayonnaise",
     ]);
-    expect(rolled.find((entry) => entry.allergen === "fish")!.sources).toEqual([
+    expect(rolled.find((entry) => entry.allergen === "Fish")!.sources).toEqual([
       "House Comeback Sauce → Worcestershire sauce",
     ]);
+  });
+
+  it("reaches into what an item is itself made of", () => {
+    const library = sandwichLibrary();
+    const rolled = rollUpAllergens(find(library, "tenders").components, library);
+
+    expect(rolled.map((entry) => entry.allergen)).toEqual(["Egg", "Fish", "Wheat"]);
+    // The dredge carries no allergen of its own; the flour inside it does.
+    expect(rolled.find((entry) => entry.allergen === "Wheat")!.sources).toEqual([
+      "Nashville dredge → All-purpose flour",
+    ]);
+  });
+
+  it("never reports None, which is a claim about a record rather than an allergen", () => {
+    const library: Library = {
+      ingredients: [ingredient("salt", { allergens: ["None"] })],
+      recipes: [recipe("a", [uses("salt")])],
+    };
+    expect(rollUpAllergens(find(library, "a").components, library)).toEqual([]);
   });
 
   it("returns nothing for components without allergens", () => {
@@ -134,12 +162,25 @@ describe("rollUpAllergens", () => {
 
   it("does not hang on a loop that slipped into the data", () => {
     const library: Library = {
-      ingredients: [ingredient("egg", { allergens: ["egg"] })],
+      ingredients: [ingredient("egg", { allergens: ["Egg"] })],
       recipes: [recipe("a", [contains("b"), uses("egg")]), recipe("b", [contains("a")])],
     };
     expect(rollUpAllergens(find(library, "a").components, library).map((entry) => entry.allergen)).toEqual([
-      "egg",
+      "Egg",
     ]);
+  });
+
+  it("does not hang on an item that contains itself", () => {
+    const library: Library = {
+      ingredients: [
+        ingredient("a", { allergens: ["Soy"], parts: [{ itemId: "b", quantity: 1, unit: "lb" }] }),
+        ingredient("b", { parts: [{ itemId: "a", quantity: 1, unit: "lb" }] }),
+      ],
+      recipes: [recipe("dish", [uses("a")])],
+    };
+    expect(rollUpAllergens(find(library, "dish").components, library).map((entry) => entry.allergen)).toEqual(
+      ["Soy"],
+    );
   });
 });
 
@@ -169,16 +210,28 @@ describe("loops", () => {
     const { recipes } = sandwichLibrary();
     expect(wouldCreateLoop(null, "sandwich", recipes)).toBe(false);
   });
+
+  it("finds every item built from an item, itself included", () => {
+    const { ingredients } = sandwichLibrary();
+    expect([...itemsContaining("flour", ingredients)].sort()).toEqual(["dredge", "flour"]);
+    expect([...itemsContaining("bun", ingredients)]).toEqual(["bun"]);
+  });
 });
 
 /* ------------------------------------------------------------------ staleness */
 
 describe("staleness", () => {
-  it("an ingredient edit reaches every recipe using it, directly or through a sub-recipe", () => {
-    const { recipes } = sandwichLibrary();
-    expect(recipesUsingIngredient("mayo", recipes).sort()).toEqual(["sandwich", "sauce", "tenders"]);
-    expect(recipesUsingIngredient("bun", recipes)).toEqual(["sandwich"]);
-    expect(recipesUsingIngredient("nobody-uses-this", recipes)).toEqual([]);
+  it("an item edit reaches every recipe using it, directly or through a sub-recipe", () => {
+    const library = sandwichLibrary();
+    expect(recipesUsingItem("mayo", library).sort()).toEqual(["sandwich", "sauce", "tenders"]);
+    expect(recipesUsingItem("bun", library)).toEqual(["sandwich"]);
+    expect(recipesUsingItem("nobody-uses-this", library)).toEqual([]);
+  });
+
+  it("an edit to something a prepped item is made of reaches the recipes using that item", () => {
+    const library = sandwichLibrary();
+    // Nothing names the flour; the dredge is made of it, and the tenders use the dredge.
+    expect(recipesUsingItem("flour", library)).toEqual(["tenders"]);
   });
 
   it("a recipe change reaches the recipe and everything it sits inside", () => {
@@ -205,12 +258,15 @@ describe("staleness", () => {
     expect(recipeContentKey({ ...base, components: reprepped })).not.toBe(key);
   });
 
-  it("re-ticking the same tags in a different order is not an ingredient change", () => {
+  it("re-ticking the same tags in a different order is not an item change", () => {
     const before = ingredient("mayo", { flavorTags: ["tangy", "creamy"] });
-    expect(ingredientContentKey({ ...before, flavorTags: ["creamy", "tangy"] })).toBe(
-      ingredientContentKey(before),
+    expect(itemContentKey({ ...before, flavorTags: ["creamy", "tangy"] })).toBe(
+      itemContentKey(before),
     );
-    expect(ingredientContentKey({ ...before, intensity: 4 })).not.toBe(ingredientContentKey(before));
+    expect(itemContentKey({ ...before, intensity: 4 })).not.toBe(itemContentKey(before));
+    expect(
+      itemContentKey({ ...before, parts: [{ itemId: "oil", quantity: 1, unit: "oz" }] }),
+    ).not.toBe(itemContentKey(before));
   });
 });
 
@@ -231,7 +287,7 @@ describe("resolveRecipe", () => {
       amount: 6,
       unit: "oz",
       prep_note: "pounded to 1/2 inch",
-      category: "protein",
+      category: "Protein",
       intensity: 2,
       flavor_tags: [],
       texture_tags: [],
@@ -251,6 +307,17 @@ describe("resolveRecipe", () => {
     ]);
   });
 
+  it("carries what the catalogue says an item is made of", () => {
+    const resolved = resolveRecipe("tenders", sandwichLibrary());
+    const dredge = resolved.components[1];
+
+    expect(dredge).toMatchObject({ kind: "ingredient", name: "Nashville dredge", amount: 1 });
+    expect(dredge.kind === "ingredient" && dredge.made_from).toMatchObject([
+      { name: "All-purpose flour", amount: 8, unit: "lb" },
+      { name: "Cayenne pepper", amount: 2, unit: "lb", intensity: 5 },
+    ]);
+  });
+
   it("leaves allergens, blank prep notes and blank notes out of the prompt", () => {
     const json = JSON.stringify(resolveRecipe("sauce", sandwichLibrary()));
     expect(json).not.toContain("allergen");
@@ -264,6 +331,17 @@ describe("resolveRecipe", () => {
       recipes: [recipe("a", [contains("b")]), recipe("b", [contains("a")])],
     };
     expect(() => resolveRecipe("a", library)).toThrow(RecipeLoopError);
+  });
+
+  it("does not follow an item that contains itself", () => {
+    const library: Library = {
+      ingredients: [
+        ingredient("a", { parts: [{ itemId: "b", quantity: 1, unit: "lb" }] }),
+        ingredient("b", { parts: [{ itemId: "a", quantity: 1, unit: "lb" }] }),
+      ],
+      recipes: [recipe("dish", [uses("a")])],
+    };
+    expect(() => resolveRecipe("dish", library)).not.toThrow();
   });
 });
 
@@ -309,70 +387,5 @@ describe("parseGeneration", () => {
     expect(() => parseGeneration(JSON.stringify({ ...REPLY, pairs_with: "Coleslaw" }))).toThrow(
       /pairs_with/,
     );
-  });
-});
-
-describe("pickFrom", () => {
-  it("drops values off the list and keeps the list's order", () => {
-    expect(pickFrom(["smoky", "made-up", "sweet"], FLAVOR_TAGS)).toEqual(["sweet", "smoky"]);
-  });
-});
-
-describe("parseSpecSheet", () => {
-  const CATEGORIES = ["produce", "frozen", "other"];
-  const SHEET = {
-    is_food_product: true,
-    name: "  Breaded dill pickle chips ",
-    category: "frozen",
-    flavor_tags: ["tangy", "salty", "sour"],
-    texture_tags: ["crunchy", "crispy"],
-    intensity: 3,
-    allergens: ["gluten"],
-    cross_contact: "Processed on shared equipment with shrimp and fish.",
-    notes: "Crinkle-cut dill pickle slices, battered and breaded.",
-  };
-
-  it("reads a well-formed reply, putting tags in the vocabulary's order", () => {
-    const { ingredient, crossContact } = parseSpecSheet(JSON.stringify(SHEET), CATEGORIES);
-    expect(ingredient).toEqual({
-      name: "Breaded dill pickle chips",
-      category: "frozen",
-      flavorTags: ["salty", "sour", "tangy"],
-      textureTags: ["crispy", "crunchy"],
-      intensity: 3,
-      allergens: ["gluten"],
-      notes: "Crinkle-cut dill pickle slices, battered and breaded.",
-    });
-    expect(crossContact).toMatch(/shrimp and fish/);
-  });
-
-  it("holds every value to what the form can save", () => {
-    const loose = {
-      ...SHEET,
-      category: "Deleted since",
-      flavor_tags: ["salty", "pickled"],
-      allergens: ["gluten", "mustard"],
-      intensity: 9,
-    };
-    const { ingredient } = parseSpecSheet(JSON.stringify(loose), CATEGORIES);
-    expect(ingredient.category).toBe("other");
-    expect(ingredient.flavorTags).toEqual(["salty"]);
-    expect(ingredient.allergens).toEqual(["gluten"]);
-    expect(ingredient.intensity).toBe(5);
-    expect(parseSpecSheet(JSON.stringify(loose), ["produce"]).ingredient.category).toBe("produce");
-  });
-
-  it("refuses a document that isn't a food spec sheet, and a reply with no name", () => {
-    expect(() =>
-      parseSpecSheet(JSON.stringify({ ...SHEET, is_food_product: false }), CATEGORIES),
-    ).toThrow(NotASpecSheetError);
-    expect(() => parseSpecSheet(JSON.stringify({ ...SHEET, name: " " }), CATEGORIES)).toThrow(/name/);
-    expect(() => parseSpecSheet("not json", CATEGORIES)).toThrow(GenerationFormatError);
-  });
-});
-
-describe("normaliseCategory", () => {
-  it("trims, single-spaces and lower-cases", () => {
-    expect(normaliseCategory("  Frozen   Apps ")).toBe("frozen apps");
   });
 });

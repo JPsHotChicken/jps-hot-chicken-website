@@ -20,9 +20,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { AdminDrawer } from "@/components/admin/AdminDrawer";
 import { FIELD_CLASS, LABEL_CLASS } from "@/components/admin/field";
+import { TagToggles } from "@/components/admin/TagToggles";
 import { logout } from "@/app/admin/actions";
 import {
   ALLERGENS,
+  FLAVOR_TAGS,
   FIELD_GROUPS,
   FIELD_GROUP_LABELS,
   ITEM_SCOPES,
@@ -31,8 +33,10 @@ import {
   ITEM_STATUS_LABELS,
   ITEM_TYPES,
   ITEM_TYPE_LABELS,
+  MAX_INTENSITY,
   STORAGE_ZONES,
   STORAGE_ZONE_LABELS,
+  TEXTURE_TAGS,
   foodCostPercent,
   formatMoney,
   formatPercent,
@@ -115,6 +119,9 @@ function toForm(item: Item): ItemFormInput {
     recipeUrl: item.recipeUrl,
     menuPrice: text(item.menuPrice),
     allergens: item.allergens,
+    flavorTags: item.flavorTags,
+    textureTags: item.textureTags,
+    intensity: item.intensity,
     storageZone: item.storageZone,
     storageTemp: item.storageTemp,
     shelfLifeDays: text(item.shelfLifeDays),
@@ -147,6 +154,8 @@ export function ItemRecord({
   const [form, setForm] = useState<ItemFormInput>(() => toForm(item));
   const [summary, setSummary] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /** How many menu descriptions the last save put out of date. */
+  const [stale, setStale] = useState(0);
   const [pending, startTransition] = useTransition();
 
   const set = <K extends keyof ItemFormInput>(key: K, value: ItemFormInput[K]) =>
@@ -157,6 +166,7 @@ export function ItemRecord({
 
   const run = (work: () => Promise<unknown>) => {
     setError(null);
+    setStale(0);
     startTransition(async () => {
       try {
         await work();
@@ -169,9 +179,10 @@ export function ItemRecord({
 
   const save = () =>
     run(async () => {
-      const code = await updateItemAction(item.id, form, summary);
+      const { code, staleCount } = await updateItemAction(item.id, form, summary);
       setEditing(false);
       setSummary("");
+      setStale(staleCount);
       if (code !== item.code) router.replace(`${basePath}/${encodeURIComponent(code)}`);
     });
 
@@ -256,6 +267,21 @@ export function ItemRecord({
             <TriangleAlert className="mt-0.5 size-4 shrink-0" />
             <p className="flex-1">{error}</p>
             <Button variant="ghost" size="icon-xs" aria-label="Dismiss" onClick={() => setError(null)}>
+              <X />
+            </Button>
+          </div>
+        )}
+
+        {stale > 0 && (
+          <div className="flex items-start gap-2 border-t border-border bg-muted px-4 py-2 text-sm sm:px-6">
+            <p className="flex-1">
+              Saved. {stale} menu description{stale === 1 ? " is" : "s are"} now out of date —{" "}
+              <Link href="/admin/menu-descriptions" className="font-semibold text-brand hover:underline">
+                regenerate
+              </Link>{" "}
+              when you&rsquo;re ready.
+            </p>
+            <Button variant="ghost" size="icon-xs" aria-label="Dismiss" onClick={() => setStale(0)}>
               <X />
             </Button>
           </div>
@@ -548,6 +574,65 @@ export function ItemRecord({
             pending={pending}
             run={run}
           />
+        )}
+
+        {groups.includes("taste") && (
+          <Panel
+            title={FIELD_GROUP_LABELS.taste}
+            hint="What the menu description generator reads. Tags describe it as it is served."
+          >
+            {editing ? (
+              <div className="space-y-4">
+                <fieldset>
+                  <legend className={LABEL_CLASS}>Intensity — how loudly it reads in a dish</legend>
+                  <div className="mt-1 flex gap-1">
+                    {Array.from({ length: MAX_INTENSITY }, (_, index) => index + 1).map((level) => (
+                      <button
+                        key={level}
+                        type="button"
+                        aria-pressed={form.intensity === level}
+                        onClick={() => set("intensity", level)}
+                        className={`size-8 rounded-lg border text-sm font-semibold tabular-nums transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${
+                          form.intensity === level
+                            ? "border-brand bg-brand text-brand-foreground"
+                            : "border-border bg-background hover:bg-muted"
+                        }`}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                    <span className="ml-2 self-center text-xs text-muted-foreground">
+                      1 barely there · 5 dominates
+                    </span>
+                  </div>
+                </fieldset>
+                <TagToggles
+                  legend="Flavor"
+                  options={FLAVOR_TAGS}
+                  value={form.flavorTags}
+                  onChange={(value) => set("flavorTags", value)}
+                />
+                <TagToggles
+                  legend="Texture"
+                  options={TEXTURE_TAGS}
+                  value={form.textureTags}
+                  onChange={(value) => set("textureTags", value)}
+                />
+              </div>
+            ) : (
+              <Grid>
+                <Field label="Intensity">
+                  <IntensityDots value={item.intensity} />
+                </Field>
+                <Field label="Flavor">
+                  <Tags values={item.flavorTags} />
+                </Field>
+                <Field label="Texture">
+                  <Tags values={item.textureTags} />
+                </Field>
+              </Grid>
+            )}
+          </Panel>
         )}
 
         {groups.includes("menu") && (
@@ -1233,6 +1318,37 @@ function Select({
         </option>
       ))}
     </select>
+  );
+}
+
+/** A row of chips for a tag list that isn't being edited. */
+function Tags({ values }: { values: readonly string[] }) {
+  if (values.length === 0) return <>—</>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {values.map((value) => (
+        <span key={value} className="rounded-full bg-muted px-2 py-0.5 text-xs whitespace-nowrap">
+          {value}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function IntensityDots({ value }: { value: number }) {
+  return (
+    <span
+      className="flex items-center gap-0.5"
+      role="img"
+      aria-label={`Intensity ${value} of ${MAX_INTENSITY}`}
+    >
+      {Array.from({ length: MAX_INTENSITY }, (_, index) => (
+        <span
+          key={index}
+          className={`size-2.5 rounded-full ${index < value ? "bg-brand" : "bg-border"}`}
+        />
+      ))}
+    </span>
   );
 }
 

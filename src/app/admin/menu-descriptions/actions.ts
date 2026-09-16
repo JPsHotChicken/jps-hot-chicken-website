@@ -6,21 +6,13 @@ import { assertUuid, requireAdmin } from "@/lib/admin-guard";
 import { GenerationError, generateDescription } from "@/lib/menu-descriptions-ai";
 import * as repo from "@/lib/menu-descriptions-repo";
 import {
-  ALLERGENS,
   COMPONENT_UNITS,
-  FLAVOR_TAGS,
-  MAX_CATEGORY_LENGTH,
-  MAX_INTENSITY,
   MENU_DESCRIPTIONS_PATH,
   RecipeLoopError,
-  TEXTURE_TAGS,
   YIELD_UNITS,
-  ingredientContentKey,
   isOneOf,
-  normaliseCategory,
   recipeAndDependents,
   recipeContentKey,
-  recipesUsingIngredient,
   resolveRecipe,
   wouldCreateLoop,
   type Library,
@@ -29,6 +21,10 @@ import {
 
 /**
  * Writes to the menu description generator.
+ *
+ * Only recipes: the ingredients are items, and every write to one goes through
+ * the items database at `/admin/items`, which is the single place the catalogue
+ * is edited.
  *
  * Every action re-checks the admin session, because a Server Action is a public
  * endpoint. Problems the owner can fix — a duplicate name, a missing amount, an
@@ -78,165 +74,10 @@ function positiveNumber(value: unknown, field: string): number | null {
   return Math.round(parsed * 1000) / 1000;
 }
 
-function tags<T extends string>(values: unknown, allowed: readonly T[], field: string): T[] {
-  if (!Array.isArray(values)) return [];
-  const unknown = values.filter((value) => typeof value !== "string" || !isOneOf(value, allowed));
-  if (unknown.length > 0) throw new InputError(`${field} contains a value that isn't on the list.`);
-  return allowed.filter((value) => values.includes(value));
-}
-
-/* ------------------------------------------------------------- ingredients */
-
-export type IngredientInput = {
-  name: string;
-  category: string;
-  flavorTags: string[];
-  textureTags: string[];
-  intensity: number;
-  allergens: string[];
-  notes: string;
-};
-
-async function toIngredientDraft(input: IngredientInput): Promise<repo.IngredientDraft> {
-  const intensity = Number(input.intensity);
-  if (!Number.isInteger(intensity) || intensity < 1 || intensity > MAX_INTENSITY) {
-    throw new InputError(`Intensity must be a whole number from 1 to ${MAX_INTENSITY}.`);
-  }
-  const categories = await repo.loadCategories();
-  if (typeof input.category !== "string" || !categories.includes(input.category)) {
-    throw new InputError("Pick a category.");
-  }
-
-  return {
-    name: text(input.name, "Name", { max: 80, required: true }),
-    category: input.category,
-    flavorTags: tags(input.flavorTags, FLAVOR_TAGS, "Flavor"),
-    textureTags: tags(input.textureTags, TEXTURE_TAGS, "Texture"),
-    intensity,
-    allergens: tags(input.allergens, ALLERGENS, "Allergens"),
-    notes: text(input.notes, "Notes", { max: 500 }),
-  };
-}
-
-export async function createIngredientAction(input: IngredientInput): Promise<ActionResult> {
-  return attempt(async () => {
-    await repo.createIngredient(await toIngredientDraft(input));
-    revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
-    return undefined;
-  });
-}
-
-/**
- * Save an ingredient edit. Returns how many generated descriptions it made
- * stale — every recipe using the ingredient, directly or inside a sub-recipe —
- * so the table can say so. An edit that changes nothing marks nothing.
- */
-export async function updateIngredientAction(
-  id: string,
-  input: IngredientInput,
-): Promise<ActionResult<{ staleCount: number }>> {
-  return attempt(async () => {
-    assertUuid(id, "Ingredient");
-    const draft = await toIngredientDraft(input);
-    const library = await repo.loadLibrary();
-    const before = library.ingredients.find((ingredient) => ingredient.id === id);
-    if (!before) throw new InputError("That ingredient no longer exists.");
-
-    await repo.updateIngredient(id, draft);
-
-    const staleCount =
-      ingredientContentKey(before) === ingredientContentKey(draft)
-        ? 0
-        : await markIngredientsChanged([id], library);
-
-    revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
-    return { staleCount };
-  });
-}
-
-export async function deleteIngredientAction(id: string): Promise<ActionResult> {
-  return attempt(async () => {
-    assertUuid(id, "Ingredient");
-    await repo.deleteIngredient(id);
-    revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
-    return undefined;
-  });
-}
-
-/**
- * Mark stale every description written from these ingredients, directly or
- * through a sub-recipe. Returns how many were fresh until now, for the notice.
- */
-async function markIngredientsChanged(ingredientIds: string[], library: Library): Promise<number> {
-  const affected = new Set(ingredientIds.flatMap((id) => recipesUsingIngredient(id, library.recipes)));
-  await repo.markStale([...affected]);
-  return library.recipes.filter(
-    (recipe) => affected.has(recipe.id) && recipe.generatedAt && !recipe.isStale,
-  ).length;
-}
-
-/* -------------------------------------------------------------- categories */
-
-function categoryName(value: unknown): string {
-  const name = normaliseCategory(typeof value === "string" ? value : "");
-  if (!name) throw new InputError("Give the category a name.");
-  if (name.length > MAX_CATEGORY_LENGTH) {
-    throw new InputError(`A category name must be ${MAX_CATEGORY_LENGTH} characters or fewer.`);
-  }
-  return name;
-}
-
-export async function createCategoryAction(name: string): Promise<ActionResult> {
-  return attempt(async () => {
-    await repo.createCategory(categoryName(name));
-    revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
-    return undefined;
-  });
-}
-
-/**
- * Rename a category. Every ingredient in it moves with it, and since the model
- * is told each ingredient's category, descriptions written from them go out of
- * date — the count comes back for the notice, as with an ingredient edit.
- */
-export async function renameCategoryAction(
-  from: string,
-  to: string,
-): Promise<ActionResult<{ staleCount: number }>> {
-  return attempt(async () => {
-    const current = typeof from === "string" ? from : "";
-    const next = categoryName(to);
-    if (next === current) return { staleCount: 0 };
-
-    const library = await repo.loadLibrary();
-    await repo.renameCategory(current, next);
-    const moved = library.ingredients.filter((ingredient) => ingredient.category === current);
-    const staleCount = await markIngredientsChanged(
-      moved.map((ingredient) => ingredient.id),
-      library,
-    );
-
-    revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
-    return { staleCount };
-  });
-}
-
-/** Refused while an ingredient is still in the category, and for the last one left. */
-export async function deleteCategoryAction(name: string): Promise<ActionResult> {
-  return attempt(async () => {
-    const categories = await repo.loadCategories();
-    if (!categories.includes(name)) throw new InputError("That category no longer exists.");
-    if (categories.length === 1) throw new InputError("Keep at least one category.");
-    await repo.deleteCategory(name);
-    revalidatePath(MENU_DESCRIPTIONS_PATH, "layout");
-    return undefined;
-  });
-}
-
 /* ----------------------------------------------------------------- recipes */
 
 export type ComponentInput = {
-  ingredientId: string | null;
+  itemId: string | null;
   childRecipeId: string | null;
   amount: string;
   unit: string;
@@ -264,19 +105,19 @@ function toRecipeDraft(id: string | null, input: RecipeInput, library: Library):
     throw new InputError("A recipe can have up to 100 components.");
   }
 
-  const ingredientIds = new Set(library.ingredients.map((ingredient) => ingredient.id));
+  const itemIds = new Set(library.ingredients.map((ingredient) => ingredient.id));
   const recipesById = new Map(library.recipes.map((recipe) => [recipe.id, recipe]));
 
   const components = input.components.map((line, position): RecipeComponent => {
     const label = `Component ${position + 1}`;
-    const ingredientId = line.ingredientId || null;
+    const itemId = line.itemId || null;
     const childRecipeId = line.childRecipeId || null;
 
-    if ((ingredientId === null) === (childRecipeId === null)) {
-      throw new InputError(`${label} needs an ingredient or a recipe chosen.`);
+    if ((itemId === null) === (childRecipeId === null)) {
+      throw new InputError(`${label} needs an item or a recipe chosen.`);
     }
-    if (ingredientId && !ingredientIds.has(ingredientId)) {
-      throw new InputError(`${label}: that ingredient no longer exists.`);
+    if (itemId && !itemIds.has(itemId)) {
+      throw new InputError(`${label}: that item is no longer in the catalogue.`);
     }
     if (childRecipeId) {
       const child = recipesById.get(childRecipeId);
@@ -295,7 +136,7 @@ function toRecipeDraft(id: string | null, input: RecipeInput, library: Library):
     if (!isOneOf(line.unit, COMPONENT_UNITS)) throw new InputError(`${label} needs a unit.`);
 
     return {
-      ingredientId,
+      itemId,
       childRecipeId,
       amount,
       unit: line.unit,

@@ -1,11 +1,10 @@
 import "server-only";
 
 import { getDb } from "@/lib/supabase/server";
+import { loadGraph } from "@/lib/items-repo";
+import { canBeIngredient, compareItems, unitLabelFor, type ItemGraph } from "@/lib/items";
 import {
-  ALLERGENS,
-  FLAVOR_TAGS,
-  TEXTURE_TAGS,
-  pickFrom,
+  recipesUsingItem,
   toTasteProfile,
   type Generation,
   type Ingredient,
@@ -19,7 +18,10 @@ import {
  *
  * The library is loaded whole: the allergen roll-up, the loop check and the
  * staleness walk all need every recipe's lines in hand, and a single store's
- * ingredients and recipes number in the hundreds at most.
+ * items and recipes number in the hundreds at most.
+ *
+ * Ingredients aren't a table of their own — they are the items catalogue, read
+ * through `items-repo` and narrowed here to what a recipe line may point at.
  */
 
 function fail(context: string, error: { message: string } | null): never {
@@ -36,14 +38,42 @@ export class LibraryError extends Error {
 
 /* -------------------------------------------------------------------- reads */
 
+/**
+ * The catalogue as the generator sees it: every item a recipe may be built
+ * from, carrying its own components so a prepped item describes itself.
+ *
+ * A component pointing at something that can't be an ingredient — a wrap sheet
+ * inside a sandwich — is left out rather than passed on as a flavour.
+ */
+function toIngredients(graph: ItemGraph): Ingredient[] {
+  const usable = graph.items.filter(canBeIngredient);
+  const usableIds = new Set(usable.map((item) => item.id));
+
+  return usable.sort(compareItems).map((item): Ingredient => ({
+    id: item.id,
+    code: item.code,
+    name: item.internalName,
+    category: item.category,
+    flavorTags: item.flavorTags,
+    textureTags: item.textureTags,
+    intensity: item.intensity,
+    allergens: item.allergens,
+    notes: item.notes,
+    parts: (graph.components.get(item.id) ?? [])
+      .filter((part) => usableIds.has(part.componentId))
+      .map((part) => ({
+        itemId: part.componentId,
+        quantity: part.quantity,
+        unit: unitLabelFor(graph.byId.get(part.componentId)!, part.basis),
+      })),
+  }));
+}
+
 export async function loadLibrary(): Promise<Library> {
   const db = getDb();
 
-  const [ingredients, recipes, components] = await Promise.all([
-    db
-      .from("ingredients")
-      .select("id, name, category, flavor_tags, texture_tags, intensity, allergens, notes")
-      .order("name"),
+  const [graph, recipes, components] = await Promise.all([
+    loadGraph(),
     db
       .from("recipes")
       .select(
@@ -54,11 +84,10 @@ export async function loadLibrary(): Promise<Library> {
       .order("name"),
     db
       .from("recipe_components")
-      .select("recipe_id, ingredient_id, child_recipe_id, amount, unit, prep_note, sort_order")
+      .select("recipe_id, item_id, child_recipe_id, amount, unit, prep_note, sort_order")
       .order("sort_order"),
   ]);
 
-  if (ingredients.error) fail("loading ingredients", ingredients.error);
   if (recipes.error) fail("loading recipes", recipes.error);
   if (components.error) fail("loading recipe components", components.error);
 
@@ -66,7 +95,7 @@ export async function loadLibrary(): Promise<Library> {
   for (const row of components.data ?? []) {
     const lines = linesByRecipe.get(row.recipe_id) ?? [];
     lines.push({
-      ingredientId: row.ingredient_id,
+      itemId: row.item_id,
       childRecipeId: row.child_recipe_id,
       amount: Number(row.amount),
       unit: row.unit,
@@ -76,19 +105,7 @@ export async function loadLibrary(): Promise<Library> {
   }
 
   return {
-    ingredients: (ingredients.data ?? []).map(
-      (row): Ingredient => ({
-        id: row.id,
-        name: row.name,
-        // A foreign key keeps this one of `ingredient_categories`.
-        category: row.category,
-        flavorTags: pickFrom(row.flavor_tags ?? [], FLAVOR_TAGS),
-        textureTags: pickFrom(row.texture_tags ?? [], TEXTURE_TAGS),
-        intensity: row.intensity,
-        allergens: pickFrom(row.allergens ?? [], ALLERGENS),
-        notes: row.notes,
-      }),
-    ),
+    ingredients: toIngredients(graph),
     recipes: (recipes.data ?? []).map(
       (row): Recipe => ({
         id: row.id,
@@ -110,103 +127,6 @@ export async function loadLibrary(): Promise<Library> {
   };
 }
 
-/* ------------------------------------------------------------- ingredients */
-
-export type IngredientDraft = Omit<Ingredient, "id">;
-
-const toIngredientRow = (draft: IngredientDraft) => ({
-  name: draft.name.trim(),
-  category: draft.category,
-  flavor_tags: draft.flavorTags,
-  texture_tags: draft.textureTags,
-  intensity: draft.intensity,
-  allergens: draft.allergens,
-  notes: draft.notes.trim(),
-});
-
-const duplicateName = (kind: string, name: string) =>
-  new LibraryError(`There's already ${kind} called "${name.trim()}".`);
-
-export async function createIngredient(draft: IngredientDraft): Promise<void> {
-  const { error } = await getDb().from("ingredients").insert(toIngredientRow(draft));
-  if (error?.code === "23505") throw duplicateName("an ingredient", draft.name);
-  if (error) fail("adding an ingredient", error);
-}
-
-export async function updateIngredient(id: string, draft: IngredientDraft): Promise<void> {
-  const { error } = await getDb()
-    .from("ingredients")
-    .update({ ...toIngredientRow(draft), updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error?.code === "23505") throw duplicateName("an ingredient", draft.name);
-  if (error) fail("updating an ingredient", error);
-}
-
-/** Refused by the database while any recipe still uses the ingredient. */
-export async function deleteIngredient(id: string): Promise<void> {
-  const { error } = await getDb().from("ingredients").delete().eq("id", id);
-  if (error?.code === "23503") {
-    throw new LibraryError("A recipe still uses this ingredient. Take it out of the recipe first.");
-  }
-  if (error) fail("deleting an ingredient", error);
-}
-
-/* -------------------------------------------------------------- categories */
-
-/** Category names in the owner's order. Names are the key: ingredients point at them. */
-export async function loadCategories(): Promise<string[]> {
-  const { data, error } = await getDb()
-    .from("ingredient_categories")
-    .select("name")
-    .order("sort_order")
-    .order("name");
-  if (error) fail("loading categories", error);
-  return (data ?? []).map((row) => row.name);
-}
-
-const duplicateCategory = (name: string) =>
-  new LibraryError(`There's already a category called "${name}".`);
-
-/** Adds a category to the end of the list. `name` must already be normalised. */
-export async function createCategory(name: string): Promise<void> {
-  const db = getDb();
-  const last = await db
-    .from("ingredient_categories")
-    .select("sort_order")
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  if (last.error) fail("adding a category", last.error);
-
-  const { error } = await db
-    .from("ingredient_categories")
-    .insert({ name, sort_order: (last.data?.[0]?.sort_order ?? 0) + 1 });
-  if (error?.code === "23505") throw duplicateCategory(name);
-  if (error) fail("adding a category", error);
-}
-
-/** Renames a category; the foreign key carries the new name onto every ingredient in it. */
-export async function renameCategory(from: string, to: string): Promise<void> {
-  const { data, error } = await getDb()
-    .from("ingredient_categories")
-    .update({ name: to })
-    .eq("name", from)
-    .select("name");
-  if (error?.code === "23505") throw duplicateCategory(to);
-  if (error) fail("renaming a category", error);
-  if (!data?.length) throw new LibraryError("That category no longer exists.");
-}
-
-/** Refused by the database while any ingredient is still in the category. */
-export async function deleteCategory(name: string): Promise<void> {
-  const { error } = await getDb().from("ingredient_categories").delete().eq("name", name);
-  if (error?.code === "23503") {
-    throw new LibraryError(
-      `Some ingredients are still in "${name}". Move them to another category first.`,
-    );
-  }
-  if (error) fail("deleting a category", error);
-}
-
 /* ----------------------------------------------------------------- recipes */
 
 export type RecipeDraft = {
@@ -218,6 +138,9 @@ export type RecipeDraft = {
   descriptionShort: string;
   components: RecipeComponent[];
 };
+
+const duplicateName = (kind: string, name: string) =>
+  new LibraryError(`There's already ${kind} called "${name.trim()}".`);
 
 /**
  * Save a recipe's details and replace its lines, in one transaction.
@@ -236,7 +159,7 @@ export async function saveRecipe(id: string | null, draft: RecipeDraft): Promise
     p_description: draft.description,
     p_description_short: draft.descriptionShort,
     p_components: draft.components.map((part) => ({
-      ingredient_id: part.ingredientId,
+      item_id: part.itemId,
       child_recipe_id: part.childRecipeId,
       amount: part.amount,
       unit: part.unit,
@@ -275,6 +198,27 @@ export async function markStale(recipeIds: string[]): Promise<void> {
     .in("id", recipeIds)
     .not("generated_at", "is", null);
   if (error) fail("marking descriptions out of date", error);
+}
+
+/**
+ * Mark every description written from an item out of date, and say how many
+ * were fresh until now.
+ *
+ * This is what the items database calls after a save, so editing a record in
+ * the catalogue reaches the menu copy built on it. It is deliberately quiet
+ * about failure: a description left looking fresh is worth less than an edit
+ * the owner can't save, so the caller logs and carries on.
+ */
+export async function markStaleForItems(itemIds: string[]): Promise<number> {
+  if (itemIds.length === 0) return 0;
+
+  const library = await loadLibrary();
+  const affected = new Set(itemIds.flatMap((id) => recipesUsingItem(id, library)));
+  await markStale([...affected]);
+
+  return library.recipes.filter(
+    (recipe) => affected.has(recipe.id) && recipe.generatedAt && !recipe.isStale,
+  ).length;
 }
 
 /** Store a fresh generation, replacing whatever description was there. */

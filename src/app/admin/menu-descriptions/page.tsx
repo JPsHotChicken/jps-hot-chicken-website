@@ -17,7 +17,12 @@ export const metadata: Metadata = {
 // A stale badge that lags behind an ingredient edit would defeat the point of it.
 export const dynamic = "force-dynamic";
 
-/** Every recipe, split into menu items and the components they are built from. */
+/**
+ * Every recipe, split into menu items and the components they are built from.
+ *
+ * The ingredients count is of the catalogue, not a list of its own: an
+ * ingredient is an item, edited at `/admin/items`.
+ */
 export default async function MenuDescriptionsPage() {
   // `proxy.ts` already redirects signed-out visitors; checking again here means
   // the page can never render off the back of a forged cookie.
@@ -33,8 +38,7 @@ export default async function MenuDescriptionsPage() {
 
   return (
     <MenuDescriptionsShell
-      tab="recipes"
-      subtitle={`${recipes.length} recipe${recipes.length === 1 ? "" : "s"} · ${ingredients.length} ingredient${ingredients.length === 1 ? "" : "s"}${stale > 0 ? ` · ${stale} out of date` : ""}`}
+      subtitle={`${recipes.length} recipe${recipes.length === 1 ? "" : "s"} · ${ingredients.length} item${ingredients.length === 1 ? "" : "s"} to build from${stale > 0 ? ` · ${stale} out of date` : ""}`}
     >
       <RecipeList recipes={recipes} />
     </MenuDescriptionsShell>
