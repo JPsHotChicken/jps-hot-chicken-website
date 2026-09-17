@@ -95,7 +95,13 @@ const locations: readonly RestaurantLocation[] = [
     phone: "931-266-0025",
     // uberEatsUrl: pending — see header note. Uber Eats stays omitted until this
     // store has its own listing; Oak Grove's link would misroute orders here.
-    orderingUrl: "https://jpshotchicken.toast.site/",
+    // Deep link straight to the Trenton Rd menu, not the Toast root. Both render
+    // the same page today, but if Oak Grove ever moves onto Toast as well, the
+    // root would become a location picker — an extra tap that silently costs
+    // orders on paid traffic. This link keeps going to the right menu. If Toast
+    // renames the slug it 404s, which is loud and obvious rather than silent.
+    // Verified 2026-09-17: preserves the gclid query parameter.
+    orderingUrl: "https://jpshotchicken.toast.site/order/jps-hot-chicken-trenton",
     doordashUrl:
       "https://www.doordash.com/store/jp's-hot-chicken-clarksville-47994625/116482960/?event_type=autocomplete&pickup=false",
     isOpen: true,

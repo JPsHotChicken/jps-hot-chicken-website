@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  decorateOrderingUrl,
   isPaidVisit,
   parseAttribution,
   primaryClickId,
@@ -173,5 +174,51 @@ describe("validateCateringForm", () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.company).toBe("spam");
+  });
+});
+
+/* ------------------------------------------------- cross-domain handoff */
+
+describe("decorateOrderingUrl", () => {
+  it("appends the click id to an external ordering URL", () => {
+    const out = decorateOrderingUrl("https://jpshotchicken.toast.site/", { gclid: "abc" });
+    expect(out).toContain("gclid=abc");
+    expect(out.startsWith("https://jpshotchicken.toast.site/")).toBe(true);
+  });
+
+  it("carries gbraid and wbraid too, not just gclid", () => {
+    // The iOS click ids matter most here: mobile is where food ordering happens.
+    expect(decorateOrderingUrl("https://x.test/", { gbraid: "b" })).toContain("gbraid=b");
+    expect(decorateOrderingUrl("https://x.test/", { wbraid: "w" })).toContain("wbraid=w");
+  });
+
+  it("carries UTM parameters alongside", () => {
+    const out = decorateOrderingUrl("https://x.test/", { gclid: "a", utm_source: "google" });
+    expect(out).toContain("utm_source=google");
+  });
+
+  it("leaves internal paths untouched", () => {
+    expect(decorateOrderingUrl("/order/clarksville", { gclid: "abc" })).toBe("/order/clarksville");
+  });
+
+  it("returns the URL unchanged when there is no attribution", () => {
+    expect(decorateOrderingUrl("https://x.test/", {})).toBe("https://x.test/");
+  });
+
+  it("never overwrites a parameter the destination already sets", () => {
+    const out = decorateOrderingUrl("https://x.test/?gclid=theirs", { gclid: "ours" });
+    expect(out).toContain("gclid=theirs");
+    expect(out).not.toContain("ours");
+  });
+
+  it("preserves the destination's existing query string", () => {
+    const out = decorateOrderingUrl("https://x.test/?location=clarksville", { gclid: "a" });
+    expect(out).toContain("location=clarksville");
+    expect(out).toContain("gclid=a");
+  });
+
+  it("returns the original href rather than throwing on a malformed URL", () => {
+    // An order button that throws is worse than one with imperfect attribution.
+    expect(decorateOrderingUrl("https://", { gclid: "a" })).toBe("https://");
   });
 });

@@ -117,3 +117,39 @@ export function primaryClickId(attribution: Attribution): string | undefined {
 export function isPaidVisit(attribution: Attribution): boolean {
   return primaryClickId(attribution) !== undefined;
 }
+
+/**
+ * Append this visit's click identifiers to an outbound ordering URL.
+ *
+ * Checkout happens on Toast (and SkyTab), a different domain. Google Ads
+ * attributes a conversion using a first-party cookie, and a cookie set on
+ * jpshotchicken.com cannot be read on toast.site — so without this, an order
+ * completed over there is credited to nobody and the ad that paid for it looks
+ * worthless.
+ *
+ * Carrying the click id in the query string is the way across that boundary:
+ * the Google tag on the destination reads it out of the URL and writes its own
+ * cookie there. Verified 2026-09-17 that Toast preserves query parameters on
+ * the landing page.
+ *
+ * UTM parameters ride along too, so Toast-side analytics can see the source.
+ *
+ * Returns the URL unchanged if it is not an ordering URL, if there is nothing
+ * to add, or if it cannot be parsed — an order button that throws is far worse
+ * than one with imperfect attribution.
+ */
+export function decorateOrderingUrl(href: string, attribution: Attribution): string {
+  if (!/^https?:\/\//.test(href)) return href;
+  const entries = Object.entries(attribution).filter(([, v]) => v);
+  if (entries.length === 0) return href;
+  try {
+    const url = new URL(href);
+    for (const [key, value] of entries) {
+      // Never clobber a parameter the destination URL already sets itself.
+      if (!url.searchParams.has(key)) url.searchParams.set(key, value as string);
+    }
+    return url.toString();
+  } catch {
+    return href;
+  }
+}

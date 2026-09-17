@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { trackConversion } from "@/lib/google-ads";
+import { decorateOrderingUrl, readAttribution } from "@/lib/attribution";
 
 type TrackedOrderButtonProps = {
   /** The ordering platform URL (Toast, SkyTab) or an internal /order path. */
@@ -48,11 +49,18 @@ export function TrackedOrderButton({
     }
 
     event.preventDefault();
+    // Carry the click id across to the ordering platform so a completed order
+    // over there can still be credited to the keyword that paid for the click.
+    // Read at click time, not at render, so a click id captured after this
+    // component mounted is still picked up.
+    const destination = isExternal
+      ? decorateOrderingUrl(href, readAttribution())
+      : href;
     trackConversion("order", () => {
       if (isExternal) {
-        window.open(href, "_blank", "noopener,noreferrer");
+        window.open(destination, "_blank", "noopener,noreferrer");
       } else {
-        window.location.href = href;
+        window.location.href = destination;
       }
     });
   };
