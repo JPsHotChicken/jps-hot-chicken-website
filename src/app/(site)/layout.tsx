@@ -1,10 +1,11 @@
 import { Analytics } from "@vercel/analytics/next";
-import { GoogleAnalytics } from "@next/third-parties/google";
 
 import { buildOrganizationJsonLd, serializeJsonLd } from "@/lib/jsonld";
 import { Nav } from "@/components/Nav";
 import { AttributionCapture } from "@/components/AttributionCapture";
+import { GoogleAnalyticsTag } from "@/components/GoogleAnalyticsTag";
 import { GoogleAdsTag } from "@/components/GoogleAdsTag";
+import { ClarityTag } from "@/components/ClarityTag";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Footer } from "@/components/Footer";
 
@@ -18,8 +19,6 @@ export default function SiteLayout({
   children: React.ReactNode;
 }>) {
   const jsonLd = buildOrganizationJsonLd();
-  // GA4 activates once NEXT_PUBLIC_GA_ID (a "G-…" measurement ID) is set in Vercel.
-  const gaId = process.env.NEXT_PUBLIC_GA_ID;
 
   return (
     <>
@@ -45,9 +44,13 @@ export default function SiteLayout({
       </main>
       <Footer />
       <Analytics />
-      {gaId && <GoogleAnalytics gaId={gaId} />}
+      {/* GA4. Also re-sends page_view on client-side navigation, which Google's
+          copy-paste snippet does not do. */}
+      <GoogleAnalyticsTag />
       {/* Google Ads conversion tag. Dormant until NEXT_PUBLIC_GOOGLE_ADS_ID is set. */}
       <GoogleAdsTag />
+      {/* Microsoft Clarity — heatmaps and session replay for the public site only. */}
+      <ClarityTag />
       {/* Stashes gclid / gbraid / wbraid + UTMs so a conversion can be attributed
           to the click that earned it, even several pages later. */}
       <AttributionCapture />

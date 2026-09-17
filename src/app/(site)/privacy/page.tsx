@@ -15,7 +15,7 @@ import { siteConfig } from "@/data/site";
  */
 
 /** The day this wording last changed. Bump it whenever the text below does. */
-const EFFECTIVE_DATE = "August 25, 2026";
+const EFFECTIVE_DATE = "September 17, 2026";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -102,6 +102,13 @@ export default function PrivacyPage() {
           which pages and locations people are interested in and whether our advertising
           is working. We do not use it to identify you personally.
         </p>
+        <p>
+          <strong>Session replay.</strong> We also use Microsoft Clarity, which records how
+          people move through the pages of this site — mouse movement, scrolling, taps, and
+          clicks — and plays it back so we can see where the site is confusing. Clarity
+          automatically masks the text you type into forms. We use it to fix the website,
+          not to identify you.
+        </p>
       </Section>
 
       <Section title="Cookies and similar technologies">
@@ -112,8 +119,9 @@ export default function PrivacyPage() {
         </p>
         <p>
           <strong>Analytics.</strong> We use Google Analytics 4, which sets cookies to
-          tell repeat visits apart from new ones, and Vercel Analytics, which is
-          cookieless and does not follow you across other websites.
+          tell repeat visits apart from new ones; Vercel Analytics, which is
+          cookieless and does not follow you across other websites; and Microsoft
+          Clarity, which sets cookies so it can stitch the pages of one visit together.
         </p>
         <p>
           <strong>Advertising.</strong> We advertise with Google. Google and its partners
@@ -164,6 +172,10 @@ export default function PrivacyPage() {
             <strong>Google</strong> — Analytics and Ads for measurement and advertising,
             and Google Workspace for the email inbox and the spreadsheet where new job
             applications are logged.
+          </li>
+          <li>
+            <strong>Microsoft</strong> — Clarity, which produces the heatmaps and session
+            replays we use to improve the site.
           </li>
           <li>
             <strong>Supabase</strong> — the database that stores job applications and our
