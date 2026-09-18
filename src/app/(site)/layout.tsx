@@ -6,6 +6,7 @@ import { AttributionCapture } from "@/components/AttributionCapture";
 import { GoogleAnalyticsTag } from "@/components/GoogleAnalyticsTag";
 import { GoogleAdsTag } from "@/components/GoogleAdsTag";
 import { ClarityTag } from "@/components/ClarityTag";
+import { MetaPixelTag } from "@/components/MetaPixelTag";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Footer } from "@/components/Footer";
 
@@ -51,6 +52,8 @@ export default function SiteLayout({
       <GoogleAdsTag />
       {/* Microsoft Clarity — heatmaps and session replay for the public site only. */}
       <ClarityTag />
+      {/* Meta Pixel — Facebook / Instagram ad measurement and retargeting. */}
+      <MetaPixelTag />
       {/* Stashes gclid / gbraid / wbraid + UTMs so a conversion can be attributed
           to the click that earned it, even several pages later. */}
       <AttributionCapture />

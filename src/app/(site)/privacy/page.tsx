@@ -15,7 +15,7 @@ import { siteConfig } from "@/data/site";
  */
 
 /** The day this wording last changed. Bump it whenever the text below does. */
-const EFFECTIVE_DATE = "September 17, 2026";
+const EFFECTIVE_DATE = "September 18, 2026";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -124,12 +124,23 @@ export default function PrivacyPage() {
           Clarity, which sets cookies so it can stitch the pages of one visit together.
         </p>
         <p>
-          <strong>Advertising.</strong> We advertise with Google. Google and its partners
-          may use cookies and similar identifiers to measure clicks on our ads and to show
-          our ads to people who have visited this site. You can control this at{" "}
+          <strong>Advertising.</strong> We advertise with Google and with Meta (Facebook
+          and Instagram). Both, and their partners, may use cookies and similar identifiers
+          to measure visits that come from our ads and to show our ads to people who have
+          visited this site. You can control this at{" "}
           <a href="https://myadcenter.google.com" className={LINK} target="_blank" rel="noopener noreferrer">
             Google My Ad Center
           </a>{" "}
+          and in{" "}
+          <a
+            href="https://accountscenter.facebook.com/ad_preferences"
+            className={LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Meta&rsquo;s ad preferences
+          </a>
+          ,{" "}
           or opt out of Google Analytics entirely with the{" "}
           <a
             href="https://tools.google.com/dlpage/gaoptout"
@@ -172,6 +183,10 @@ export default function PrivacyPage() {
             <strong>Google</strong> — Analytics and Ads for measurement and advertising,
             and Google Workspace for the email inbox and the spreadsheet where new job
             applications are logged.
+          </li>
+          <li>
+            <strong>Meta</strong> — the Meta Pixel, which measures our Facebook and
+            Instagram ads and lets us show those ads to people who have visited this site.
           </li>
           <li>
             <strong>Microsoft</strong> — Clarity, which produces the heatmaps and session
