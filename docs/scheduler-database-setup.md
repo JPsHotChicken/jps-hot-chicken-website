@@ -61,6 +61,7 @@ That is the intended posture, not a finding to fix.
 | `published_shifts` | Snapshot of the grid as of the last "Go Live". |
 | `published_tip_rates` | One row per week of tips the owner has sent to staff: the dates, and what an hour earned. Nothing else off the labor summary. |
 | `staff_login_attempts` | Sign-in throttling for `/staff`. |
+| `staff_rule_signatures` | One row per person per rules slide they have signed on `/staff`: the slide, its version, the name they typed, and when. |
 
 `shift_assignments` is keyed by real calendar date — `(shift_date, row_index,
 hour)` — rather than by week plus weekday, so a date can only ever mean one
@@ -125,6 +126,27 @@ all, which is what keeps one person's pay out of a page everybody can open.
 The rate is keyed on the day its period starts, so re-running a week and sending
 it again corrects the number rather than adding a second one. The button reads
 `Go live`, `Update` (staff can see an older figure — it says which), or `Live`.
+
+### Rules & regulations sign-off
+
+The top of `/staff` is a slideshow of rules, each signed by typing a full name
+before the next one opens. The slides are listed in `src/lib/staff-rules.ts`
+and their wording lives in `src/components/staff/RulesSlideshow.tsx`.
+
+- **A signature has to start with the first name on file**, then a last name
+  written out. The roster mostly holds first names only, so that is all that
+  can be checked. Somebody filed under a nickname can't sign until the owner
+  renames them in Staff management to the first name on their ID.
+- **Changing a slide's wording means bumping its `version`.** Everybody is then
+  asked to sign that slide again; the old rows stay as the record of what was
+  agreed to before. Only rows on a slide's current version count.
+- **Order is enforced by the Server Action too**, not only by the buttons: a
+  slide can't be signed while an earlier one is unsigned.
+- The write-up form's page images and PDF are in `public/staff/rules/`, so
+  `proxy.ts` only serves them to a signed-in employee. That's why they skip the
+  image optimiser, which fetches without the visitor's cookie.
+
+Staff management shows each person's progress on their row.
 
 ### Why the password is stored as typed
 

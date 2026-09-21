@@ -36,6 +36,7 @@ import {
   setTimeOffStatusAction,
 } from "@/app/admin/schedule-actions";
 import { exportSchedulePdf, type ExportScope } from "@/lib/schedule-pdf";
+import type { RulesProgress } from "@/lib/staff-rules";
 import {
   DAY_KEYS,
   addDays,
@@ -78,6 +79,8 @@ export type SchedulerProps = {
   employees: Employee[];
   /** How payroll spells each person, learned when a pay stub was assigned. */
   payrollNames?: { employeeId: string; payrollName: string }[];
+  /** How far each person has got through signing the rules on `/staff`. */
+  rulesProgress?: Record<string, RulesProgress>;
   timeOff: TimeOffRequest[];
   /** Requests that were deleted, kept so a delete can be undone. */
   deletedTimeOff: DeletedTimeOffRequest[];
@@ -121,6 +124,7 @@ export function Scheduler({
   week: initialWeek,
   publishState: initialPublishState,
   payrollNames: initialPayrollNames = [],
+  rulesProgress = {},
   initialView = "scheduler",
 }: SchedulerProps) {
   const [employees, setEmployees] = useState(initialEmployees);
@@ -727,6 +731,7 @@ export function Scheduler({
         <StaffManagement
           employees={employees}
           payrollNames={payrollNames}
+          rulesProgress={rulesProgress}
           onSavePassword={savePassword}
           onRegenerateSetupCode={regenerateSetupCode}
           onRename={renameEmployee}

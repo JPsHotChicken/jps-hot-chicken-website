@@ -1,6 +1,15 @@
 import "@testing-library/jest-dom/vitest";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+
+/**
+ * `next/font` is compiled away by Next's own build and means nothing to Vite,
+ * so any component that loads a font gets a plain class name instead.
+ */
+vi.mock("next/font/google", () => {
+  const font = () => ({ className: "font-stub", style: { fontFamily: "stub" }, variable: "" });
+  return { Blinker: font, Dancing_Script: font };
+});
 
 /**
  * An in-memory `localStorage`, for the jsdom environment that arrives without

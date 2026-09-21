@@ -10,6 +10,7 @@ import {
   LoaderCircle,
   Pencil,
   Plus,
+  ScrollText,
   Trash2,
   UserPlus,
   Users,
@@ -18,6 +19,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { STAFF_PASSWORD_MIN_LENGTH } from "@/lib/staff-auth";
+import { RULE_SLIDES, formatSignedDate, type RulesProgress } from "@/lib/staff-rules";
 import {
   EMPLOYEE_NAME_MAX_LENGTH,
   SHIFT_GROUPS,
@@ -37,6 +39,8 @@ type Props = {
   employees: Employee[];
   /** How payroll spells each person, learned when a pay stub was assigned. */
   payrollNames?: { employeeId: string; payrollName: string }[];
+  /** How far each person has got through signing the rules on `/staff`. */
+  rulesProgress?: Record<string, RulesProgress>;
   onForgetPayrollName?: (payrollName: string) => Promise<void>;
   /** Rejects with a message worth showing against the row. */
   onSavePassword: (id: string, password: string) => Promise<void>;
@@ -111,6 +115,26 @@ function AddEmployeeForm({ onAdd }: { onAdd: (name: string, group: ShiftGroup) =
   );
 }
 
+/** Whether somebody has signed the rules slides at the top of their `/staff` page. */
+function RulesStatus({ progress }: { progress?: RulesProgress }) {
+  if (progress?.completedAt) {
+    return (
+      <p className="flex items-center gap-1 text-xs text-emerald-700">
+        <ScrollText className="size-3 shrink-0" />
+        Signed the rules · {formatSignedDate(progress.completedAt)}
+      </p>
+    );
+  }
+  return (
+    <p className="flex items-center gap-1 text-xs text-amber-700">
+      <ScrollText className="size-3 shrink-0" />
+      {progress?.signed
+        ? `Signed ${progress.signed} of ${RULE_SLIDES.length} rules pages`
+        : "Hasn't signed the rules yet"}
+    </p>
+  );
+}
+
 /**
  * One employee row: their name, the code that gets them started, and the
  * password they ended up with.
@@ -123,6 +147,7 @@ function AddEmployeeForm({ onAdd }: { onAdd: (name: string, group: ShiftGroup) =
  */
 function EmployeeRow({
   employee,
+  rules,
   payrollNames = [],
   onSavePassword,
   onRegenerateSetupCode,
@@ -131,6 +156,7 @@ function EmployeeRow({
   onRemove,
 }: {
   employee: Employee;
+  rules?: RulesProgress;
   payrollNames?: string[];
   onSavePassword: (id: string, password: string) => Promise<void>;
   onRegenerateSetupCode: (id: string) => Promise<void>;
@@ -307,6 +333,7 @@ function EmployeeRow({
                 : "Hasn't set a password yet — read them the code"}
             </p>
           )}
+          <RulesStatus progress={rules} />
 
           {payrollNames.length > 0 && (
             <ul className="mt-1 flex flex-wrap gap-1.5">
@@ -451,6 +478,7 @@ function EmployeeRow({
 export function StaffManagement({
   employees,
   payrollNames = [],
+  rulesProgress = {},
   onSavePassword,
   onRegenerateSetupCode,
   onRename,
@@ -495,6 +523,7 @@ export function StaffManagement({
                     <EmployeeRow
                       key={employee.id}
                       employee={employee}
+                      rules={rulesProgress[employee.id]}
                       payrollNames={namesFor(employee.id)}
                       onSavePassword={onSavePassword}
                       onRegenerateSetupCode={onRegenerateSetupCode}

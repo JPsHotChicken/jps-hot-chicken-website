@@ -161,6 +161,32 @@ describe("StaffManagement renaming", () => {
   });
 });
 
+describe("StaffManagement rules sign-off", () => {
+  it("says who has signed the rules, who is part way, and who hasn't started", () => {
+    render(
+      <StaffManagement
+        employees={[
+          ...employees,
+          { id: "e3", name: "Sam Partway", group: "other", setupCode: null, password: "halfway" },
+        ]}
+        rulesProgress={{
+          e1: { signed: 4, completedAt: "2026-09-20T15:00:00Z" },
+          e3: { signed: 2, completedAt: null },
+        }}
+        onSavePassword={vi.fn(async () => {})}
+        onRegenerateSetupCode={vi.fn(async () => {})}
+        onRename={vi.fn(async () => {})}
+        onAdd={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Signed the rules · Sep 20, 2026")).toBeInTheDocument();
+    expect(screen.getByText(/Signed 2 of \d+ rules pages/)).toBeInTheDocument();
+    expect(screen.getByText("Hasn't signed the rules yet")).toBeInTheDocument();
+  });
+});
+
 describe("StaffManagement setup codes", () => {
   it("shows each person's five digit code so it can be read out", () => {
     setup();

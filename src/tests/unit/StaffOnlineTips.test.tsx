@@ -14,6 +14,7 @@ vi.mock("@/app/staff/actions", () => ({
   myRequestsAction: vi.fn(),
   requestTimeOffAction: vi.fn(),
   scheduledDatesAction: vi.fn(),
+  signRulesSlideAction: vi.fn(),
 }));
 
 const EMPLOYEE: Employee = { id: "e1", name: "Alazia Vann", group: "night" };
@@ -36,6 +37,7 @@ function dashboard(tipRates: PublishedTipRate[]) {
       scheduledRange={{ from: "2026-08-03", to: "2026-09-20" }}
       payStubs={[]}
       tipRates={tipRates}
+      ruleSignatures={[]}
     />,
   );
 }

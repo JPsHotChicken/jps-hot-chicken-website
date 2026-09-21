@@ -18,8 +18,16 @@ import {
   readStaffSetupToken,
 } from "@/lib/staff-auth";
 import * as staff from "@/lib/staff-repo";
+import { listRuleSignatures, saveRuleSignature } from "@/lib/staff-rules-repo";
 import { insertTimeOff } from "@/lib/schedule-repo";
 import { type TimeOffRequest, type WeekSchedule } from "@/lib/schedule";
+import {
+  RULE_SLIDES,
+  checkSignature,
+  findRuleSlide,
+  firstUnsignedIndex,
+  type RuleSignature,
+} from "@/lib/staff-rules";
 
 export type StaffLoginState = { error?: string };
 export type StaffSetupState = { error?: string };
@@ -226,4 +234,48 @@ export async function requestTimeOffAction(input: {
   if (reason.length > 200) throw new Error("Please keep the reason under 200 characters.");
 
   await insertTimeOff({ employeeId, startDate, endDate, reason });
+}
+
+/**
+ * Sign one of the rules slides with a typed name.
+ *
+ * Everything the slideshow enforces is enforced again here, because a Server
+ * Action can be called with anything: the name has to pass the same check
+ * against the name on file, and a slide can only be signed once every slide
+ * before it has been — so nobody can skip ahead by calling this directly.
+ *
+ * A refusal comes back as a value rather than a thrown error so its wording
+ * survives production, where Next.js swaps a thrown message for a generic one.
+ */
+export type SignRulesResult =
+  | { ok: true; signature: RuleSignature }
+  | { ok: false; error: string };
+
+export async function signRulesSlideAction(
+  slideId: string,
+  signedName: string,
+): Promise<SignRulesResult> {
+  const employeeId = await requireStaff();
+
+  const slide = findRuleSlide(slideId);
+  if (!slide) return { ok: false, error: "That page doesn't exist. Reload and try again." };
+
+  const employee = await staff.findEmployeeById(employeeId);
+  if (!employee) return { ok: false, error: "Not signed in." };
+
+  const check = checkSignature(String(signedName ?? ""), employee.name);
+  if (!check.ok) return { ok: false, error: check.reason };
+
+  const signed = await listRuleSignatures(employeeId);
+  const position = RULE_SLIDES.findIndex((entry) => entry.id === slide.id);
+  if (firstUnsignedIndex(new Set(signed.map((entry) => entry.slideId))) < position) {
+    return { ok: false, error: "Sign the pages before this one first." };
+  }
+
+  await saveRuleSignature(employeeId, slide.id, check.name);
+
+  // Read back rather than echo, so a page signed twice shows the first signature.
+  const saved = (await listRuleSignatures(employeeId)).find((entry) => entry.slideId === slide.id);
+  if (!saved) throw new Error("[staff-rules] a saved signature didn't read back");
+  return { ok: true, signature: saved };
 }

@@ -27,6 +27,10 @@ class PasswordTakenError extends Error {
 
 vi.mock("@/lib/staff-repo", () => ({ ...repo, PasswordTakenError }));
 vi.mock("@/lib/schedule-repo", () => ({ insertTimeOff: vi.fn() }));
+vi.mock("@/lib/staff-rules-repo", () => ({
+  listRuleSignatures: vi.fn(),
+  saveRuleSignature: vi.fn(),
+}));
 
 /** A stand-in cookie jar that records what the action set and deleted. */
 const jar = vi.hoisted(() => {

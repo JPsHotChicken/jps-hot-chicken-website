@@ -38,6 +38,8 @@ import {
 } from "@/lib/schedule";
 import { formatPayDate } from "@/lib/pay-stubs";
 import { formatMoney, formatPeriod, type PublishedTipRate } from "@/lib/tips";
+import { type RuleSignature } from "@/lib/staff-rules";
+import { RulesSlideshow } from "./RulesSlideshow";
 import { TimeOffCalendar } from "./TimeOffCalendar";
 import { WeekSchedule as WeekScheduleView } from "./WeekSchedule";
 
@@ -70,6 +72,8 @@ export type StaffDashboardProps = {
   payStubs: MyPayStub[];
   /** Every week of tips per hour the owner has sent out, oldest first. */
   tipRates: PublishedTipRate[];
+  /** Which rules slides this person has signed, on their current wording. */
+  ruleSignatures: RuleSignature[];
 };
 
 export function StaffDashboard({
@@ -82,6 +86,7 @@ export function StaffDashboard({
   scheduledRange,
   payStubs,
   tipRates,
+  ruleSignatures,
 }: StaffDashboardProps) {
   const [weekStart, setWeekStart] = useState(initialWeekStart);
   const [weeks, setWeeks] = useState<Record<string, WeekSchedule>>(
@@ -210,6 +215,9 @@ export function StaffDashboard({
       </header>
 
       <main className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:px-6">
+        {/* The rules come first, above everything else on the page. */}
+        <RulesSlideshow employeeName={employee.name} initialSignatures={ruleSignatures} />
+
         {/* ------------------------------------------------------- schedule */}
         <section className="rounded-xl border border-border bg-background shadow-sm">
           <header className="flex items-center gap-2 border-b border-border px-4 py-3">

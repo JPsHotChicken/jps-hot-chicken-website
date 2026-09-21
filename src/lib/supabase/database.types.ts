@@ -369,6 +369,38 @@ export type Database = {
         };
         Relationships: [];
       };
+      staff_rule_signatures: {
+        Row: {
+          employee_id: string;
+          signed_at: string;
+          signed_name: string;
+          slide_id: string;
+          slide_version: number;
+        };
+        Insert: {
+          employee_id: string;
+          signed_at?: string;
+          signed_name: string;
+          slide_id: string;
+          slide_version: number;
+        };
+        Update: {
+          employee_id?: string;
+          signed_at?: string;
+          signed_name?: string;
+          slide_id?: string;
+          slide_version?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "staff_rule_signatures_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       recurring_time_off: {
         Row: {
           created_at: string;
