@@ -252,7 +252,7 @@ const SLIDES: Record<RuleSlideId, { body: ReactNode; pledge: string }> = {
         <ul className="mt-4 space-y-3">
           <RuleCard icon={Utensils} title="Break meals go on a for-here tray">
             All staff break meals <strong>must</strong>{" "}
-            be taken on a for-here tray. No to-go trays — even if you want to eat in your car.
+            be taken on a for-here tray. No to-go trays — if you want to eat in your car, take the tray to your car.
           </RuleCard>
           <RuleCard icon={Hand} title="Ask a manager before every break">
             You <strong>must</strong>{" "}
@@ -470,10 +470,10 @@ export function RulesSlideshow({ employeeName, initialSignatures }: Props) {
                     >
                       <span
                         className={`flex size-4 shrink-0 items-center justify-center rounded-full text-[0.6rem] font-bold ${signed
-                            ? "bg-emerald-500 text-white"
-                            : current
-                              ? "bg-brand text-brand-foreground"
-                              : "bg-muted text-muted-foreground"
+                          ? "bg-emerald-500 text-white"
+                          : current
+                            ? "bg-brand text-brand-foreground"
+                            : "bg-muted text-muted-foreground"
                           }`}
                       >
                         {signed ? (
