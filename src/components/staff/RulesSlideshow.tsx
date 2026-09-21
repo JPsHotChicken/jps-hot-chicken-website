@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { signRulesSlideAction } from "@/app/staff/actions";
 import {
   RULE_SLIDES,
+  SIGNATURE_MAX_LENGTH,
   checkSignature,
   firstUnsignedIndex,
   formatSignedDate,
@@ -95,28 +96,79 @@ function RuleCard({ icon: Icon, title, children }: { icon: Icon; title: string; 
   );
 }
 
-/** The line a signature sits on, written out in cursive. */
-function SignatureLine({ name, signedAt }: { name: string; signedAt?: string }) {
+type SignatureInput = {
+  value: string;
+  onChange: (value: string) => void;
+  onEnter: () => void;
+  disabled: boolean;
+  /** Set while the typed name has been turned away — the message's id. */
+  errorId?: string;
+};
+
+/**
+ * The line a signature sits on, in cursive.
+ *
+ * Given `input`, the line itself is where the name is typed: the whole box is a
+ * label, so tapping anywhere on it puts the cursor on the line, and the name
+ * comes out in cursive as it is typed. Without it, it shows a signature already
+ * on file.
+ */
+function SignatureLine({
+  name,
+  signedAt,
+  input,
+}: {
+  name?: string;
+  signedAt?: string;
+  input?: SignatureInput;
+}) {
+  const ink = `${signatureFont.className} min-w-0 flex-1 text-3xl leading-tight text-blue-900 sm:text-4xl dark:text-blue-200`;
+  const Box = input ? "label" : "div";
+
   return (
-    <div className="rounded-lg border border-border bg-background px-4 pt-2 pb-2">
-      <div className="flex min-h-14 items-end gap-2 border-b border-foreground/30 pb-1">
+    <Box
+      className={`block rounded-lg border bg-background px-4 pt-2 pb-2 ${input?.errorId ? "border-destructive" : "border-border"
+        } ${input
+          ? "cursor-text transition-shadow focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
+          : ""
+        }`}
+    >
+      <span className="flex min-h-14 items-end gap-2 border-b border-foreground/30 pb-1">
         <span aria-hidden className="pb-1.5 text-sm font-bold text-muted-foreground">
           ✕
         </span>
-        <span
-          data-testid="signature-preview"
-          className={`${signatureFont.className} min-w-0 truncate text-3xl leading-tight sm:text-4xl ${
-            name ? "text-blue-900 dark:text-blue-200" : "text-muted-foreground/35"
-          }`}
-        >
-          {name || "Your signature"}
-        </span>
-      </div>
-      <p className="mt-1 flex justify-between gap-2 text-[0.65rem] font-bold tracking-widest text-muted-foreground uppercase">
+        {input ? (
+          <input
+            value={input.value}
+            onChange={(event) => input.onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                input.onEnter();
+              }
+            }}
+            disabled={input.disabled}
+            placeholder="Tap here to sign"
+            aria-label="Your signature: type your full name, as it's written on your ID"
+            aria-invalid={Boolean(input.errorId)}
+            aria-describedby={input.errorId}
+            autoComplete="off"
+            autoCapitalize="words"
+            spellCheck={false}
+            maxLength={SIGNATURE_MAX_LENGTH}
+            className={`${ink} w-full bg-transparent py-0 outline-none placeholder:text-muted-foreground/40 disabled:opacity-60`}
+          />
+        ) : (
+          <span data-testid="signature-preview" className={`${ink} truncate`}>
+            {name}
+          </span>
+        )}
+      </span>
+      <span className="mt-1 flex justify-between gap-2 text-[0.65rem] font-bold tracking-widest text-muted-foreground uppercase">
         <span>Signature</span>
         {signedAt && <span>Signed {formatSignedDate(signedAt)}</span>}
-      </p>
-    </div>
+      </span>
+    </Box>
   );
 }
 
@@ -185,10 +237,7 @@ const SLIDES: Record<RuleSlideId, { body: ReactNode; pledge: string }> = {
           <Forbidden icon={Headphones} label="No headphones" />
         </div>
         <p className="mt-4 text-center text-base font-bold">
-          Phone use and headphones are not allowed at all.
-        </p>
-        <p className="mt-1.5 text-center text-sm leading-relaxed text-foreground/85">
-          We&apos;re forced to make this rule because phone use has been excessive lately.
+          Phone use and headphones must not be used at all while on the clock.
         </p>
         <Consequence>Failure to comply will result in a write-up.</Consequence>
       </>
@@ -407,29 +456,25 @@ export function RulesSlideshow({ employeeName, initialSignatures }: Props) {
                     onClick={() => goTo(position)}
                     disabled={locked}
                     aria-current={current ? "step" : undefined}
-                    aria-label={`Page ${position + 1}, ${entry.title}${
-                      signed ? ", signed" : locked ? ", locked until the page before is signed" : ""
-                    }`}
+                    aria-label={`Page ${position + 1}, ${entry.title}${signed ? ", signed" : locked ? ", locked until the page before is signed" : ""
+                      }`}
                     className="flex w-full flex-col gap-1.5 rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed"
                   >
                     <span
-                      className={`h-1.5 w-full rounded-full ${
-                        current ? "bg-brand" : signed ? "bg-emerald-500" : "bg-muted-foreground/20"
-                      }`}
+                      className={`h-1.5 w-full rounded-full ${current ? "bg-brand" : signed ? "bg-emerald-500" : "bg-muted-foreground/20"
+                        }`}
                     />
                     <span
-                      className={`flex min-w-0 items-center gap-1 text-[0.7rem] font-semibold ${
-                        current ? "text-foreground" : "text-muted-foreground"
-                      } ${locked ? "opacity-60" : ""}`}
+                      className={`flex min-w-0 items-center gap-1 text-[0.7rem] font-semibold ${current ? "text-foreground" : "text-muted-foreground"
+                        } ${locked ? "opacity-60" : ""}`}
                     >
                       <span
-                        className={`flex size-4 shrink-0 items-center justify-center rounded-full text-[0.6rem] font-bold ${
-                          signed
+                        className={`flex size-4 shrink-0 items-center justify-center rounded-full text-[0.6rem] font-bold ${signed
                             ? "bg-emerald-500 text-white"
                             : current
                               ? "bg-brand text-brand-foreground"
                               : "bg-muted text-muted-foreground"
-                        }`}
+                          }`}
                       >
                         {signed ? (
                           <Check aria-hidden className="size-2.5" strokeWidth={3.5} />
@@ -467,38 +512,32 @@ export function RulesSlideshow({ employeeName, initialSignatures }: Props) {
               {SLIDES[slide.id].pledge}
             </p>
             <p className="mt-0.5 mb-3 pl-6 text-xs text-muted-foreground">
-              Type your full name exactly as it&apos;s written on your ID — first and last name.
+              Tap the line and type your full name exactly as it&apos;s written on your ID — first
+              and last name.
             </p>
 
-            <SignatureLine name={draft.trim()} />
-
-            <div className="mt-3 flex gap-2">
-              <label htmlFor="rules-signature" className="sr-only">
-                Your full name, as it&apos;s written on your ID
-              </label>
-              <input
-                id="rules-signature"
-                value={draft}
-                onChange={(event) => {
-                  setDraft(event.target.value);
+            <SignatureLine
+              input={{
+                value: draft,
+                onChange: (value) => {
+                  setDraft(value);
                   setError(null);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && draft.trim() && !saving) {
-                    event.preventDefault();
-                    void sign();
-                  }
-                }}
-                placeholder="First and last name"
-                autoComplete="off"
-                autoCapitalize="words"
-                spellCheck={false}
-                maxLength={120}
-                aria-invalid={Boolean(error)}
-                aria-describedby={error ? "rules-signature-error" : undefined}
-                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-[invalid=true]:border-destructive sm:text-sm"
-              />
-              <Button size="lg" onClick={sign} disabled={saving || !draft.trim()}>
+                },
+                onEnter: () => {
+                  if (draft.trim() && !saving) void sign();
+                },
+                disabled: saving,
+                errorId: error ? "rules-signature-error" : undefined,
+              }}
+            />
+
+            <div className="mt-3 flex justify-end">
+              <Button
+                size="lg"
+                onClick={sign}
+                disabled={saving || !draft.trim()}
+                className="w-full sm:w-auto"
+              >
                 {saving ? (
                   <LoaderCircle data-icon="inline-start" className="animate-spin" />
                 ) : (

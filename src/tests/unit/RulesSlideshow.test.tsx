@@ -23,7 +23,7 @@ beforeEach(() => {
   }));
 });
 
-const nameBox = () => screen.getByLabelText(/Your full name/);
+const nameBox = () => screen.getByLabelText(/Your signature/);
 const next = () => screen.getByRole("button", { name: "Next" });
 
 function typeAndSign(name: string) {
@@ -42,11 +42,23 @@ describe("RulesSlideshow", () => {
     expect(screen.getByRole("button", { name: /Page 2, Phones, locked/ })).toBeDisabled();
   });
 
-  it("shows the typed name as a signature preview", () => {
+  it("takes the name on the signature line itself, in the cursive font", () => {
+    render(<RulesSlideshow employeeName="Noah" initialSignatures={[]} />);
+
+    // One box to type in — the signature line — not a separate name field.
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    fireEvent.change(nameBox(), { target: { value: "Noah Williams" } });
+    expect(nameBox()).toHaveValue("Noah Williams");
+    expect(nameBox()).toHaveClass("font-stub");
+  });
+
+  it("signs on Enter from the signature line", async () => {
     render(<RulesSlideshow employeeName="Noah" initialSignatures={[]} />);
 
     fireEvent.change(nameBox(), { target: { value: "Noah Williams" } });
-    expect(screen.getByTestId("signature-preview")).toHaveTextContent("Noah Williams");
+    fireEvent.keyDown(nameBox(), { key: "Enter" });
+
+    await waitFor(() => expect(sign).toHaveBeenCalledWith("write-ups", "Noah Williams"));
   });
 
   it("turns away random letters without asking the server", () => {
