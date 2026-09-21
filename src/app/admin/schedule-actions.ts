@@ -8,6 +8,7 @@ import * as repo from "@/lib/schedule-repo";
 import * as staff from "@/lib/staff-repo";
 import {
   DAY_KEYS,
+  EMPLOYEE_NAME_MAX_LENGTH,
   ROW_COUNT,
   SLOT_COUNT,
   SHIFT_GROUPS,
@@ -120,10 +121,18 @@ export async function addEmployeeAction(name: string, group: ShiftGroup): Promis
   await requireAdmin();
   if (!SHIFT_GROUPS.includes(group)) throw new Error(`Unknown shift group "${group}".`);
   return repo.insertEmployee(
-    assertText(name, "Name", { max: 80, required: true }),
+    assertText(name, "Name", { max: EMPLOYEE_NAME_MAX_LENGTH, required: true }),
     group,
     await staff.generateUniqueSetupCode(),
   );
+}
+
+/** Fix a spelling, or add a surname. Returns the name as it was stored. */
+export async function renameEmployeeAction(employeeId: string, name: string): Promise<string> {
+  await requireAdmin();
+  const stored = assertText(name, "Name", { max: EMPLOYEE_NAME_MAX_LENGTH, required: true });
+  await repo.renameEmployee(assertUuid(employeeId, "Employee"), stored);
+  return stored;
 }
 
 /**

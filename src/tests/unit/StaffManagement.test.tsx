@@ -15,17 +15,19 @@ function setup(over: Partial<Parameters<typeof StaffManagement>[0]> = {}) {
   const onRemove = vi.fn();
   const onSavePassword = vi.fn(async () => {});
   const onRegenerateSetupCode = vi.fn(async () => {});
+  const onRename = vi.fn(async () => {});
   render(
     <StaffManagement
       employees={employees}
       onSavePassword={onSavePassword}
       onRegenerateSetupCode={onRegenerateSetupCode}
+      onRename={onRename}
       onAdd={onAdd}
       onRemove={onRemove}
       {...over}
     />,
   );
-  return { onAdd, onRemove, onSavePassword, onRegenerateSetupCode };
+  return { onAdd, onRemove, onSavePassword, onRegenerateSetupCode, onRename };
 }
 
 /** The password box on one person's row. */
@@ -89,6 +91,76 @@ describe("StaffManagement hiring and removing", () => {
   });
 });
 
+describe("StaffManagement renaming", () => {
+  it("saves a new name, trimmed, and closes the box", async () => {
+    const { onRename } = setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Alex Morning's name" }));
+    fireEvent.change(screen.getByLabelText("New name for Alex Morning"), {
+      target: { value: "  Alex Mornington  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith("e1", "Alex Mornington"));
+    await waitFor(() =>
+      expect(screen.queryByLabelText("New name for Alex Morning")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("saves on Enter and backs out on Escape", async () => {
+    const { onRename } = setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Zoe Nightshift's name" }));
+    const box = screen.getByLabelText("New name for Zoe Nightshift");
+    fireEvent.change(box, { target: { value: "Zoey Nightshift" } });
+    fireEvent.keyDown(box, { key: "Escape" });
+
+    expect(screen.queryByLabelText("New name for Zoe Nightshift")).not.toBeInTheDocument();
+    expect(onRename).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Zoe Nightshift's name" }));
+    // Reopening starts from the real name, not the abandoned edit.
+    expect(screen.getByLabelText("New name for Zoe Nightshift")).toHaveValue("Zoe Nightshift");
+    fireEvent.change(screen.getByLabelText("New name for Zoe Nightshift"), {
+      target: { value: "Zoey Nightshift" },
+    });
+    fireEvent.keyDown(screen.getByLabelText("New name for Zoe Nightshift"), { key: "Enter" });
+
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith("e2", "Zoey Nightshift"));
+  });
+
+  it("won't save a blank name, and doesn't write an unchanged one", () => {
+    const { onRename } = setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Alex Morning's name" }));
+    const box = screen.getByLabelText("New name for Alex Morning");
+    fireEvent.change(box, { target: { value: "   " } });
+    expect(screen.getByRole("button", { name: "Save name" })).toBeDisabled();
+
+    fireEvent.change(box, { target: { value: "Alex Morning" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+
+    expect(onRename).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("New name for Alex Morning")).not.toBeInTheDocument();
+  });
+
+  it("keeps the box open with the error when the save fails", async () => {
+    const onRename = vi.fn(async () => {
+      throw new Error("Couldn't save that name. Please try again.");
+    });
+    setup({ onRename });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Alex Morning's name" }));
+    fireEvent.change(screen.getByLabelText("New name for Alex Morning"), {
+      target: { value: "Alexandra Morning" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't save that name");
+    expect(screen.getByLabelText("New name for Alex Morning")).toHaveValue("Alexandra Morning");
+  });
+});
+
 describe("StaffManagement setup codes", () => {
   it("shows each person's five digit code so it can be read out", () => {
     setup();
@@ -106,6 +178,7 @@ describe("StaffManagement setup codes", () => {
         ]}
         onSavePassword={vi.fn(async () => {})}
         onRegenerateSetupCode={vi.fn(async () => {})}
+        onRename={vi.fn(async () => {})}
         onAdd={vi.fn()}
         onRemove={vi.fn()}
       />,

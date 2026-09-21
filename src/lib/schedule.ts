@@ -14,6 +14,9 @@ export const SHIFT_GROUP_LABELS: Record<ShiftGroup, string> = {
   other: "Other",
 };
 
+/** Longest name Staff management will save, when hiring or renaming. */
+export const EMPLOYEE_NAME_MAX_LENGTH = 80;
+
 export type Employee = {
   id: string;
   name: string;

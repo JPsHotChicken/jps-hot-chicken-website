@@ -30,6 +30,7 @@ import {
   removeEmployeeAction,
   removeRecurringTimeOffAction,
   removeTimeOffAction,
+  renameEmployeeAction,
   restoreTimeOffAction,
   setStaffPasswordAction,
   setTimeOffStatusAction,
@@ -373,6 +374,23 @@ export function Scheduler({
     );
   }, []);
 
+  /**
+   * Rename somebody. Like a password, a failure is thrown for Staff management
+   * to show against the row, with the typed name left in the box to retry.
+   */
+  const renameEmployee = useCallback(async (id: string, name: string) => {
+    let stored: string;
+    try {
+      stored = await renameEmployeeAction(id, name);
+    } catch (cause) {
+      console.error("[scheduler] Could not rename an employee:", cause);
+      throw new Error("Couldn't save that name. Please try again.");
+    }
+    setEmployees((current) =>
+      current.map((employee) => (employee.id === id ? { ...employee, name: stored } : employee)),
+    );
+  }, []);
+
   const regenerateSetupCode = useCallback(async (id: string) => {
     const setupCode = await regenerateSetupCodeAction(id);
     setEmployees((current) =>
@@ -711,6 +729,7 @@ export function Scheduler({
           payrollNames={payrollNames}
           onSavePassword={savePassword}
           onRegenerateSetupCode={regenerateSetupCode}
+          onRename={renameEmployee}
           onAdd={addEmployee}
           onRemove={removeEmployee}
           onForgetPayrollName={async (payrollName) => {

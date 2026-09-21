@@ -8,6 +8,7 @@ import {
   EyeOff,
   KeyRound,
   LoaderCircle,
+  Pencil,
   Plus,
   Trash2,
   UserPlus,
@@ -18,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { STAFF_PASSWORD_MIN_LENGTH } from "@/lib/staff-auth";
 import {
+  EMPLOYEE_NAME_MAX_LENGTH,
   SHIFT_GROUPS,
   SHIFT_GROUP_LABELS,
   employeesByGroup,
@@ -39,6 +41,8 @@ type Props = {
   /** Rejects with a message worth showing against the row. */
   onSavePassword: (id: string, password: string) => Promise<void>;
   onRegenerateSetupCode: (id: string) => Promise<void>;
+  /** Rejects with a message worth showing against the row. */
+  onRename: (id: string, name: string) => Promise<void>;
   onAdd: (name: string, group: ShiftGroup) => void;
   onRemove: (id: string) => void;
 };
@@ -76,6 +80,7 @@ function AddEmployeeForm({ onAdd }: { onAdd: (name: string, group: ShiftGroup) =
             }
           }}
           placeholder="Employee name"
+          maxLength={EMPLOYEE_NAME_MAX_LENGTH}
           className="min-w-40 flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         <label htmlFor="employee-group" className="sr-only">
@@ -121,6 +126,7 @@ function EmployeeRow({
   payrollNames = [],
   onSavePassword,
   onRegenerateSetupCode,
+  onRename,
   onForgetPayrollName,
   onRemove,
 }: {
@@ -128,6 +134,7 @@ function EmployeeRow({
   payrollNames?: string[];
   onSavePassword: (id: string, password: string) => Promise<void>;
   onRegenerateSetupCode: (id: string) => Promise<void>;
+  onRename: (id: string, name: string) => Promise<void>;
   onForgetPayrollName?: (payrollName: string) => Promise<void>;
   onRemove: (id: string) => void;
 }) {
@@ -138,6 +145,11 @@ function EmployeeRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState(false);
+  // The name box starts from whatever they're called when it is opened, so it
+  // never needs re-syncing the way the password box does.
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(employee.name);
+  const [savingName, setSavingName] = useState(false);
 
   // Re-sync when the stored password changes underneath the row — a dashboard
   // reload after a failed write, say — so the box never shows a value that
@@ -175,6 +187,37 @@ function EmployeeRow({
       await onRegenerateSetupCode(employee.id);
     });
 
+  const startRenaming = () => {
+    setNameDraft(employee.name);
+    setError(null);
+    setRenaming(true);
+  };
+
+  const cancelRenaming = () => {
+    setRenaming(false);
+    setError(null);
+  };
+
+  /** A failed rename stays open with what was typed, so it can be tried again. */
+  const saveName = async () => {
+    const name = nameDraft.trim();
+    if (!name) return;
+    if (name === employee.name) {
+      cancelRenaming();
+      return;
+    }
+    setSavingName(true);
+    setError(null);
+    try {
+      await onRename(employee.id, name);
+      setRenaming(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Couldn't save that name.");
+    } finally {
+      setSavingName(false);
+    }
+  };
+
   /** Letting somebody go takes their shifts and time off with them. */
   const remove = () => {
     if (
@@ -192,7 +235,67 @@ function EmployeeRow({
     <li className="px-4 py-3">
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold">{employee.name}</p>
+          {renaming ? (
+            <div className="flex items-center gap-1.5">
+              <label htmlFor={`name-${employee.id}`} className="sr-only">
+                New name for {employee.name}
+              </label>
+              <input
+                id={`name-${employee.id}`}
+                value={nameDraft}
+                onChange={(event) => {
+                  setNameDraft(event.target.value);
+                  setError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void saveName();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelRenaming();
+                  }
+                }}
+                maxLength={EMPLOYEE_NAME_MAX_LENGTH}
+                autoFocus
+                autoComplete="off"
+                disabled={savingName}
+                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 py-1 text-sm font-semibold outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              />
+              <Button size="sm" onClick={saveName} disabled={savingName || !nameDraft.trim()}>
+                {savingName ? (
+                  <LoaderCircle data-icon="inline-start" className="animate-spin" />
+                ) : (
+                  <Check data-icon="inline-start" />
+                )}
+                {savingName ? "Saving…" : "Save name"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={cancelRenaming}
+                disabled={savingName}
+                aria-label="Keep the old name"
+                title="Keep the old name"
+              >
+                <X />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex min-w-0 items-center gap-1">
+              <p className="truncate font-semibold">{employee.name}</p>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={startRenaming}
+                aria-label={`Edit ${employee.name}'s name`}
+                title="Fix the spelling, or change what they're called"
+                className="shrink-0 text-muted-foreground"
+              >
+                <Pencil />
+              </Button>
+            </div>
+          )}
           {error ? (
             <p role="alert" className="text-xs text-destructive">
               {error}
@@ -342,7 +445,7 @@ function EmployeeRow({
 
 /**
  * Staff management: who works here and what they type in to see their schedule.
- * Hiring, letting go, codes and passwords all live here rather than on the
+ * Hiring, renaming, letting go, codes and passwords all live here rather than on the
  * scheduler's employee card, which is for dragging shifts, not admin.
  */
 export function StaffManagement({
@@ -350,6 +453,7 @@ export function StaffManagement({
   payrollNames = [],
   onSavePassword,
   onRegenerateSetupCode,
+  onRename,
   onForgetPayrollName,
   onAdd,
   onRemove,
@@ -394,6 +498,7 @@ export function StaffManagement({
                       payrollNames={namesFor(employee.id)}
                       onSavePassword={onSavePassword}
                       onRegenerateSetupCode={onRegenerateSetupCode}
+                      onRename={onRename}
                       onForgetPayrollName={onForgetPayrollName}
                       onRemove={onRemove}
                     />

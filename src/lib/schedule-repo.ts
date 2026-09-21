@@ -177,6 +177,16 @@ export async function insertEmployee(
 }
 
 /**
+ * Change what somebody is called. Everything else points at them by id, so the
+ * schedule, time off, pay stubs and their own `/staff` page all follow along —
+ * including already-published weeks, which store ids rather than names.
+ */
+export async function renameEmployee(id: string, name: string): Promise<void> {
+  const { error } = await getDb().from("employees").update({ name }).eq("id", id);
+  if (error) fail("renaming an employee", error);
+}
+
+/**
  * Remove someone. Their shifts and time off go with them via `on delete
  * cascade`, so there is no chance of orphaned ids pointing at a deleted person.
  */
