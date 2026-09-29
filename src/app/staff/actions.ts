@@ -231,6 +231,7 @@ export async function requestTimeOffAction(input: {
   if (endDate < startDate) throw new Error("The last day can't be before the first day.");
 
   const reason = input.reason.trim();
+  if (!reason) throw new Error("Please give a reason for your request.");
   if (reason.length > 200) throw new Error("Please keep the reason under 200 characters.");
 
   await insertTimeOff({ employeeId, startDate, endDate, reason });

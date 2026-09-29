@@ -150,7 +150,7 @@ export function StaffDashboard({
   }, []);
 
   const submitRequest = async () => {
-    if (!selection) return;
+    if (!selection || !reason.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -318,13 +318,14 @@ export function StaffDashboard({
                   id="staff-reason"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
-                  placeholder="Reason (optional)"
+                  placeholder="Reason (required)"
+                  required
                   maxLength={200}
                   className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 />
 
                 <div className="flex gap-2">
-                  <Button onClick={submitRequest} disabled={submitting}>
+                  <Button onClick={submitRequest} disabled={submitting || !reason.trim()}>
                     <Send data-icon="inline-start" />
                     {submitting ? "Sending…" : "Send request"}
                   </Button>
