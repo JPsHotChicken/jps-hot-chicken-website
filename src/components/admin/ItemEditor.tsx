@@ -8,6 +8,7 @@ import { FIELD_CLASS, LABEL_CLASS } from "./field";
 import {
   DEFAULT_CATEGORIES,
   DEFAULT_SUPPLIER,
+  IMPORTED_CATEGORIES,
   MAX_QUANTITY,
   ORDER_UNITS,
   OTHER_CATEGORY,
@@ -37,6 +38,9 @@ const blank: TruckItemDraft = {
   unitPrice: null,
   parQuantity: 0,
 };
+
+/** The picker's "type a new one" choice; no real section is called this. */
+const NEW_CATEGORY = "__new_category__";
 
 /** A price field's text back to a number — empty means "not known", not zero. */
 function parsePrice(value: string): number | null {
@@ -70,6 +74,8 @@ export function ItemEditor({ item, categories, onSave, onRemove, onClose }: Prop
   );
   // Kept as text so a half-typed "12." doesn't get rounded away underneath.
   const [priceText, setPriceText] = useState(item?.unitPrice?.toFixed(2) ?? "");
+  // True while a brand-new section name is being typed instead of picked.
+  const [newCategory, setNewCategory] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -89,11 +95,12 @@ export function ItemEditor({ item, categories, onSave, onRemove, onClose }: Prop
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!draft.name.trim()) return;
+    const category = draft.category.trim() || OTHER_CATEGORY;
 
     setSaving(true);
     setError(null);
     try {
-      await onSave({ ...draft, unitPrice: parsePrice(priceText) });
+      await onSave({ ...draft, category, unitPrice: parsePrice(priceText) });
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That item couldn't be saved.");
@@ -101,8 +108,12 @@ export function ItemEditor({ item, categories, onSave, onRemove, onClose }: Prop
     }
   };
 
-  // Suggestions are the built-in sections plus anything already typed in.
-  const suggestions = [...new Set([...DEFAULT_CATEGORIES, ...categories])].sort();
+  // The built-in sections, the ones an invoice import uses, and anything typed in.
+  const options = [
+    ...new Set([...DEFAULT_CATEGORIES, ...IMPORTED_CATEGORIES, ...categories, draft.category]),
+  ]
+    .filter((category) => category.trim() !== "")
+    .sort((a, b) => (a === OTHER_CATEGORY ? 1 : b === OTHER_CATEGORY ? -1 : a.localeCompare(b)));
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/20 p-4 sm:items-center">
@@ -143,19 +154,52 @@ export function ItemEditor({ item, categories, onSave, onRemove, onClose }: Prop
             <label className={LABEL_CLASS} htmlFor="item-category">
               Category
             </label>
-            <input
-              id="item-category"
-              list="truck-categories"
-              value={draft.category}
-              onChange={(event) => set("category", event.target.value)}
-              maxLength={60}
-              className={`mt-1 ${FIELD_CLASS}`}
-            />
-            <datalist id="truck-categories">
-              {suggestions.map((category) => (
-                <option key={category} value={category} />
-              ))}
-            </datalist>
+            {newCategory ? (
+              <div className="mt-1 flex gap-1">
+                <input
+                  id="item-category"
+                  autoFocus
+                  value={draft.category}
+                  onChange={(event) => set("category", event.target.value)}
+                  placeholder="New category"
+                  maxLength={60}
+                  className={FIELD_CLASS}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Pick an existing category"
+                  className="self-center"
+                  onClick={() => {
+                    setNewCategory(false);
+                    set("category", item?.category ?? OTHER_CATEGORY);
+                  }}
+                >
+                  <X />
+                </Button>
+              </div>
+            ) : (
+              <select
+                id="item-category"
+                value={draft.category}
+                onChange={(event) => {
+                  if (event.target.value === NEW_CATEGORY) {
+                    setNewCategory(true);
+                    set("category", "");
+                  } else {
+                    set("category", event.target.value);
+                  }
+                }}
+                className={`mt-1 ${FIELD_CLASS}`}
+              >
+                {options.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+                <option value={NEW_CATEGORY}>New category…</option>
+              </select>
+            )}
           </div>
 
           <div>

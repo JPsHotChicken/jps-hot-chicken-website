@@ -502,6 +502,9 @@ const PFG_CATEGORIES: Record<string, string> = {
   "CHEMICALS & CLEANING": "Cleaning",
 };
 
+/** Every section an invoice import can file an item under, for pickers. */
+export const IMPORTED_CATEGORIES = [...new Set(Object.values(PFG_CATEGORIES))];
+
 /** "GROCERY DRY" to "Dry Goods"; "SOMETHING NEW" to "Something New". */
 export function categoryFromClass(productClass: string): string {
   const trimmed = productClass.trim();
