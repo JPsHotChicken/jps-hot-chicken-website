@@ -351,16 +351,20 @@ function PayoutEditor() {
   };
 
   /**
-   * The one-page summary for the accountant. jsPDF is a big dependency and this
-   * is the only thing on the page that needs it, so it is fetched on the click
-   * rather than with the page.
+   * The one-page summary for the accountant, and the tips breakdown with it.
+   * jsPDF is a big dependency and this is the only thing on the page that needs
+   * it, so it is fetched on the click rather than with the page.
    */
   const exportPdf = async () => {
     setExporting(true);
     setError(null);
     try {
-      const { exportTipsPdf } = await import("@/lib/tips-pdf");
+      const [{ exportTipsPdf }, { exportTipBreakdownPdf }] = await Promise.all([
+        import("@/lib/tips-pdf"),
+        import("@/lib/tip-breakdown-pdf"),
+      ]);
       await exportTipsPdf({ people, payout, period, basis, note, from, to });
+      await exportTipBreakdownPdf({ tips: payout.tips, period, from, to });
     } catch (cause) {
       console.error("[tips] Could not build the PDF summary:", cause);
       setError("The PDF couldn't be built. The CSV export has the same figures.");
