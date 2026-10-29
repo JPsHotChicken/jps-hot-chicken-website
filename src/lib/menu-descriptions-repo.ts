@@ -2,10 +2,11 @@ import "server-only";
 
 import { getDb } from "@/lib/supabase/server";
 import { loadGraph } from "@/lib/items-repo";
-import { canBeIngredient, compareItems, unitLabelFor, type ItemGraph } from "@/lib/items";
+import { canBeIngredient, compareItems, costAll, unitLabelFor, type ItemGraph } from "@/lib/items";
 import {
   recipesUsingItem,
   toTasteProfile,
+  unitPricesFor,
   type Generation,
   type Ingredient,
   type Library,
@@ -48,6 +49,7 @@ export class LibraryError extends Error {
 function toIngredients(graph: ItemGraph): Ingredient[] {
   const usable = graph.items.filter(canBeIngredient);
   const usableIds = new Set(usable.map((item) => item.id));
+  const costs = costAll(graph);
 
   return usable.sort(compareItems).map((item): Ingredient => ({
     id: item.id,
@@ -66,6 +68,7 @@ function toIngredients(graph: ItemGraph): Ingredient[] {
         quantity: part.quantity,
         unit: unitLabelFor(graph.byId.get(part.componentId)!, part.basis),
       })),
+    prices: unitPricesFor(item, costs.get(item.id)!),
   }));
 }
 

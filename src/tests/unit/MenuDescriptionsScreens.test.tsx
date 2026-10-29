@@ -35,6 +35,7 @@ const ingredient = (
   allergens: [],
   notes: "",
   parts: [],
+  prices: { oz: null, flOz: null, each: null, slice: null, priced: false },
   ...over,
 });
 
@@ -122,6 +123,37 @@ describe("RecipeBuilder", () => {
     const panel = allergenPanel();
     expect(within(panel).getByText("Egg")).toBeInTheDocument();
     expect(within(panel).getByText("House Comeback Sauce → Duke's mayonnaise")).toBeInTheDocument();
+  });
+
+  it("costs each component from the catalogue as it is typed, and totals them", () => {
+    const lib = library();
+    const price = { oz: null, flOz: null, each: null, slice: null, priced: true };
+    lib.ingredients.find((entry) => entry.id === "chicken")!.prices = { ...price, oz: 0.125 };
+    lib.ingredients.find((entry) => entry.id === "mayo")!.prices = { ...price, flOz: 0.1 };
+    render(<RecipeBuilder recipe={lib.recipes[1]} library={lib} generatorReady />);
+
+    // 6 oz of chicken at 12.5¢, and an ounce of a 32 oz sauce whose batch costs $2.
+    expect(screen.getByLabelText("Component 1 cost")).toHaveTextContent("$0.7500");
+    expect(screen.getByLabelText("Component 2 cost")).toHaveTextContent("$0.0625");
+    expect(screen.getByText("Total cost")).toHaveTextContent("$0.8125");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Component 1 amount" }), {
+      target: { value: "10" },
+    });
+    expect(screen.getByText("Total cost")).toHaveTextContent("$1.31");
+
+    // An unpriced item is a gap, named, never a zero.
+    fireEvent.click(screen.getByRole("button", { name: "Add component" }));
+    const picker = screen.getByRole("combobox", { name: "Component 3" });
+    fireEvent.focus(picker);
+    fireEvent.change(picker, { target: { value: "cayenne" } });
+    fireEvent.keyDown(picker, { key: "Enter" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Component 3 amount" }), {
+      target: { value: "1" },
+    });
+    expect(screen.getByLabelText("Component 3 cost")).toHaveTextContent("—");
+    expect(screen.getByText("Cayenne pepper has no price in the items catalogue.")).toBeInTheDocument();
+    expect(screen.getByText("Total cost")).toHaveTextContent("—");
   });
 
   it("picks a component by typing, and the allergens follow before saving", () => {

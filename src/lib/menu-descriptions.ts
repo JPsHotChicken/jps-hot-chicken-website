@@ -9,14 +9,19 @@
  * sub-recipes expanded and any item's own bill of materials with them.
  *
  * Nothing in here touches the database or the network, so every rule — the
- * allergen roll-up, loop detection, which descriptions go stale, and reading
- * the model's reply — is testable with plain objects.
+ * allergen roll-up, the cost of a line, loop detection, which descriptions go
+ * stale, and reading the model's reply — is testable with plain objects.
  */
 
 import {
   ALLERGENS as ITEM_ALLERGENS,
   ALLERGEN_NONE,
+  costLadder,
+  isCountWord,
+  isMeasure,
   type FlavorTag,
+  type Item,
+  type ItemCost,
   type TextureTag,
 } from "@/lib/items";
 import {
@@ -73,10 +78,11 @@ export const isOneOf = <T extends string>(value: string, allowed: readonly T[]):
 /**
  * An item from the catalogue, as the generator reads it.
  *
- * Only the fields that bear on how a dish tastes — the cost and purchasing half
- * of the record is no business of the description writer. `parts` is the item's
- * own bill of materials, so a prepped item used in a recipe carries what it is
- * made of without anybody typing it twice.
+ * The fields that bear on how a dish tastes, plus what it costs by each measure
+ * a recipe line can use. The price is for the builder's cost column only — the
+ * description writer is never shown it. `parts` is the item's own bill of
+ * materials, so a prepped item used in a recipe carries what it is made of
+ * without anybody typing it twice.
  */
 export type Ingredient = {
   id: string;
@@ -89,6 +95,25 @@ export type Ingredient = {
   allergens: string[];
   notes: string;
   parts: IngredientPart[];
+  prices: UnitPrices;
+};
+
+/**
+ * What one of each recipe measure costs, after trim and cook loss — read off
+ * the item's own cost ladder. Null wherever the record can't say: a sack of
+ * flour priced by the pound has no price per tablespoon, because turning a
+ * volume into a weight needs a density nobody has recorded.
+ */
+export type UnitPrices = {
+  /** One ounce by weight. */
+  oz: number | null;
+  /** One fluid ounce. */
+  flOz: number | null;
+  /** One piece — the item's own count unit, or its portion where that isn't a measure. */
+  each: number | null;
+  slice: number | null;
+  /** Whether the item has a price at all, so "unpriced" and "not by that measure" read differently. */
+  priced: boolean;
 };
 
 /** One line of an item's own bill of materials, with its unit already resolved. */
@@ -326,7 +351,7 @@ export function recipeContentKey(recipe: Pick<Recipe, "name" | "yieldAmount" | "
  * Cost, pack size and par level are left out: they change often and change
  * nothing about how the dish is described.
  */
-export function itemContentKey(ingredient: Omit<Ingredient, "id" | "code" | "allergens">) {
+export function itemContentKey(ingredient: Omit<Ingredient, "id" | "code" | "allergens" | "prices">) {
   return JSON.stringify([
     ingredient.name.trim(),
     ingredient.category.trim(),
@@ -336,6 +361,192 @@ export function itemContentKey(ingredient: Omit<Ingredient, "id" | "code" | "all
     ingredient.notes.trim(),
     ingredient.parts.map((part) => [part.itemId, part.quantity, part.unit]),
   ]);
+}
+
+/* --------------------------------------------------------------------- cost */
+
+const SLICE_WORDS = new Set(["slice", "slices", "slc"]);
+
+/**
+ * An item's price by every measure a recipe line can be written in.
+ *
+ * Nothing is entered for it: the ladder already breaks a case down to the
+ * ounce, the piece and the portion, and this picks the rungs a recipe uses.
+ * Where a rung has a cost after yield, that is the one taken — a recipe uses
+ * the trimmed pound, not the pound off the truck.
+ */
+export function unitPricesFor(item: Item, cost: ItemCost): UnitPrices {
+  const levels = costLadder(item, cost).levels.map((level) => ({
+    names: [level.unit, ...level.alsoCalled].map((name) => name.trim().toLowerCase()),
+    cost: level.usableCost ?? level.cost,
+  }));
+  const find = (matches: (name: string) => boolean) =>
+    levels.find((level) => level.names.some(matches))?.cost ?? null;
+
+  const portion = item.portionUnit.trim().toLowerCase();
+  const pieceByPortion =
+    portion && !isMeasure(portion) && !SLICE_WORDS.has(portion)
+      ? find((name) => name === portion)
+      : null;
+
+  return {
+    oz: find((name) => name === "oz"),
+    flOz: find((name) => name === "fl oz"),
+    each: find(isCountWord) ?? pieceByPortion,
+    slice: find((name) => SLICE_WORDS.has(name)),
+    priced: levels.some((level) => level.cost !== null),
+  };
+}
+
+type Family = "weight" | "volume" | "count" | "slice";
+
+/**
+ * A recipe measure in ounces of its family. A bare "oz" belongs to both: a
+ * cook writing "2 oz" of hot sauce means fluid ounces, of chicken means weight,
+ * so it is read as whichever the other side is priced or yielded in.
+ */
+type Measure = { families: Family[]; ounces: number };
+
+const GRAMS_PER_OUNCE = 28.349523125;
+
+const MEASURES: Record<string, Measure> = {
+  oz: { families: ["weight", "volume"], ounces: 1 },
+  g: { families: ["weight"], ounces: 1 / GRAMS_PER_OUNCE },
+  lbs: { families: ["weight"], ounces: 16 },
+  tbsp: { families: ["volume"], ounces: 1 / 2 },
+  tsp: { families: ["volume"], ounces: 1 / 6 },
+  cups: { families: ["volume"], ounces: 8 },
+  // A sixteenth of a teaspoon, the usual reading.
+  pinch: { families: ["volume"], ounces: 1 / 96 },
+  each: { families: ["count"], ounces: 1 },
+  slices: { families: ["slice"], ounces: 1 },
+};
+
+/** The units to suggest when a line is written in one the item isn't priced by. */
+const UNITS_FOR: Record<Family, string> = {
+  weight: "oz or g",
+  volume: "tbsp, tsp, cups or oz",
+  count: "each",
+  slice: "slices",
+};
+
+const PRICED_BY: Record<Family, string> = {
+  weight: "weight",
+  volume: "volume",
+  count: "the piece",
+  slice: "the slice",
+};
+
+const PRICE_KEY: Record<Family, keyof Omit<UnitPrices, "priced">> = {
+  weight: "oz",
+  volume: "flOz",
+  count: "each",
+  slice: "slice",
+};
+
+/** What one line costs, or why it can't be worked out — never a guess. */
+export type LineCost = { cost: number | null; problem: string | null };
+
+export type RecipeCost = {
+  /** Null unless every line is known: a missing price reads as "unknown", never as $0. */
+  total: number | null;
+  /** One per line, in order. */
+  lines: LineCost[];
+};
+
+const known = (cost: number): LineCost => ({ cost, problem: null });
+const unknown = (problem: string): LineCost => ({ cost: null, problem });
+
+/**
+ * What a list of recipe lines costs, line by line.
+ *
+ * Takes lines rather than a saved recipe so the builder can cost what is on
+ * screen before it is saved. Items are costed from the catalogue's purchase
+ * cost — the price on the record, not any one supplier's quote — and
+ * sub-recipes from their own saved lines, a share of the batch by its yield.
+ */
+export function costLines(lines: RecipeComponent[], library: Library): RecipeCost {
+  const index = indexLibrary(library);
+  const batches = new Map<string, LineCost>();
+
+  /** The cost of one whole batch of a saved recipe. */
+  const batchCost = (recipe: Recipe, visiting: Set<string>): LineCost => {
+    const cached = batches.get(recipe.id);
+    if (cached) return cached;
+    const costed = recipe.components.map((part) =>
+      lineCost(part, new Set(visiting).add(recipe.id)),
+    );
+    const gap = costed.find((line) => line.cost === null);
+    const result = gap
+      ? unknown(`${recipe.name}: ${gap.problem}`)
+      : known(costed.reduce((sum, line) => sum + line.cost!, 0));
+    batches.set(recipe.id, result);
+    return result;
+  };
+
+  const itemCost = (ingredient: Ingredient, amount: number, unit: string): LineCost => {
+    const measure = MEASURES[unit];
+    if (!ingredient.prices.priced) return unknown(`${ingredient.name} has no price in the items catalogue.`);
+    if (!measure) return unknown(`${unit} can't be costed.`);
+
+    const family = measure.families.find((candidate) => ingredient.prices[PRICE_KEY[candidate]] !== null);
+    if (!family) {
+      const by = (Object.keys(PRICE_KEY) as Family[]).filter(
+        (candidate) => ingredient.prices[PRICE_KEY[candidate]] !== null,
+      );
+      if (by.length === 0) return unknown(`${ingredient.name} has no price by a measure a recipe uses.`);
+      // A piece needs a count on the record; the owner may rather add one than re-measure.
+      const orCount = measure.families.includes("count") || measure.families.includes("slice")
+        ? `, or give the item a portion count in the catalogue`
+        : "";
+      return unknown(
+        `${ingredient.name} is priced by ${by.map((candidate) => PRICED_BY[candidate]).join(" or ")}, ` +
+          `not ${unit} — measure it in ${by.map((candidate) => UNITS_FOR[candidate]).join(", or ")}${orCount}.`,
+      );
+    }
+    return known(amount * measure.ounces * ingredient.prices[PRICE_KEY[family]]!);
+  };
+
+  const childCost = (child: Recipe, amount: number, unit: string, visiting: Set<string>): LineCost => {
+    if (visiting.has(child.id)) return unknown(`${child.name} contains itself.`);
+    const batch = batchCost(child, visiting);
+    if (batch.cost === null) return batch;
+
+    if (!child.yieldAmount || child.yieldAmount <= 0) {
+      return unknown(`${child.name} has no yield, so a share of it can't be costed.`);
+    }
+    const used = MEASURES[unit];
+    const made = MEASURES[child.yieldUnit];
+    if (!used || !made || !used.families.some((family) => made.families.includes(family))) {
+      return unknown(
+        `${child.name} makes ${child.yieldAmount} ${child.yieldUnit}, which ${unit} can't be measured against.`,
+      );
+    }
+    const share = (amount * used.ounces) / (child.yieldAmount * made.ounces);
+    return known(batch.cost * share);
+  };
+
+  const lineCost = (part: RecipeComponent, visiting: Set<string>): LineCost => {
+    if (!Number.isFinite(part.amount) || part.amount <= 0) return unknown("Needs an amount.");
+    if (part.itemId) {
+      const ingredient = index.ingredients.get(part.itemId);
+      return ingredient
+        ? itemCost(ingredient, part.amount, part.unit)
+        : unknown("That item isn't in the catalogue any more.");
+    }
+    const child = part.childRecipeId ? index.recipes.get(part.childRecipeId) : undefined;
+    return child
+      ? childCost(child, part.amount, part.unit, visiting)
+      : unknown("That recipe no longer exists.");
+  };
+
+  const costed = lines.map((part) => lineCost(part, new Set()));
+  return {
+    total: costed.every((line) => line.cost !== null)
+      ? costed.reduce((sum, line) => sum + line.cost!, 0)
+      : null,
+    lines: costed,
+  };
 }
 
 /* --------------------------------------------------------- what the model reads */

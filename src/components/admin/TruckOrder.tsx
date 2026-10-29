@@ -381,7 +381,7 @@ export function TruckOrder({
 
   const exportOrder = () => {
     if (!order) return;
-    download(orderCsvFilename(order), toOrderCsv(order));
+    download(orderCsvFilename(order), toOrderCsv(order, items));
   };
 
   /* ----------------------------------------------------------------- items */

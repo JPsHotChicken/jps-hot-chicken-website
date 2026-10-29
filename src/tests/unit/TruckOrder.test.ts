@@ -7,7 +7,9 @@ import {
   groupByCategory,
   moveCategory,
   moveItem,
+  nextSortOrder,
   reorderedIds,
+  sheetOrderLines,
   hasEveryPrice,
   orderItemCount,
   orderTotal,
@@ -208,6 +210,66 @@ describe("arranging", () => {
   });
 });
 
+describe("placing new items", () => {
+  const list = () => [
+    item({ id: "c1", name: "Tenders", category: "Chicken", sortOrder: 0 }),
+    item({ id: "c2", name: "Breasts", category: "Chicken", sortOrder: 1 }),
+    item({ id: "c3", name: "Wings", category: "Chicken", sortOrder: 2 }),
+    item({ id: "p1", name: "Cabbage", category: "Produce", sortOrder: 3 }),
+    item({ id: "p2", name: "Onions", category: "Produce", sortOrder: 4 }),
+  ];
+
+  it("goes after the last arranged position", () => {
+    expect(nextSortOrder(list())).toBe(5);
+  });
+
+  it("stays at 0 on a list nobody has arranged, and on an empty one", () => {
+    expect(nextSortOrder(list().map((one) => ({ ...one, sortOrder: 0 })))).toBe(0);
+    expect(nextSortOrder([])).toBe(0);
+  });
+
+  it("lands at the bottom of its own section without moving the section", () => {
+    const added = item({ id: "c4", name: "Livers", category: "Chicken", sortOrder: nextSortOrder(list()) });
+    const groups = groupByCategory([...list(), added].sort(compareItems));
+    expect(groups.map((group) => group.category)).toEqual(["Chicken", "Produce"]);
+    expect(groups[0].rows.map((one) => one.name)).toEqual(["Tenders", "Breasts", "Wings", "Livers"]);
+  });
+});
+
+describe("lines in sheet order", () => {
+  const items = [
+    item({ id: "c1", name: "Tenders", category: "Chicken", sortOrder: 1 }),
+    item({ id: "p1", name: "Cabbage", category: "Produce", sortOrder: 2 }),
+    item({ id: "c2", name: "Wings", category: "Chicken", sortOrder: 0 }),
+  ];
+
+  it("follows the items' current arrangement, not the positions the lines were saved with", () => {
+    const lines = [
+      line({ id: "l1", itemId: "p1", name: "Cabbage", sortOrder: 0 }),
+      line({ id: "l2", itemId: "c1", name: "Tenders", sortOrder: 0 }),
+      line({ id: "l3", itemId: "c2", name: "Wings", sortOrder: 9 }),
+    ];
+    expect(sheetOrderLines(lines, items).map((one) => one.name)).toEqual([
+      "Wings",
+      "Tenders",
+      "Cabbage",
+    ]);
+  });
+
+  it("puts lines for deleted items last, in their saved order", () => {
+    const lines = [
+      line({ id: "o2", itemId: null, name: "Old sauce", sortOrder: 5 }),
+      line({ id: "l1", itemId: "p1", name: "Cabbage" }),
+      line({ id: "o1", itemId: null, name: "Old buns", sortOrder: 1 }),
+    ];
+    expect(sheetOrderLines(lines, items).map((one) => one.name)).toEqual([
+      "Cabbage",
+      "Old buns",
+      "Old sauce",
+    ]);
+  });
+});
+
 describe("CSV parsing", () => {
   it("handles quoted fields, embedded commas and doubled quotes", () => {
     expect(parseCsv('a,"b,c","say ""hi"""')).toEqual([["a", "b,c", 'say "hi"']]);
@@ -321,6 +383,26 @@ describe("order export", () => {
     const pickles = parseCsv(toOrderCsv(order)).find((row) => row[1] === "Pickles")!;
     expect(pickles[5]).toBe("");
     expect(pickles[6]).toBe("");
+  });
+
+  it("lists the rows in the order the sheet is arranged in", () => {
+    const items = [
+      item({ id: "i3", name: "Pickles", sortOrder: 0 }),
+      item({ id: "i1", name: "Chicken tenders", sortOrder: 1 }),
+    ];
+    const arranged = {
+      ...order,
+      lines: [
+        line({ id: "l1", itemId: "i1", name: "Chicken tenders", quantity: 2 }),
+        line({ id: "l3", itemId: "i3", name: "Pickles", quantity: 1 }),
+      ],
+    };
+    expect(parseCsv(toOrderCsv(arranged, items)).map((row) => row[1])).toEqual([
+      "Item",
+      "Pickles",
+      "Chicken tenders",
+      "Total",
+    ]);
   });
 
   it("quotes a name that would otherwise break the row", () => {

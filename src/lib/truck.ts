@@ -300,10 +300,54 @@ export function moveCategory(
  * The ids of an arranged list, in order — what gets saved.
  *
  * Positions are stored rather than the list itself, so an item added later
- * lands at the end instead of disturbing everything already placed.
+ * lands at the end instead of disturbing everything already placed — see
+ * `nextSortOrder`.
  */
 export function reorderedIds(items: readonly TruckItem[]): string[] {
   return items.map((item) => item.id);
+}
+
+/**
+ * The position for an item joining the list, or joining a different section.
+ *
+ * Left at the column's default of 0, a new item would sort ahead of everything
+ * on an arranged list — and since a section takes its place from its first row,
+ * one new bottle of degreaser would drag the whole Cleaning section to the top
+ * of the sheet. Past the end it lands as the last row of its own section, and a
+ * brand-new section comes in last.
+ *
+ * A list that has never been arranged is left alone: everything there sits at
+ * 0 and reads by category and name, and a new item should simply join that.
+ */
+export function nextSortOrder(items: readonly Pick<TruckItem, "sortOrder">[]): number {
+  const highest = items.reduce((max, item) => Math.max(max, item.sortOrder), 0);
+  return highest === 0 ? 0 : highest + 1;
+}
+
+/**
+ * An order's lines in the order the sheet reads, for anything that lists them
+ * outside the sheet itself.
+ *
+ * The position comes from the item as it is now rather than the copy the line
+ * took when it was added, so rearranging the sheet rearranges an order already
+ * being built. Lines for deleted items have no place on the list any more and
+ * go last, in the order they had when they were added.
+ */
+export function sheetOrderLines<T extends TruckOrderLine>(
+  lines: readonly T[],
+  items: readonly TruckItem[],
+): T[] {
+  const position = new Map([...items].sort(compareItems).map((item, index) => [item.id, index]));
+  const placed = (line: T) => (line.itemId === null ? undefined : position.get(line.itemId));
+
+  return [...lines].sort((a, b) => {
+    const left = placed(a);
+    const right = placed(b);
+    if (left !== undefined && right !== undefined) return left - right;
+    if (left !== undefined) return -1;
+    if (right !== undefined) return 1;
+    return a.sortOrder - b.sortOrder;
+  });
 }
 
 /** True when an item is the first or last of its section, so it can't move. */
@@ -760,10 +804,12 @@ export function parseInvoiceExport(text: string): InvoiceImport {
  * The order as a spreadsheet — one row per item being ordered.
  *
  * Item code first, because that is the column a rep or a portal's upload keys
- * off; everything after it is there so the sheet reads on its own.
+ * off; everything after it is there so the sheet reads on its own. Rows follow
+ * the sheet's arrangement when the set list is passed in, so the export reads
+ * down the walk-in the same way the screen and the printout do.
  */
-export function toOrderCsv(order: TruckOrderDetail): string {
-  const lines = orderedLines(order.lines);
+export function toOrderCsv(order: TruckOrderDetail, items: readonly TruckItem[] = []): string {
+  const lines = sheetOrderLines(orderedLines(order.lines), items);
   return toCsv([
     ["Item code", "Item", "Pack size", "Unit", "Quantity", "Unit price", "Line total"],
     ...lines.map((line) => [

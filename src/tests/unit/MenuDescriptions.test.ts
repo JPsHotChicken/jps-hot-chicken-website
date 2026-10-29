@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   GenerationFormatError,
   RecipeLoopError,
+  costLines,
   itemContentKey,
   itemsContaining,
   parseGeneration,
@@ -12,14 +13,21 @@ import {
   recipesUsingItem,
   resolveRecipe,
   rollUpAllergens,
+  unitPricesFor,
   wouldCreateLoop,
   type Ingredient,
   type Library,
   type Recipe,
   type RecipeComponent,
+  type UnitPrices,
 } from "@/lib/menu-descriptions";
+import { buildGraph, costOf, type Item } from "@/lib/items";
 
 /* ------------------------------------------------------------------ fixtures */
+
+const UNPRICED: UnitPrices = { oz: null, flOz: null, each: null, slice: null, priced: false };
+
+const priced = (over: Partial<UnitPrices>): UnitPrices => ({ ...UNPRICED, priced: true, ...over });
 
 /** An item as the generator reads it, so each test states only what it cares about. */
 function ingredient(id: string, over: Partial<Ingredient> = {}): Ingredient {
@@ -34,6 +42,7 @@ function ingredient(id: string, over: Partial<Ingredient> = {}): Ingredient {
     allergens: [],
     notes: "",
     parts: [],
+    prices: UNPRICED,
     ...over,
   };
 }
@@ -386,6 +395,166 @@ describe("parseGeneration", () => {
     );
     expect(() => parseGeneration(JSON.stringify({ ...REPLY, pairs_with: "Coleslaw" }))).toThrow(
       /pairs_with/,
+    );
+  });
+});
+
+/* ----------------------------------------------------------------------- cost */
+
+/** A bought item as the catalogue holds it, for reading prices off its ladder. */
+const bought = (over: Partial<Item>): Item => ({
+  id: "item",
+  code: "RAW-0001",
+  type: "raw",
+  internalName: "Item",
+  customerName: "",
+  aliases: [],
+  category: "Other",
+  subcategory: "",
+  status: "active",
+  purchaseUnit: "case",
+  packSize: "",
+  purchaseCost: null,
+  parLevel: null,
+  reorderPoint: null,
+  stockUnit: "",
+  portionUnit: "",
+  stockPerPurchaseUnit: null,
+  portionsPerStockUnit: null,
+  yieldFactor: 1,
+  batchYieldQuantity: 1,
+  recipeUrl: "",
+  menuPrice: null,
+  allergens: [],
+  flavorTags: [],
+  textureTags: [],
+  intensity: 3,
+  storageZone: "none",
+  storageTemp: "",
+  shelfLifeDays: null,
+  dateLabelRule: "",
+  nutrition: {},
+  photoUrl: "",
+  sopLinks: [],
+  notes: "",
+  scope: "core",
+  availableEverywhere: true,
+  version: 1,
+  createdAt: "",
+  updatedAt: "",
+  updatedBy: "",
+  ...over,
+});
+
+const pricesOf = (item: Item) => unitPricesFor(item, costOf(item.id, buildGraph([item], new Map())));
+
+describe("unitPricesFor", () => {
+  it("prices a case of chicken by the weight ounce, after trim", () => {
+    // $64 for 40 lb is $1.60 a pound; losing a fifth makes the usable pound $2.
+    const prices = pricesOf(
+      bought({ purchaseCost: 64, stockUnit: "lb", stockPerPurchaseUnit: 40, yieldFactor: 0.8 }),
+    );
+    expect(prices.oz).toBeCloseTo(2 / 16);
+    expect(prices.flOz).toBeNull();
+    expect(prices.each).toBeNull();
+    expect(prices.priced).toBe(true);
+  });
+
+  it("prices a jug of sauce by the fluid ounce", () => {
+    const prices = pricesOf(
+      bought({ purchaseCost: 51.2, packSize: "4 / 1 gal", stockUnit: "gal", stockPerPurchaseUnit: 4 }),
+    );
+    expect(prices.flOz).toBeCloseTo(0.1);
+    expect(prices.oz).toBeNull();
+  });
+
+  it("prices a bun by the piece, and a portion that isn't a measure as a piece", () => {
+    expect(pricesOf(bought({ purchaseCost: 24, stockUnit: "each", stockPerPurchaseUnit: 48 })).each).toBeCloseTo(0.5);
+
+    const breasts = pricesOf(
+      bought({
+        purchaseCost: 64,
+        stockUnit: "lb",
+        stockPerPurchaseUnit: 40,
+        portionUnit: "breast",
+        portionsPerStockUnit: 2,
+      }),
+    );
+    expect(breasts.each).toBeCloseTo(0.8);
+  });
+
+  it("prices cheese by the slice", () => {
+    const prices = pricesOf(
+      bought({ purchaseCost: 30, stockUnit: "lb", stockPerPurchaseUnit: 5, portionUnit: "slice", portionsPerStockUnit: 20 }),
+    );
+    expect(prices.slice).toBeCloseTo(0.3);
+    expect(prices.each).toBeNull();
+  });
+
+  it("knows an item with no purchase cost is unpriced", () => {
+    expect(pricesOf(bought({ stockUnit: "lb", stockPerPurchaseUnit: 40 })).priced).toBe(false);
+  });
+});
+
+describe("costLines", () => {
+  function costedLibrary(): Library {
+    const library = sandwichLibrary();
+    const price: Record<string, UnitPrices> = {
+      chicken: priced({ oz: 0.125 }),
+      bun: priced({ each: 0.5 }),
+      mayo: priced({ flOz: 0.1 }),
+      worcestershire: priced({ flOz: 0.2 }),
+      flour: priced({ oz: 0.03 }),
+    };
+    for (const entry of library.ingredients) entry.prices = price[entry.id] ?? UNPRICED;
+    return library;
+  }
+
+  it("multiplies the amount by the item's price in that measure", () => {
+    const { lines, total } = costLines([uses("chicken", 6), uses("bun", 1, "each")], costedLibrary());
+    expect(lines.map((line) => line.cost)).toEqual([0.75, 0.5]);
+    expect(total).toBeCloseTo(1.25);
+  });
+
+  it("converts kitchen measures, and reads a bare oz as fluid on a liquid", () => {
+    const library = costedLibrary();
+    // A tablespoon is half a fluid ounce.
+    expect(costLines([uses("worcestershire", 2, "tbsp")], library).lines[0].cost).toBeCloseTo(0.2);
+    expect(costLines([uses("mayo", 2, "oz")], library).lines[0].cost).toBeCloseTo(0.2);
+    expect(costLines([uses("chicken", 100, "g")], library).lines[0].cost).toBeCloseTo((100 / 28.349523125) * 0.125);
+  });
+
+  it("costs a sub-recipe as a share of its batch, by its yield", () => {
+    // The sauce batch is 20 fl oz of mayo ($2) and a tablespoon of Worcestershire ($0.10), for 32 oz.
+    const { lines } = costLines([contains("sauce", 4)], costedLibrary());
+    expect(lines[0].cost).toBeCloseTo((2.1 * 4) / 32);
+  });
+
+  it("leaves the total unknown, and says why, rather than counting a gap as zero", () => {
+    const library = costedLibrary();
+    const { lines, total } = costLines([uses("chicken", 6), uses("cayenne", 1, "tsp")], library);
+    expect(total).toBeNull();
+    expect(lines[1]).toEqual({ cost: null, problem: "Cayenne pepper has no price in the items catalogue." });
+
+    // Flour is priced by weight; a cup of it would need a density.
+    expect(costLines([uses("flour", 1, "cups")], library).lines[0].problem).toBe(
+      "All-purpose flour is priced by weight, not cups — measure it in oz or g.",
+    );
+  });
+
+  it("can't cost a share of a recipe in a measure its yield isn't in", () => {
+    const library = costedLibrary();
+    find(library, "sauce").yieldUnit = "each";
+    expect(costLines([contains("sauce", 1, "tbsp")], library).lines[0].problem).toMatch(
+      /makes 32 each, which tbsp can't be measured against/,
+    );
+  });
+
+  it("names the gap inside a sub-recipe", () => {
+    const library = costedLibrary();
+    library.ingredients.find((entry) => entry.id === "mayo")!.prices = UNPRICED;
+    expect(costLines([contains("sauce", 1)], library).lines[0].problem).toBe(
+      "House Comeback Sauce: Duke's mayonnaise has no price in the items catalogue.",
     );
   });
 });

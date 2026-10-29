@@ -670,7 +670,11 @@ function measureOf(unit: string, family?: Measure["family"]): Measure | null {
   return measure === OUNCE.weight && family === "volume" ? OUNCE.volume : measure;
 }
 
-const isCountWord = (unit: string): boolean => COUNT_WORDS.has(spelling(unit));
+/** Whether a unit is a count of things — "each", "ct", "pieces" — rather than an amount. */
+export const isCountWord = (unit: string): boolean => COUNT_WORDS.has(spelling(unit));
+
+/** Whether a unit is a weight or a volume, as opposed to a piece or a container. */
+export const isMeasure = (unit: string): boolean => measureOf(unit) !== null;
 
 /** A distributor pack size read apart: "6 / 5 lb" is six packs of five pounds. */
 export type PackSize = {

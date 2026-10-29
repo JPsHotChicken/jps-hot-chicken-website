@@ -96,6 +96,14 @@ Two things follow from that, and both are load-bearing:
   does not impose one. Anything drawing the sheet has to sort with
   `compareItems` first — `buildRows` in `OrderSheet.tsx` does this itself rather
   than trusting its caller.
+- **A new item goes on the end** (`nextSortOrder`), and so does an item moved
+  to a different section, whether by hand or by an import. Left at the column's
+  default of 0 it would be the first row on the sheet, and its whole section
+  would follow it to the top. A list nobody has arranged yet keeps everything at
+  0, so the category-and-name fallback still applies.
+
+The CSV export lists its rows in the same order (`sheetOrderLines`), going by
+each item's position now rather than the copy a line took when it was added.
 
 Saving only writes the rows whose position actually changed. The first arrange
 of an imported list moves everything off zero and so touches every row; every

@@ -6,6 +6,7 @@ import {
   OTHER_CATEGORY,
   clampQuantity,
   compareItems,
+  nextSortOrder,
   orderItemCount,
   orderTotal,
   orderUnitCount,
@@ -499,10 +500,12 @@ function itemColumns(draft: TruckItemDraft) {
 /** The message the owner sees when two items claim the same distributor code. */
 const DUPLICATE_CODE = "Another item already uses that item code.";
 
+/** A new item goes in as the last row of its section — see `nextSortOrder`. */
 export async function insertItem(draft: TruckItemDraft): Promise<TruckItem> {
+  const sortOrder = nextSortOrder(await loadItems());
   const { data, error } = await getDb()
     .from("truck_items")
-    .insert(itemColumns(draft))
+    .insert({ ...itemColumns(draft), sort_order: sortOrder })
     .select(ITEM_COLUMNS)
     .single();
 
@@ -514,11 +517,20 @@ export async function insertItem(draft: TruckItemDraft): Promise<TruckItem> {
 /**
  * Edit an item. Lines already on past orders keep their own copy of the old
  * details, so changing a price here doesn't rewrite what an order cost.
+ *
+ * Moving an item to another section also moves it to the end of the list. Its
+ * old position belongs to the section it left, and if that put it ahead of
+ * everything in its new one it would pull the whole section up with it.
  */
 export async function updateItem(id: string, draft: TruckItemDraft): Promise<TruckItem> {
+  const columns = itemColumns(draft);
+  const items = await loadItems();
+  const current = items.find((item) => item.id === id);
+  const moved = current !== undefined && current.category !== columns.category;
+
   const { data, error } = await getDb()
     .from("truck_items")
-    .update(itemColumns(draft))
+    .update(moved ? { ...columns, sort_order: nextSortOrder(items) } : columns)
     .eq("id", id)
     .select(ITEM_COLUMNS)
     .single();
@@ -625,15 +637,30 @@ export async function importOrderGuide(
     deduped.set(draft.supplierItemCode.trim().toLowerCase() || draft.name.trim().toLowerCase(), draft);
   }
 
-  const inserts: ItemColumns[] = [];
-  const updates: { id: string; values: Partial<ItemColumns> }[] = [];
+  type Placed = { sort_order?: number };
+  const inserts: (ItemColumns & Placed)[] = [];
+  const updates: { id: string; values: Partial<ItemColumns> & Placed }[] = [];
+
+  // New items, and items the guide files under a different section, go on the
+  // end in the order the guide lists them — the same rule as adding one by
+  // hand, for the same reason (see `nextSortOrder`).
+  let next = nextSortOrder(existing);
+  const place = () => (next === 0 ? 0 : next++);
 
   for (const draft of deduped.values()) {
     const code = draft.supplierItemCode.trim().toLowerCase();
     const match = (code ? byCode.get(code) : undefined) ?? byName.get(draft.name.trim().toLowerCase());
+    const columns = itemColumns(draft);
 
-    if (match) updates.push({ id: match.id, values: pick(itemColumns(draft), updatable) });
-    else inserts.push(itemColumns(draft));
+    if (!match) {
+      inserts.push({ ...columns, sort_order: place() });
+      continue;
+    }
+    const values: Partial<ItemColumns> & Placed = pick(columns, updatable);
+    if (values.category !== undefined && values.category !== match.category) {
+      values.sort_order = place();
+    }
+    updates.push({ id: match.id, values });
   }
 
   if (inserts.length > 0) {

@@ -29,6 +29,7 @@ import {
   MENU_DESCRIPTIONS_PATH,
   YIELD_UNITS,
   capitalise,
+  costLines,
   countWords,
   formatTimestamp,
   rollUpAllergens,
@@ -37,6 +38,7 @@ import {
   type Recipe,
   type RecipeComponent,
 } from "@/lib/menu-descriptions";
+import { formatCost } from "@/lib/items";
 import { Notice, type NoticeState } from "./Notice";
 import { PartPicker, type PartOption, type PartValue } from "./PartPicker";
 import { StaleBadge } from "./StaleBadge";
@@ -223,6 +225,20 @@ function Builder({
     return rollUpAllergens(lines, library);
   }, [form.rows, library]);
 
+  // Keyed by row, so a row with nothing chosen yet simply has no cost.
+  const cost = useMemo(() => {
+    const filled = form.rows.filter((row) => row.part);
+    const lines: RecipeComponent[] = filled.map((row) => ({
+      itemId: row.part!.kind === "item" ? row.part!.id : null,
+      childRecipeId: row.part!.kind === "recipe" ? row.part!.id : null,
+      amount: row.amount.trim() ? Number(row.amount.trim()) : NaN,
+      unit: row.unit,
+      prepNote: "",
+    }));
+    const { total, lines: costed } = costLines(lines, library);
+    return { total, byRow: new Map(filled.map((row, position) => [row.key, costed[position]])) };
+  }, [form.rows, library]);
+
   /** Run an action, keeping the button that started it labelled while it works. */
   const run = (kind: NonNullable<typeof busy>, work: () => Promise<void>) => {
     setNotice(null);
@@ -274,6 +290,9 @@ function Builder({
   };
 
   const filledRows = form.rows.filter((row) => row.part).length;
+  const yieldAmount = Number(form.yieldAmount);
+  const perYieldUnit =
+    cost.total !== null && yieldAmount > 0 && yieldAmount !== 1 ? cost.total / yieldAmount : null;
   const shortWords = countWords(form.descriptionShort);
   const verb = recipe?.generatedAt ? "regenerate" : "generate";
   const generateLabel = dirty ? `Save & ${verb}` : capitalise(verb);
@@ -398,23 +417,28 @@ function Builder({
         {/* ---------------------------------------------------- components */}
         <Panel
           title="Components"
-          hint="Items from the catalogue and other recipes. Amounts matter — the taste profile is weighted by them."
+          hint="Items from the catalogue and other recipes. Amounts matter — the taste profile is weighted by them, and the cost is worked out from them."
         >
           <div
             aria-hidden
-            className="mb-1.5 hidden gap-2 text-xs font-semibold text-muted-foreground sm:grid sm:grid-cols-[minmax(0,2.2fr)_5rem_5.5rem_minmax(0,1.6fr)_1.75rem]"
+            className="mb-1.5 hidden gap-2 text-xs font-semibold text-muted-foreground sm:grid sm:grid-cols-[minmax(0,2.2fr)_5rem_5.5rem_4.5rem_minmax(0,1.4fr)_1.75rem]"
           >
             <span>Item or recipe</span>
             <span>Amount</span>
             <span>Unit</span>
+            <span className="text-right">Cost</span>
             <span>Prep note</span>
           </div>
 
           <ol className="space-y-3 sm:space-y-2">
-            {form.rows.map((row, position) => (
+            {form.rows.map((row, position) => {
+              const line = cost.byRow.get(row.key);
+              // A blank amount is still being typed, not a problem worth a warning.
+              const problem = row.amount.trim() ? line?.problem : null;
+              return (
               <li
                 key={row.key}
-                className="grid grid-cols-[5rem_5.5rem_minmax(0,1fr)_1.75rem] gap-2 border-b border-border pb-3 last:border-b-0 sm:grid-cols-[minmax(0,2.2fr)_5rem_5.5rem_minmax(0,1.6fr)_1.75rem] sm:border-b-0 sm:pb-0"
+                className="grid grid-cols-[5rem_5.5rem_minmax(0,1fr)_1.75rem] gap-2 border-b border-border pb-3 last:border-b-0 sm:grid-cols-[minmax(0,2.2fr)_5rem_5.5rem_4.5rem_minmax(0,1.4fr)_1.75rem] sm:border-b-0 sm:pb-0"
               >
                 <div className="col-span-4 sm:col-span-1">
                   <PartPicker
@@ -444,6 +468,16 @@ function Builder({
                     </option>
                   ))}
                 </select>
+                {/* Below the row on a phone, its own column from sm up. */}
+                <p
+                  aria-label={`Component ${position + 1} cost`}
+                  className={`order-last col-span-4 text-sm tabular-nums sm:order-none sm:col-span-1 sm:self-center sm:text-right ${
+                    line ? "" : "max-sm:hidden"
+                  }`}
+                >
+                  <span className="text-muted-foreground sm:hidden">Cost </span>
+                  {line && (line.cost === null ? "—" : formatCost(line.cost))}
+                </p>
                 <input
                   value={row.prepNote}
                   onChange={(event) => setRow(row.key, { prepNote: event.target.value })}
@@ -466,12 +500,36 @@ function Builder({
                 >
                   <X />
                 </Button>
+                {problem && (
+                  <p className="order-last col-span-4 text-xs text-amber-700 sm:col-span-6">{problem}</p>
+                )}
               </li>
-            ))}
+              );
+            })}
           </ol>
 
           {form.rows.length === 0 && (
             <p className="text-sm text-muted-foreground">No components yet.</p>
+          )}
+
+          {filledRows > 0 && (
+            <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-border pt-3">
+              <p className="text-sm font-semibold">
+                Total cost{" "}
+                <span className="tabular-nums">{formatCost(cost.total)}</span>
+                {perYieldUnit !== null && (
+                  <span className="font-normal text-muted-foreground">
+                    {" "}
+                    · {formatCost(perYieldUnit)} per {form.yieldUnit}
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {cost.total === null
+                  ? "Unknown until every component has a cost."
+                  : "From each item's purchase cost in the catalogue, after yield."}
+              </p>
+            </div>
           )}
 
           <Button
