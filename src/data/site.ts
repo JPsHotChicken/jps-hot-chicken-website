@@ -3,7 +3,6 @@
 //
 // ⚠️ MISSING BUSINESS DATA (owner to provide). These fields are *omitted* — never
 // faked — so no placeholder can reach the live site, Google, or the structured data:
-//   - Clarksville: uberEatsUrl (the CTA appears automatically once it is set)
 //   - socials: real Instagram / Facebook page URLs (published as schema.org sameAs)
 //   - googleBusinessUrl per location: Google Business Profile / Maps listing link
 // ✏️ CONFIRM with the owner:
@@ -93,8 +92,10 @@ const locations: readonly RestaurantLocation[] = [
     lat: 36.57885,
     lng: -87.31505,
     phone: "931-266-0025",
-    // uberEatsUrl: pending — see header note. Uber Eats stays omitted until this
-    // store has its own listing; Oak Grove's link would misroute orders here.
+    // This store's own Uber Eats listing ("JPs Hot Chicken - Trenton Rd") — never
+    // Oak Grove's link, which would misroute orders here. Owner approved 2026-10-31.
+    uberEatsUrl:
+      "https://www.ubereats.com/store/jps-hot-chicken-trenton-rd/R5rXMkqrT5e1UuTXhOCEJg",
     // Deep link straight to the Trenton Rd menu, not the Toast root. Both render
     // the same page today, but if Oak Grove ever moves onto Toast as well, the
     // root would become a location picker — an extra tap that silently costs
