@@ -95,7 +95,7 @@ const locations: readonly RestaurantLocation[] = [
     // This store's own Uber Eats listing ("JPs Hot Chicken - Trenton Rd") — never
     // Oak Grove's link, which would misroute orders here. Owner approved 2026-10-31.
     uberEatsUrl:
-      "https://www.ubereats.com/store/jps-hot-chicken-trenton-rd/R5rXMkqrT5e1UuTXhOCEJg",
+      "https://www.ubereats.com/store/jps-hot-chicken-trenton-rd/O7SDB2xUW--6YbhASK-Igg?diningMode=DELIVERY&surfaceName=",
     // Deep link straight to the Trenton Rd menu, not the Toast root. Both render
     // the same page today, but if Oak Grove ever moves onto Toast as well, the
     // root would become a location picker — an extra tap that silently costs
