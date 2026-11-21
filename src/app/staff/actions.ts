@@ -23,7 +23,6 @@ import { insertTimeOff } from "@/lib/schedule-repo";
 import {
   DAY_KEYS,
   isClosedDay,
-  isPositionKey,
   restaurantTodayISO,
   type RecurringTimeOff,
   type DayKey,
@@ -304,17 +303,17 @@ export async function removeRecurringDayOffAction(id: string): Promise<Recurring
   return staff.listRecurringForEmployee(employeeId);
 }
 
-export async function setPositionPreferenceAction(
+export async function setRolePreferenceAction(
   dateISO: string,
-  positionKey: string | null,
+  roleId: string | null,
 ): Promise<SettingResult> {
   const employeeId = await requireStaff();
   if (!ISO_DATE.test(dateISO)) return { ok: false, error: "Pick a day." };
-  if (positionKey !== null && !isPositionKey(positionKey)) {
-    return { ok: false, error: "That position isn't on the list." };
+  if (roleId !== null && !UUID.test(roleId)) {
+    return { ok: false, error: "That role isn't on the list." };
   }
   try {
-    await staff.setOwnPreference(employeeId, dateISO, restaurantTodayISO(), positionKey);
+    await staff.setOwnPreference(employeeId, dateISO, restaurantTodayISO(), roleId);
     return { ok: true };
   } catch (cause) {
     if (cause instanceof staff.PreferenceRefusedError) return { ok: false, error: cause.message };

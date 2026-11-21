@@ -9,7 +9,8 @@ import { scheduledDatesAction } from "@/app/staff/actions";
 import {
   formatDateRange,
   type Employee,
-  type PositionPreference,
+  type RolePreference,
+  type ShiftRole,
   type RecurringTimeOff,
   type StaffShiftDay,
   type TimeOffRequest,
@@ -50,8 +51,10 @@ export type StaffDashboardProps = {
   shiftDays?: StaffShiftDay[];
   /** Weekdays they have off every week. */
   initialRecurring?: RecurringTimeOff[];
-  /** Stations they've asked for on coming days. */
-  initialPreferences?: PositionPreference[];
+  /** Roles they've asked for on coming days. */
+  initialPreferences?: RolePreference[];
+  /** The owner's roles, for picking a preference from. */
+  roles?: ShiftRole[];
   /** Today's weather at the restaurant, or `null` if the forecast didn't load. */
   weather?: Weather | null;
   /** Which section to open on — `/staff?view=payStubs`, say. */
@@ -70,6 +73,7 @@ export function StaffDashboard({
   shiftDays = [],
   initialRecurring = [],
   initialPreferences = [],
+  roles = [],
   weather = null,
   initialView = "home",
 }: StaffDashboardProps) {
@@ -185,6 +189,7 @@ export function StaffDashboard({
             onRecurringChange={setRecurring}
             preferences={preferences}
             onPreferencesChange={setPreferences}
+            roles={roles}
           />
         )}
 

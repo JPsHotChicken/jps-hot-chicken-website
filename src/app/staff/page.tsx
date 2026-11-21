@@ -13,6 +13,7 @@ import {
   loadShiftDays,
 } from "@/lib/staff-repo";
 import { payStubsForEmployee } from "@/lib/pay-stubs-repo";
+import { loadRoles } from "@/lib/schedule-repo";
 import { listRuleSignatures } from "@/lib/staff-rules-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import {
@@ -94,6 +95,7 @@ export default async function StaffPage({
     shiftDays,
     recurring,
     preferences,
+    roles,
     weather,
   ] = await Promise.all([
     listPublishedWeeks(thisWeek),
@@ -106,6 +108,8 @@ export default async function StaffPage({
     loadShiftDays(employee.id, shiftsFrom, shiftsTo),
     listRecurringForEmployee(employee.id),
     listOwnPreferences(employee.id, todayISO, shiftsTo),
+    // The owner's roles: what a role preference is picked from.
+    loadRoles(),
     // Never throws, and gives up after a couple of seconds: decoration only.
     loadTodaysWeather(),
   ]);
@@ -148,6 +152,7 @@ export default async function StaffPage({
       shiftDays={shiftDays}
       initialRecurring={recurring}
       initialPreferences={preferences}
+      roles={roles}
       weather={shownWeather}
       initialView={initialView}
     />

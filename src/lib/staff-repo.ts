@@ -15,7 +15,7 @@ import {
   toISODate,
   type DayKey,
   type Employee,
-  type PositionPreference,
+  type RolePreference,
   type RecurringTimeOff,
   type StaffShiftDay,
   type TimeOffRequest,
@@ -481,24 +481,24 @@ export async function removeOwnRecurring(employeeId: string, id: string): Promis
   if (error) fail("removing a day off every week", error);
 }
 
-/* ----------------------------------------------- position preferences */
+/* --------------------------------------------------- role preferences */
 
 export async function listOwnPreferences(
   employeeId: string,
   fromISO: string,
   toISO: string,
-): Promise<PositionPreference[]> {
+): Promise<RolePreference[]> {
   const { data, error } = await getDb()
-    .from("position_preferences")
-    .select("employee_id, shift_date, position_key")
+    .from("role_preferences")
+    .select("employee_id, shift_date, role_id")
     .eq("employee_id", employeeId)
     .gte("shift_date", fromISO)
     .lte("shift_date", toISO);
-  if (error) fail("loading your position preferences", error);
+  if (error) fail("loading your role preferences", error);
   return data.map((row) => ({
     employeeId: row.employee_id,
     date: row.shift_date,
-    positionKey: row.position_key,
+    roleId: row.role_id,
   }));
 }
 
@@ -506,26 +506,26 @@ export async function listOwnPreferences(
 export class PreferenceRefusedError extends Error {}
 
 /**
- * Say which station you'd like on a day you're working, or clear it with
- * `null`. Only for days from today on that you have a published shift: a
- * preference for a day you aren't on has nothing to attach to.
+ * Say which of the owner's roles you'd like on a day you're working, or clear
+ * it with `null`. Only for days from today on that you have a published shift:
+ * a preference for a day you aren't on has nothing to attach to.
  */
 export async function setOwnPreference(
   employeeId: string,
   dateISO: string,
   todayISO: string,
-  positionKey: string | null,
+  roleId: string | null,
 ): Promise<void> {
   const db = getDb();
   if (dateISO < todayISO) throw new PreferenceRefusedError("That day has already gone.");
 
-  if (positionKey === null) {
+  if (roleId === null) {
     const { error } = await db
-      .from("position_preferences")
+      .from("role_preferences")
       .delete()
       .eq("employee_id", employeeId)
       .eq("shift_date", dateISO);
-    if (error) fail("clearing a position preference", error);
+    if (error) fail("clearing a role preference", error);
     return;
   }
 
@@ -537,16 +537,20 @@ export async function setOwnPreference(
   if (shiftError) fail("checking your shift", shiftError);
   if (!count) throw new PreferenceRefusedError("You're not scheduled that day.");
 
-  const { error } = await db.from("position_preferences").upsert(
+  const { error } = await db.from("role_preferences").upsert(
     {
       employee_id: employeeId,
       shift_date: dateISO,
-      position_key: positionKey,
+      role_id: roleId,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "employee_id,shift_date" },
   );
-  if (error) fail("saving a position preference", error);
+  // 23503: the role was deleted while the page was open.
+  if (error?.code === "23503") {
+    throw new PreferenceRefusedError("That role no longer exists. Refresh the page.");
+  }
+  if (error) fail("saving a role preference", error);
 }
 
 /* -------------------------------------------------------------- publishing */

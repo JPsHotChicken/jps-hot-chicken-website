@@ -21,7 +21,6 @@ import {
   formatSlotBlock,
   isClosedDay,
   roleCellForShift,
-  positionGroupLabel,
   shiftsForDay,
   slotMinute,
   unscheduledOnDay,
@@ -30,7 +29,7 @@ import {
   type DayOffKind,
   type DaySchedule,
   type Employee,
-  type PositionPreference,
+  type RolePreference,
   type RoleCell,
   type ShiftRole,
 } from "@/lib/schedule";
@@ -141,8 +140,8 @@ type Props = {
   /** This day's role cells, and the roles they point at. */
   roleCells?: RoleCell[];
   roles?: ShiftRole[];
-  /** Stations staff have asked for today, from their `/staff` settings. */
-  preferences?: PositionPreference[];
+  /** Roles staff have asked for today, from their `/staff` settings. */
+  preferences?: RolePreference[];
   /** A name on the grid was clicked: pick a role for that person's shift. */
   onPickRole?: (employeeId: string, slotIndex: number, anchor: HTMLElement) => void;
 };
@@ -157,7 +156,7 @@ const ROLE_CLICK_DELAY_MS = 220;
 // Stable empties, so the memo below isn't redone on every render without roles.
 const NO_ROLE_CELLS: RoleCell[] = [];
 const NO_ROLES: ShiftRole[] = [];
-const NO_PREFERENCES: PositionPreference[] = [];
+const NO_PREFERENCES: RolePreference[] = [];
 
 /** Inclusive rectangle of cells, always stored lowest-first. */
 export type CellRange = { rowStart: number; rowEnd: number; slotStart: number; slotEnd: number };
@@ -377,7 +376,8 @@ export function DayGrid({
             >
               {preferences.map((preference) => {
                 const employee = employeeById.get(preference.employeeId);
-                if (!employee) return null;
+                const role = roles.find((entry) => entry.id === preference.roleId);
+                if (!employee || !role) return null;
                 return (
                   <li
                     key={preference.employeeId}
@@ -391,7 +391,11 @@ export function DayGrid({
                     />
                     <span className="truncate">{employee.name}</span>
                     <span className="font-normal opacity-70">→</span>
-                    <span className="truncate">{positionGroupLabel(preference.positionKey)}</span>
+                    <span
+                      aria-hidden
+                      className={`size-1.5 shrink-0 rounded-full ${roleColorClasses(role.color).dot}`}
+                    />
+                    <span className="truncate">{role.name}</span>
                   </li>
                 );
               })}

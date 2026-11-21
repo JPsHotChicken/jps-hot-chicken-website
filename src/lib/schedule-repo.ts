@@ -184,15 +184,15 @@ export async function loadWeekRoles(weekStartISO: string): Promise<WeekRoles> {
   return roles;
 }
 
-/** The stations staff have asked for on each day of one week. */
+/** The roles staff have asked for on each day of one week. */
 export async function loadWeekPreferences(weekStartISO: string): Promise<WeekPreferences> {
   const weekEndISO = toISODate(addDays(fromISODate(weekStartISO), 6));
   const { data, error } = await getDb()
-    .from("position_preferences")
-    .select("employee_id, shift_date, position_key")
+    .from("role_preferences")
+    .select("employee_id, shift_date, role_id")
     .gte("shift_date", weekStartISO)
     .lte("shift_date", weekEndISO);
-  if (error) fail(`loading position preferences for ${weekStartISO}`, error);
+  if (error) fail(`loading role preferences for ${weekStartISO}`, error);
 
   const preferences = makeEmptyWeekPreferences();
   for (const row of data) {
@@ -201,7 +201,7 @@ export async function loadWeekPreferences(weekStartISO: string): Promise<WeekPre
     preferences[day].push({
       employeeId: row.employee_id,
       date: row.shift_date,
-      positionKey: row.position_key,
+      roleId: row.role_id,
     });
   }
   return preferences;

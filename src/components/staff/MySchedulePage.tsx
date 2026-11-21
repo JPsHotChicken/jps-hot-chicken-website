@@ -7,12 +7,11 @@ import { Button } from "@/components/ui/button";
 import {
   addRecurringDayOffAction,
   removeRecurringDayOffAction,
-  setPositionPreferenceAction,
+  setRolePreferenceAction,
 } from "@/app/staff/actions";
 import {
   DAY_KEYS,
   DAY_LABELS,
-  POSITION_GROUPS,
   addDays,
   dayKeyOf,
   formatHours,
@@ -25,7 +24,8 @@ import {
   sundayWeekOf,
   toISODate,
   type DayKey,
-  type PositionPreference,
+  type RolePreference,
+  type ShiftRole,
   type RecurringTimeOff,
   type StaffShiftDay,
   type TimeOffRequest,
@@ -47,8 +47,10 @@ type Props = {
   onLoadDates?: (fromISO: string, toISO: string) => void;
   recurring: RecurringTimeOff[];
   onRecurringChange: (recurring: RecurringTimeOff[]) => void;
-  preferences: PositionPreference[];
-  onPreferencesChange: (preferences: PositionPreference[]) => void;
+  preferences: RolePreference[];
+  onPreferencesChange: (preferences: RolePreference[]) => void;
+  /** The owner's roles — the list a preference is picked from. */
+  roles?: ShiftRole[];
 };
 
 const FIELD =
@@ -242,31 +244,33 @@ function RecurringSettings({
 function PreferenceSettings({
   todayISO,
   shiftDays,
+  roles,
   preferences,
   onChange,
 }: {
   todayISO: string;
   shiftDays: StaffShiftDay[];
-  preferences: PositionPreference[];
-  onChange: (preferences: PositionPreference[]) => void;
+  roles: ShiftRole[];
+  preferences: RolePreference[];
+  onChange: (preferences: RolePreference[]) => void;
 }) {
   const lastDay = toISODate(addDays(fromISODate(sundayWeekOf(todayISO)[6]), 7));
   const coming = shiftDays.filter((entry) => entry.date >= todayISO && entry.date <= lastDay);
-  const byDate = new Map(preferences.map((preference) => [preference.date, preference.positionKey]));
+  const byDate = new Map(preferences.map((preference) => [preference.date, preference.roleId]));
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<{ date: string; message: string } | null>(null);
 
-  const choose = async (date: string, positionKey: string | null) => {
+  const choose = async (date: string, roleId: string | null) => {
     const before = preferences;
     // Shown at once; put back if the save is refused.
     onChange([
       ...preferences.filter((preference) => preference.date !== date),
-      ...(positionKey ? [{ employeeId: "", date, positionKey }] : []),
+      ...(roleId ? [{ employeeId: "", date, roleId }] : []),
     ]);
     setSaving(date);
     setError(null);
     try {
-      const result = await setPositionPreferenceAction(date, positionKey);
+      const result = await setRolePreferenceAction(date, roleId);
       if (!result.ok) {
         onChange(before);
         setError({ date, message: result.error });
@@ -287,13 +291,17 @@ function PreferenceSettings({
         Position preferences
       </h3>
       <p className="mt-1 text-xs text-muted-foreground">
-        Pick where you&apos;d like to work on the days you&apos;re scheduled. Your manager sees it
-        when building the schedule — it&apos;s a request, not a guarantee.
+        Pick the role you&apos;d like on the days you&apos;re scheduled. Your manager sees it when
+        building the schedule — it&apos;s a request, not a guarantee.
       </p>
 
-      {coming.length === 0 ? (
+      {coming.length > 0 && roles.length === 0 ? (
         <p className="mt-3 rounded-lg bg-muted px-3 py-3 text-sm text-muted-foreground">
-          Once you&apos;re on the schedule this week or next, you can pick a position for each day
+          Your manager hasn&apos;t set up any roles yet.
+        </p>
+      ) : coming.length === 0 ? (
+        <p className="mt-3 rounded-lg bg-muted px-3 py-3 text-sm text-muted-foreground">
+          Once you&apos;re on the schedule this week or next, you can pick a role for each day
           here.
         </p>
       ) : (
@@ -310,7 +318,7 @@ function PreferenceSettings({
                     </span>
                   </span>
                   <label htmlFor={`preference-${entry.date}`} className="sr-only">
-                    Preferred position on {label}
+                    Preferred role on {label}
                   </label>
                   <select
                     id={`preference-${entry.date}`}
@@ -320,9 +328,9 @@ function PreferenceSettings({
                     className={`${FIELD} min-w-40`}
                   >
                     <option value="">No preference</option>
-                    {POSITION_GROUPS.map((group) => (
-                      <option key={group.key} value={group.key}>
-                        {group.label}
+                    {roles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
                       </option>
                     ))}
                   </select>
@@ -360,6 +368,7 @@ export function MySchedulePage({
   onRecurringChange,
   preferences,
   onPreferencesChange,
+  roles = [],
 }: Props) {
   const marks = useDayMarks(
     workDates,
@@ -419,6 +428,7 @@ export function MySchedulePage({
           <PreferenceSettings
             todayISO={todayISO}
             shiftDays={shiftDays}
+            roles={roles}
             preferences={preferences}
             onChange={onPreferencesChange}
           />

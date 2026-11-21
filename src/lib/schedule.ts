@@ -359,25 +359,15 @@ export type PositionRow = {
   storedIndex: number;
 };
 
-/** Is this one of the stations above? Used to check a staff preference. */
-export function isPositionKey(value: string): value is PositionKey {
-  return POSITION_GROUPS.some((group) => group.key === value);
-}
-
-/** "Fryer" for `fryer` — or the key itself for a station that has since gone. */
-export function positionGroupLabel(key: string): string {
-  return POSITION_GROUPS.find((group) => group.key === key)?.label ?? key;
-}
-
 /**
- * A station somebody would like on a day they're scheduled, set from their own
- * `/staff` page. The owner sees these in the schedule maker; nothing assigns
- * them automatically.
+ * The role somebody would like on a day they're scheduled, picked from the
+ * owner's roles on their own `/staff` page. The owner sees these in the
+ * schedule maker; nothing assigns them automatically.
  */
-export type PositionPreference = { employeeId: string; date: string; positionKey: string };
+export type RolePreference = { employeeId: string; date: string; roleId: string };
 
 /** A week's preferences, by day. */
-export type WeekPreferences = Record<DayKey, PositionPreference[]>;
+export type WeekPreferences = Record<DayKey, RolePreference[]>;
 
 export function makeEmptyWeekPreferences(): WeekPreferences {
   return Object.fromEntries(DAY_KEYS.map((day) => [day, []])) as unknown as WeekPreferences;

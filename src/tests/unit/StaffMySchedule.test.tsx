@@ -1,12 +1,17 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { POSITION_GROUPS, type RecurringTimeOff, type StaffShiftDay } from "@/lib/schedule";
+import {
+  POSITION_GROUPS,
+  type RecurringTimeOff,
+  type ShiftRole,
+  type StaffShiftDay,
+} from "@/lib/schedule";
 
 const actions = vi.hoisted(() => ({
   addRecurringDayOffAction: vi.fn(),
   removeRecurringDayOffAction: vi.fn(),
-  setPositionPreferenceAction: vi.fn(),
+  setRolePreferenceAction: vi.fn(),
   deleteTimeOffRequestAction: vi.fn(),
   myRequestsAction: vi.fn(),
   requestTimeOffAction: vi.fn(),
@@ -32,7 +37,14 @@ const shift = (date: string, start = 570, end = 1020): StaffShiftDay => ({
 
 const SHIFTS = [shift("2026-11-16"), shift("2026-11-19"), shift("2026-11-24", 960, 1320)];
 
+const LEAD = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const ROLES: ShiftRole[] = [
+  { id: LEAD, name: "Shift lead", color: "blue" },
+  { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", name: "Opener", color: "emerald" },
+];
+
 function page({
+  roles = ROLES,
   recurring = [] as RecurringTimeOff[],
   onRecurringChange = vi.fn(),
   onPreferencesChange = vi.fn(),
@@ -57,6 +69,7 @@ function page({
       onRecurringChange={onRecurringChange}
       preferences={[]}
       onPreferencesChange={onPreferencesChange}
+      roles={roles}
     />,
   );
   return { onRecurringChange, onPreferencesChange };
@@ -166,28 +179,34 @@ describe("Days off every week", () => {
 });
 
 describe("Position preferences", () => {
-  it("lists coming work days with the same stations as the schedule maker", () => {
+  it("lists coming work days with the owner's roles to pick from — not the stations", () => {
     page();
     // Monday Nov 16 has gone; Thursday the 19th and Tuesday the 24th are left.
-    expect(screen.queryByLabelText(/Preferred position on Mon, Nov 16th/)).not.toBeInTheDocument();
-    const thursday = screen.getByLabelText("Preferred position on Thu, Nov 19th");
+    expect(screen.queryByLabelText(/Preferred role on Mon, Nov 16th/)).not.toBeInTheDocument();
+    const thursday = screen.getByLabelText("Preferred role on Thu, Nov 19th");
     const options = within(thursday).getAllByRole("option").map((option) => option.textContent);
-    expect(options).toEqual(["No preference", ...POSITION_GROUPS.map((group) => group.label)]);
-    expect(screen.getByLabelText("Preferred position on Tue, Nov 24th")).toBeInTheDocument();
+    expect(options).toEqual(["No preference", "Shift lead", "Opener"]);
+    for (const group of POSITION_GROUPS) expect(options).not.toContain(group.label);
+    expect(screen.getByLabelText("Preferred role on Tue, Nov 24th")).toBeInTheDocument();
+  });
+
+  it("says so when the owner hasn't made any roles", () => {
+    page({ roles: [] });
+    expect(screen.getByText("Your manager hasn't set up any roles yet.")).toBeInTheDocument();
   });
 
   it("saves a choice, and puts it back if refused", async () => {
-    actions.setPositionPreferenceAction.mockResolvedValue({
+    actions.setRolePreferenceAction.mockResolvedValue({
       ok: false,
       error: "You're not scheduled that day.",
     });
     const { onPreferencesChange } = page();
-    fireEvent.change(screen.getByLabelText("Preferred position on Thu, Nov 19th"), {
-      target: { value: "fryer" },
+    fireEvent.change(screen.getByLabelText("Preferred role on Thu, Nov 19th"), {
+      target: { value: LEAD },
     });
-    expect(actions.setPositionPreferenceAction).toHaveBeenCalledWith("2026-11-19", "fryer");
+    expect(actions.setRolePreferenceAction).toHaveBeenCalledWith("2026-11-19", LEAD);
     expect(onPreferencesChange).toHaveBeenCalledWith([
-      { employeeId: "", date: "2026-11-19", positionKey: "fryer" },
+      { employeeId: "", date: "2026-11-19", roleId: LEAD },
     ]);
     expect(await screen.findByRole("alert")).toHaveTextContent("not scheduled");
     expect(onPreferencesChange).toHaveBeenLastCalledWith([]);
