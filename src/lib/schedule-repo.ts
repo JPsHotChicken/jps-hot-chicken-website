@@ -5,11 +5,14 @@ import {
   DAY_KEYS,
   POSITION_ROWS,
   SLOT_COUNT,
+  SLOT_MINUTES,
   addDays,
   compareDeletedTimeOff,
   datesForWeek,
   fromISODate,
+  isRoleColor,
   makeEmptyWeek,
+  makeEmptyWeekRoles,
   minuteSlot,
   rowForStoredIndex,
   slotMinute,
@@ -18,9 +21,12 @@ import {
   type DeletedTimeOffRequest,
   type Employee,
   type RecurringTimeOff,
+  type RoleColor,
   type ShiftGroup,
+  type ShiftRole,
   type TimeOffRequest,
   type TimeOffStatus,
+  type WeekRoles,
   type WeekSchedule,
 } from "@/lib/schedule";
 
@@ -63,13 +69,15 @@ export type ScheduleBase = {
   /** Requests the owner deleted, newest delete first, so one can be put back. */
   deletedTimeOff: DeletedTimeOffRequest[];
   recurringTimeOff: RecurringTimeOff[];
+  /** The roles a shift can be given. */
+  roles: ShiftRole[];
 };
 
 /** Everything the dashboard needs that isn't tied to one particular week. */
 export async function loadScheduleBase(): Promise<ScheduleBase> {
   const db = getDb();
 
-  const [employees, timeOff, recurring] = await Promise.all([
+  const [employees, timeOff, recurring, roles] = await Promise.all([
     db
       .from("employees")
       .select("id, name, shift_group, setup_code, staff_password, password_set_at")
@@ -81,6 +89,7 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
       .select("id, employee_id, start_date, end_date, reason, status, requested_at, deleted_at")
       .order("start_date"),
     db.from("recurring_time_off").select("id, employee_id, day, reason"),
+    loadRoles(),
   ]);
 
   if (employees.error) fail("loading employees", employees.error);
@@ -123,6 +132,7 @@ export async function loadScheduleBase(): Promise<ScheduleBase> {
       day: row.day,
       reason: row.reason,
     })),
+    roles,
   };
 }
 
@@ -150,6 +160,113 @@ export async function loadWeek(weekStartISO: string): Promise<WeekSchedule> {
     week[day][rowIndex][slotIndex] = row.employee_id;
   }
   return week;
+}
+
+/** One week's role cells, by day. */
+export async function loadWeekRoles(weekStartISO: string): Promise<WeekRoles> {
+  const weekEndISO = toISODate(addDays(fromISODate(weekStartISO), 6));
+  const { data, error } = await getDb()
+    .from("shift_role_assignments")
+    .select("shift_date, employee_id, start_minute, role_id")
+    .gte("shift_date", weekStartISO)
+    .lte("shift_date", weekEndISO);
+
+  if (error) fail(`loading roles for week ${weekStartISO}`, error);
+
+  const roles = makeEmptyWeekRoles();
+  for (const row of data) {
+    const day = dayOf(weekStartISO, row.shift_date);
+    if (!day) continue;
+    roles[day].push({ employeeId: row.employee_id, minute: row.start_minute, roleId: row.role_id });
+  }
+  return roles;
+}
+
+/* -------------------------------------------------------------------- roles */
+
+/** Raised when a role name is already taken, ignoring case. */
+export class RoleNameTakenError extends Error {
+  constructor(name: string) {
+    super(`There is already a role called "${name}".`);
+    this.name = "RoleNameTakenError";
+  }
+}
+
+function toRole(row: { id: string; name: string; color: string }): ShiftRole {
+  return { id: row.id, name: row.name, color: isRoleColor(row.color) ? row.color : "blue" };
+}
+
+/** Every role, oldest first, so a new one lands at the bottom of the list. */
+export async function loadRoles(): Promise<ShiftRole[]> {
+  const { data, error } = await getDb()
+    .from("shift_roles")
+    .select("id, name, color")
+    .order("created_at");
+  if (error) fail("loading roles", error);
+  return data.map(toRole);
+}
+
+export async function insertRole(name: string, color: RoleColor): Promise<ShiftRole> {
+  const { data, error } = await getDb()
+    .from("shift_roles")
+    .insert({ name, color })
+    .select("id, name, color")
+    .single();
+  // 23505: the unique index on the lower-cased name.
+  if (error?.code === "23505") throw new RoleNameTakenError(name);
+  if (error) fail("adding a role", error);
+  return toRole(data);
+}
+
+/**
+ * Rename or recolour a role. Shifts point at it by id, so every shift carrying
+ * it follows along — though staff only see the change once the week is
+ * published again.
+ */
+export async function updateRole(id: string, name: string, color: RoleColor): Promise<void> {
+  const { error } = await getDb().from("shift_roles").update({ name, color }).eq("id", id);
+  if (error?.code === "23505") throw new RoleNameTakenError(name);
+  if (error) fail("updating a role", error);
+}
+
+/** Delete a role. It comes off every shift it was on via `on delete cascade`. */
+export async function deleteRole(id: string): Promise<void> {
+  const { error } = await getDb().from("shift_roles").delete().eq("id", id);
+  if (error) fail("deleting a role", error);
+}
+
+/**
+ * Give one shift a role, or take it away with `null`. `start`/`end` are the
+ * shift's minutes past midnight, end exclusive.
+ */
+export async function setShiftRole(
+  weekStartISO: string,
+  day: DayKey,
+  employeeId: string,
+  start: number,
+  end: number,
+  roleId: string | null,
+): Promise<void> {
+  const db = getDb();
+  const date = dateFor(weekStartISO, day);
+
+  const { error } = await db
+    .from("shift_role_assignments")
+    .delete()
+    .eq("shift_date", date)
+    .eq("employee_id", employeeId)
+    .gte("start_minute", start)
+    .lt("start_minute", end);
+  if (error) fail("clearing a shift's role", error);
+
+  if (!roleId) return;
+
+  const rows = [];
+  for (let minute = start; minute < end; minute += SLOT_MINUTES) {
+    rows.push({ shift_date: date, employee_id: employeeId, start_minute: minute, role_id: roleId });
+  }
+  const { error: insertError } = await db.from("shift_role_assignments").insert(rows);
+  if (insertError) fail("setting a shift's role", insertError);
 }
 
 /* ---------------------------------------------------------------- employees */
@@ -263,13 +380,32 @@ export async function copyDayToDays(
     .in("shift_date", targetDates);
   if (clearError) fail("clearing the days being replaced", clearError);
 
-  if (data.length === 0) return;
+  if (data.length > 0) {
+    const rows = targetDates.flatMap((date) =>
+      data.map((row) => ({ ...row, shift_date: date })),
+    );
+    const { error: insertError } = await db.from("shift_assignments").insert(rows);
+    if (insertError) fail("copying a day", insertError);
+  }
 
-  const rows = targetDates.flatMap((date) =>
-    data.map((row) => ({ ...row, shift_date: date })),
-  );
-  const { error: insertError } = await db.from("shift_assignments").insert(rows);
-  if (insertError) fail("copying a day", insertError);
+  // Roles go with the shifts they are on.
+  const { data: roles, error: rolesError } = await db
+    .from("shift_role_assignments")
+    .select("employee_id, start_minute, role_id")
+    .eq("shift_date", sourceDate);
+  if (rolesError) fail("reading the roles being copied", rolesError);
+
+  const { error: clearRolesError } = await db
+    .from("shift_role_assignments")
+    .delete()
+    .in("shift_date", targetDates);
+  if (clearRolesError) fail("clearing the roles being replaced", clearRolesError);
+
+  if (roles.length === 0) return;
+  const { error: rolesInsertError } = await db
+    .from("shift_role_assignments")
+    .insert(targetDates.flatMap((date) => roles.map((row) => ({ ...row, shift_date: date }))));
+  if (rolesInsertError) fail("copying a day's roles", rolesInsertError);
 }
 
 /** Replace the whole of `toWeekISO` with a copy of `fromWeekISO`. */
@@ -293,16 +429,40 @@ export async function copyWeek(fromWeekISO: string, toWeekISO: string): Promise<
     .lte("shift_date", toISODate(addDays(fromISODate(toWeekISO), 6)));
   if (clearError) fail("clearing the week being replaced", clearError);
 
-  if (data.length === 0) return;
+  if (data.length > 0) {
+    const rows = data.map((row) => ({
+      shift_date: toISODate(addDays(fromISODate(row.shift_date), offsetDays)),
+      row_index: row.row_index,
+      start_minute: row.start_minute,
+      employee_id: row.employee_id,
+    }));
+    const { error: insertError } = await db.from("shift_assignments").insert(rows);
+    if (insertError) fail("copying a week", insertError);
+  }
 
-  const rows = data.map((row) => ({
-    shift_date: toISODate(addDays(fromISODate(row.shift_date), offsetDays)),
-    row_index: row.row_index,
-    start_minute: row.start_minute,
-    employee_id: row.employee_id,
-  }));
-  const { error: insertError } = await db.from("shift_assignments").insert(rows);
-  if (insertError) fail("copying a week", insertError);
+  // Roles go with the shifts they are on.
+  const { data: roles, error: rolesError } = await db
+    .from("shift_role_assignments")
+    .select("shift_date, employee_id, start_minute, role_id")
+    .gte("shift_date", fromWeekISO)
+    .lte("shift_date", toISODate(addDays(fromISODate(fromWeekISO), 6)));
+  if (rolesError) fail("reading the roles being copied", rolesError);
+
+  const { error: clearRolesError } = await db
+    .from("shift_role_assignments")
+    .delete()
+    .gte("shift_date", toWeekISO)
+    .lte("shift_date", toISODate(addDays(fromISODate(toWeekISO), 6)));
+  if (clearRolesError) fail("clearing the roles being replaced", clearRolesError);
+
+  if (roles.length === 0) return;
+  const { error: rolesInsertError } = await db.from("shift_role_assignments").insert(
+    roles.map((row) => ({
+      ...row,
+      shift_date: toISODate(addDays(fromISODate(row.shift_date), offsetDays)),
+    })),
+  );
+  if (rolesInsertError) fail("copying a week's roles", rolesInsertError);
 }
 
 /* ---------------------------------------------------------------- time off */

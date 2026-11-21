@@ -10,11 +10,17 @@ import {
   formatShortDate,
   isClosingShift,
   rangeHours,
+  roleCellForShift,
+  type DayKey,
+  type PublishedRoleCell,
   type WeekSchedule as Week,
 } from "@/lib/schedule";
+import { roleColorClasses } from "@/lib/role-colors";
 
 type Props = {
   week: Week;
+  /** Roles on this person's shifts, as published. Absent for an older snapshot. */
+  roles?: Record<DayKey, PublishedRoleCell[]>;
   employeeId: string;
   weekStart: string;
 };
@@ -30,7 +36,7 @@ function joinList(items: string[]): string {
  * day and date on the left, the hours they're on in the middle, the day's total
  * on the right, and the closing-shift note underneath.
  */
-export function WeekSchedule({ week, employeeId, weekStart }: Props) {
+export function WeekSchedule({ week, roles, employeeId, weekStart }: Props) {
   const { days, totalHours } = employeeWeek(week, employeeId);
   const dates = datesForWeek(weekStart);
   const closingDays = days.filter(({ ranges }) => isClosingShift(ranges)).map(({ label }) => label);
@@ -66,11 +72,26 @@ export function WeekSchedule({ week, employeeId, weekStart }: Props) {
                   <p className="text-sm text-muted-foreground italic">Off</p>
                 ) : (
                   <ul className="space-y-0.5">
-                    {ranges.map((range) => (
-                      <li key={`${range.start}-${range.end}`} className="text-sm font-bold">
-                        {formatRange(range)}
-                      </li>
-                    ))}
+                    {ranges.map((range) => {
+                      const role = roleCellForShift(roles?.[day] ?? [], employeeId, range);
+                      return (
+                        <li
+                          key={`${range.start}-${range.end}`}
+                          className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold"
+                        >
+                          {formatRange(range)}
+                          {role && (
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[0.7rem] font-bold ${
+                                roleColorClasses(role.color).pill
+                              }`}
+                            >
+                              {role.name}
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>

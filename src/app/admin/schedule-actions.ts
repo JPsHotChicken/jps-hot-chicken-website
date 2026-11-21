@@ -8,17 +8,25 @@ import * as repo from "@/lib/schedule-repo";
 import * as staff from "@/lib/staff-repo";
 import {
   DAY_KEYS,
+  CLOSE_MINUTE,
   EMPLOYEE_NAME_MAX_LENGTH,
+  OPEN_MINUTE,
+  ROLE_NAME_MAX_LENGTH,
   ROW_COUNT,
   SLOT_COUNT,
+  SLOT_MINUTES,
   SHIFT_GROUPS,
   TIME_OFF_STATUSES,
+  isRoleColor,
   type DayKey,
   type Employee,
   type RecurringTimeOff,
+  type RoleColor,
   type ShiftGroup,
+  type ShiftRole,
   type TimeOffRequest,
   type TimeOffStatus,
+  type WeekRoles,
   type WeekSchedule,
 } from "@/lib/schedule";
 
@@ -94,10 +102,16 @@ function assertText(value: string, field: string, { max = 200, required = false 
 
 /* ------------------------------------------------------------------- reads */
 
-export async function loadWeekAction(weekStart: string): Promise<WeekSchedule> {
+export type WeekData = { week: WeekSchedule; weekRoles: WeekRoles };
+
+export async function loadWeekAction(weekStart: string): Promise<WeekData> {
   await requireAdmin();
   assertMonday(weekStart);
-  return repo.loadWeek(weekStart);
+  const [week, weekRoles] = await Promise.all([
+    repo.loadWeek(weekStart),
+    repo.loadWeekRoles(weekStart),
+  ]);
+  return { week, weekRoles };
 }
 
 /**
@@ -107,11 +121,15 @@ export async function loadWeekAction(weekStart: string): Promise<WeekSchedule> {
  */
 export async function reloadAction(
   weekStart: string,
-): Promise<repo.ScheduleBase & { week: WeekSchedule }> {
+): Promise<repo.ScheduleBase & WeekData> {
   await requireAdmin();
   assertMonday(weekStart);
-  const base = await repo.loadScheduleBase();
-  return { ...base, week: await repo.loadWeek(weekStart) };
+  const [base, week, weekRoles] = await Promise.all([
+    repo.loadScheduleBase(),
+    repo.loadWeek(weekStart),
+    repo.loadWeekRoles(weekStart),
+  ]);
+  return { ...base, week, weekRoles };
 }
 
 /* --------------------------------------------------------------- employees */
@@ -241,6 +259,82 @@ export async function copyWeekAction(fromWeek: string, toWeek: string): Promise<
   assertMonday(fromWeek);
   assertMonday(toWeek);
   await repo.copyWeek(fromWeek, toWeek);
+}
+
+/* ------------------------------------------------------------------- roles */
+
+function assertRoleColor(value: string): RoleColor {
+  if (!isRoleColor(value)) throw new Error(`Unknown colour "${value}".`);
+  return value;
+}
+
+/**
+ * Like a password, a refused role comes back as a value: "there is already a
+ * role called Lead" is something the owner needs to read, and production
+ * Next.js would swap a thrown message for a generic one.
+ */
+export type RoleResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+async function roleResult<T>(run: () => Promise<T>): Promise<RoleResult<T>> {
+  try {
+    return { ok: true, value: await run() };
+  } catch (cause) {
+    if (cause instanceof repo.RoleNameTakenError) return { ok: false, error: cause.message };
+    throw cause;
+  }
+}
+
+export async function addRoleAction(name: string, color: string): Promise<RoleResult<ShiftRole>> {
+  await requireAdmin();
+  const stored = assertText(name, "Role name", { max: ROLE_NAME_MAX_LENGTH, required: true });
+  return roleResult(() => repo.insertRole(stored, assertRoleColor(color)));
+}
+
+export async function updateRoleAction(
+  id: string,
+  name: string,
+  color: string,
+): Promise<RoleResult<ShiftRole>> {
+  await requireAdmin();
+  const stored = assertText(name, "Role name", { max: ROLE_NAME_MAX_LENGTH, required: true });
+  const role = { id: assertUuid(id, "Role"), name: stored, color: assertRoleColor(color) };
+  return roleResult(async () => {
+    await repo.updateRole(role.id, role.name, role.color);
+    return role;
+  });
+}
+
+export async function deleteRoleAction(id: string): Promise<void> {
+  await requireAdmin();
+  await repo.deleteRole(assertUuid(id, "Role"));
+}
+
+/** Give one person's shift a role, or clear it with `null`. */
+export async function setShiftRoleAction(
+  weekStart: string,
+  day: string,
+  employeeId: string,
+  range: { start: number; end: number },
+  roleId: string | null,
+): Promise<void> {
+  await requireAdmin();
+  assertMonday(weekStart);
+  const onGrid = (minute: number) =>
+    Number.isInteger(minute) &&
+    minute >= OPEN_MINUTE &&
+    minute <= CLOSE_MINUTE &&
+    (minute - OPEN_MINUTE) % SLOT_MINUTES === 0;
+  if (!onGrid(range.start) || !onGrid(range.end) || range.start >= range.end) {
+    throw new Error("That shift is out of range.");
+  }
+  await repo.setShiftRole(
+    weekStart,
+    assertDay(day),
+    assertUuid(employeeId, "Employee"),
+    range.start,
+    range.end,
+    roleId === null ? null : assertUuid(roleId, "Role"),
+  );
 }
 
 /* ---------------------------------------------------------------- time off */

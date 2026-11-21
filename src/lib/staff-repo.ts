@@ -13,10 +13,14 @@ import {
   fromISODate,
   makeEmptyWeek,
   minuteSlot,
+  rangesFromMinutes,
+  roleCellForShift,
   rowForStoredIndex,
   toISODate,
   type DayKey,
   type Employee,
+  type PublishedRoleCell,
+  type StaffShiftDay,
   type TimeOffRequest,
   type WeekSchedule,
 } from "@/lib/schedule";
@@ -243,6 +247,134 @@ export async function loadPublishedWeek(weekStartISO: string): Promise<WeekSched
 }
 
 /**
+ * One person's roles in a published week, by day. Only their own: nobody needs
+ * to see what everybody else was given to read their own schedule.
+ */
+export async function loadPublishedRoles(
+  weekStartISO: string,
+  employeeId: string,
+): Promise<Record<DayKey, PublishedRoleCell[]>> {
+  const { data, error } = await getDb()
+    .from("published_shift_roles")
+    .select("shift_date, employee_id, start_minute, role_name, role_color")
+    .eq("week_start", weekStartISO)
+    .eq("employee_id", employeeId);
+
+  if (error) fail(`loading published roles for ${weekStartISO}`, error);
+
+  const roles = Object.fromEntries(DAY_KEYS.map((day) => [day, []])) as unknown as Record<
+    DayKey,
+    PublishedRoleCell[]
+  >;
+  for (const row of data) {
+    const day = dayOf(weekStartISO, row.shift_date);
+    if (!day) continue;
+    roles[day].push({
+      employeeId: row.employee_id,
+      minute: row.start_minute,
+      name: row.role_name,
+      color: row.role_color,
+    });
+  }
+  return roles;
+}
+
+/**
+ * One person's published shifts between two dates, with the role on each, for
+ * the staff home page. Days with nothing on are left out, soonest first.
+ */
+export async function loadShiftDays(
+  employeeId: string,
+  fromISO: string,
+  toISO: string,
+): Promise<StaffShiftDay[]> {
+  const db = getDb();
+  const [shifts, roles] = await Promise.all([
+    db
+      .from("published_shifts")
+      .select("shift_date, start_minute")
+      .eq("employee_id", employeeId)
+      .gte("shift_date", fromISO)
+      .lte("shift_date", toISO),
+    db
+      .from("published_shift_roles")
+      .select("shift_date, start_minute, role_name, role_color")
+      .eq("employee_id", employeeId)
+      .gte("shift_date", fromISO)
+      .lte("shift_date", toISO),
+  ]);
+  if (shifts.error) fail("loading your upcoming shifts", shifts.error);
+  if (roles.error) fail("loading your upcoming roles", roles.error);
+
+  const minutesByDate = new Map<string, number[]>();
+  for (const row of shifts.data) {
+    const list = minutesByDate.get(row.shift_date) ?? [];
+    list.push(row.start_minute);
+    minutesByDate.set(row.shift_date, list);
+  }
+
+  return [...minutesByDate.keys()].sort().map((date) => {
+    const roleCells = roles.data
+      .filter((row) => row.shift_date === date)
+      .map((row) => ({
+        employeeId,
+        minute: row.start_minute,
+        name: row.role_name,
+        color: row.role_color,
+      }));
+    return {
+      date,
+      shifts: rangesFromMinutes(minutesByDate.get(date) ?? []).map((range) => {
+        const role = roleCellForShift(roleCells, employeeId, range);
+        return { ...range, role: role ? { name: role.name, color: role.color } : null };
+      }),
+    };
+  });
+}
+
+/**
+ * The working week's roles as they would be published: named and coloured, and
+ * only on half hours the person is actually on. A role left behind on time
+ * somebody was taken off is ignored rather than tidied away, so it is dropped
+ * here instead.
+ */
+async function rolesToPublish(
+  weekStartISO: string,
+  working: { shift_date: string; start_minute: number; employee_id: string }[],
+) {
+  const weekEndISO = toISODate(addDays(fromISODate(weekStartISO), 6));
+  const db = getDb();
+  const [cells, roles] = await Promise.all([
+    db
+      .from("shift_role_assignments")
+      .select("shift_date, employee_id, start_minute, role_id")
+      .gte("shift_date", weekStartISO)
+      .lte("shift_date", weekEndISO),
+    db.from("shift_roles").select("id, name, color"),
+  ]);
+  if (cells.error) fail("reading the week's roles", cells.error);
+  if (roles.error) fail("reading roles", roles.error);
+
+  const on = new Set(working.map((row) => `${row.shift_date}|${row.employee_id}|${row.start_minute}`));
+  const roleById = new Map(roles.data.map((role) => [role.id, role]));
+
+  return cells.data.flatMap((cell) => {
+    const role = roleById.get(cell.role_id);
+    if (!role || !on.has(`${cell.shift_date}|${cell.employee_id}|${cell.start_minute}`)) return [];
+    return [
+      {
+        week_start: weekStartISO,
+        shift_date: cell.shift_date,
+        employee_id: cell.employee_id,
+        start_minute: cell.start_minute,
+        role_name: role.name,
+        role_color: role.color,
+      },
+    ];
+  });
+}
+
+/**
  * The dates between `fromISO` and `toISO` this employee has a published shift
  * on, so their calendar can mark the days they are working.
  *
@@ -307,6 +439,78 @@ export async function listRequestsForEmployee(employeeId: string): Promise<TimeO
   }));
 }
 
+/**
+ * One of this person's own live requests, or `null` — whether it doesn't exist,
+ * is somebody else's, or has been deleted, the answer to them is the same.
+ */
+async function findOwnRequest(employeeId: string, id: string) {
+  const { data, error } = await getDb()
+    .from("time_off_requests")
+    .select("id, end_date")
+    .eq("id", id)
+    .eq("employee_id", employeeId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) fail("finding your request", error);
+  return data;
+}
+
+/** Raised when a staff member reaches for a request they can't change. */
+export class RequestLockedError extends Error {}
+
+/**
+ * Change the dates or reason of one of your own requests. It goes back to "In
+ * review" whatever it was before: what the manager answered was a different
+ * request. A request that has already ended is history and can't be changed.
+ */
+export async function updateOwnRequest(
+  employeeId: string,
+  id: string,
+  todayISO: string,
+  input: { startDate: string; endDate: string; reason: string },
+): Promise<void> {
+  const existing = await findOwnRequest(employeeId, id);
+  if (!existing) throw new RequestLockedError("That request couldn't be found.");
+  if (existing.end_date < todayISO) {
+    throw new RequestLockedError("That request is in the past, so it can't be changed.");
+  }
+
+  const { error } = await getDb()
+    .from("time_off_requests")
+    .update({
+      start_date: input.startDate,
+      end_date: input.endDate,
+      reason: input.reason,
+      status: "pending",
+    })
+    .eq("id", id)
+    .eq("employee_id", employeeId);
+  if (error) fail("changing your request", error);
+}
+
+/**
+ * Delete one of your own requests. Soft, like the owner's deletes: it lands in
+ * the owner's "Deleted requests" and can be put back from there.
+ */
+export async function deleteOwnRequest(
+  employeeId: string,
+  id: string,
+  todayISO: string,
+): Promise<void> {
+  const existing = await findOwnRequest(employeeId, id);
+  if (!existing) throw new RequestLockedError("That request couldn't be found.");
+  if (existing.end_date < todayISO) {
+    throw new RequestLockedError("That request is in the past, so it can't be deleted.");
+  }
+
+  const { error } = await getDb()
+    .from("time_off_requests")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("employee_id", employeeId);
+  if (error) fail("deleting your request", error);
+}
+
 /* -------------------------------------------------------------- publishing */
 
 /**
@@ -346,6 +550,18 @@ export async function publishWeek(weekStartISO: string): Promise<string> {
     if (insertError) fail("publishing the week", insertError);
   }
 
+  // Roles are snapshotted the same way, replaced wholesale.
+  const roles = await rolesToPublish(weekStartISO, data);
+  const { error: clearRolesError } = await db
+    .from("published_shift_roles")
+    .delete()
+    .eq("week_start", weekStartISO);
+  if (clearRolesError) fail("clearing the previous published roles", clearRolesError);
+  if (roles.length > 0) {
+    const { error: rolesError } = await db.from("published_shift_roles").insert(roles);
+    if (rolesError) fail("publishing the week's roles", rolesError);
+  }
+
   return publishedAt;
 }
 
@@ -360,7 +576,7 @@ export async function getPublishState(weekStartISO: string): Promise<PublishStat
   const db = getDb();
   const weekEndISO = toISODate(addDays(fromISODate(weekStartISO), 6));
 
-  const [week, working, published] = await Promise.all([
+  const [week, working, published, publishedRoles] = await Promise.all([
     db.from("published_weeks").select("published_at").eq("week_start", weekStartISO).maybeSingle(),
     db
       .from("shift_assignments")
@@ -371,11 +587,16 @@ export async function getPublishState(weekStartISO: string): Promise<PublishStat
       .from("published_shifts")
       .select("shift_date, row_index, start_minute, employee_id")
       .eq("week_start", weekStartISO),
+    db
+      .from("published_shift_roles")
+      .select("shift_date, employee_id, start_minute, role_name, role_color")
+      .eq("week_start", weekStartISO),
   ]);
 
   if (week.error) fail("reading publish state", week.error);
   if (working.error) fail("reading the working week", working.error);
   if (published.error) fail("reading the published week", published.error);
+  if (publishedRoles.error) fail("reading the published roles", publishedRoles.error);
 
   if (!week.data) return { publishedAt: null, hasUnpublishedChanges: working.data.length > 0 };
 
@@ -387,9 +608,24 @@ export async function getPublishState(weekStartISO: string): Promise<PublishStat
   }) => `${row.shift_date}|${row.row_index}|${row.start_minute}|${row.employee_id}`;
   const workingKeys = new Set(working.data.map(key));
   const publishedKeys = new Set(published.data.map(key));
-  const same =
+  const sameShifts =
     workingKeys.size === publishedKeys.size &&
     [...workingKeys].every((entry) => publishedKeys.has(entry));
+  if (!sameShifts) return { publishedAt: week.data.published_at, hasUnpublishedChanges: true };
 
-  return { publishedAt: week.data.published_at, hasUnpublishedChanges: !same };
+  // A role given, changed or renamed since Go Live is a change staff haven't seen.
+  const roleKey = (row: {
+    shift_date: string;
+    employee_id: string;
+    start_minute: number;
+    role_name: string;
+    role_color: string;
+  }) => `${row.shift_date}|${row.employee_id}|${row.start_minute}|${row.role_name}|${row.role_color}`;
+  const workingRoles = new Set((await rolesToPublish(weekStartISO, working.data)).map(roleKey));
+  const publishedRoleKeys = new Set(publishedRoles.data.map(roleKey));
+  const sameRoles =
+    workingRoles.size === publishedRoleKeys.size &&
+    [...workingRoles].every((entry) => publishedRoleKeys.has(entry));
+
+  return { publishedAt: week.data.published_at, hasUnpublishedChanges: !sameRoles };
 }

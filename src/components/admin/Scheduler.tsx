@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   LogOut,
   Menu,
+  Tag,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -18,10 +19,12 @@ import { logout } from "@/app/admin/actions";
 import {
   addEmployeeAction,
   addRecurringTimeOffAction,
+  addRoleAction,
   addTimeOffAction,
   assignBlockAction,
   copyDayAction,
   copyWeekAction,
+  deleteRoleAction,
   loadWeekAction,
   publishStateAction,
   publishWeekAction,
@@ -32,8 +35,10 @@ import {
   removeTimeOffAction,
   renameEmployeeAction,
   restoreTimeOffAction,
+  setShiftRoleAction,
   setStaffPasswordAction,
   setTimeOffStatusAction,
+  updateRoleAction,
 } from "@/app/admin/schedule-actions";
 import { exportSchedulePdf, type ExportScope } from "@/lib/schedule-pdf";
 import type { RulesProgress } from "@/lib/staff-rules";
@@ -45,18 +50,26 @@ import {
   fromISODate,
   makeEmptyDay,
   makeEmptyWeek,
+  makeEmptyWeekRoles,
   mondayOf,
   offOnDay,
   peakCoverage,
+  roleCellForShift,
+  shiftAt,
   toISODate,
+  withShiftRole,
   type DayKey,
   type DayOff,
   type DeletedTimeOffRequest,
   type Employee,
   type RecurringTimeOff,
+  type RoleColor,
   type ShiftGroup,
+  type ShiftRange,
+  type ShiftRole,
   type TimeOffRequest,
   type TimeOffStatus,
+  type WeekRoles,
   type WeekSchedule,
 } from "@/lib/schedule";
 import { CellEditor } from "./CellEditor";
@@ -65,6 +78,8 @@ import { AdminDrawer, type SchedulerView } from "./AdminDrawer";
 import { EmployeePanel } from "./EmployeePanel";
 import { ExportMenu } from "./ExportMenu";
 import { GoLiveButton, type PublishState } from "./GoLiveButton";
+import { RoleManager } from "./RoleManager";
+import { RolePicker } from "./RolePicker";
 import { StaffManagement } from "./StaffManagement";
 import { forgetPayrollNameAction } from "@/app/admin/pay-stubs/actions";
 import {
@@ -74,6 +89,8 @@ import {
 } from "./TimeOffPanel";
 
 type Editing = { day: DayKey; range: CellRange; el: HTMLElement };
+/** A shift whose role is being picked, after its name was clicked. */
+type PickingRole = { day: DayKey; employeeId: string; range: ShiftRange; el: HTMLElement };
 
 export type SchedulerProps = {
   employees: Employee[];
@@ -88,6 +105,10 @@ export type SchedulerProps = {
   /** Monday of the week the page was opened on. */
   weekStart: string;
   week: WeekSchedule;
+  /** Roles on that week's shifts. */
+  weekRoles: WeekRoles;
+  /** Every role a shift can be given. */
+  roles: ShiftRole[];
   /** Whether that week has been sent to staff, and whether it has drifted since. */
   publishState: PublishState;
   /** Which half of the dashboard to open on — `/admin?view=staff` picks staff. */
@@ -122,6 +143,8 @@ export function Scheduler({
   recurringTimeOff: initialRecurring,
   weekStart: initialWeekStart,
   week: initialWeek,
+  weekRoles: initialWeekRoles,
+  roles: initialRoles,
   publishState: initialPublishState,
   payrollNames: initialPayrollNames = [],
   rulesProgress = {},
@@ -135,6 +158,13 @@ export function Scheduler({
   const [weeks, setWeeks] = useState<Record<string, WeekSchedule>>({
     [initialWeekStart]: initialWeek,
   });
+
+  const [roles, setRoles] = useState(initialRoles);
+  const [roleWeeks, setRoleWeeks] = useState<Record<string, WeekRoles>>({
+    [initialWeekStart]: initialWeekRoles,
+  });
+  const [pickingRole, setPickingRole] = useState<PickingRole | null>(null);
+  const [rolesOpen, setRolesOpen] = useState(false);
 
   const [weekStart, setWeekStart] = useState(initialWeekStart);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -154,6 +184,7 @@ export function Scheduler({
   const [toolbarHeight, setToolbarHeight] = useState(0);
 
   const week = weeks[weekStart] ?? makeEmptyWeek();
+  const weekRoles = roleWeeks[weekStart] ?? makeEmptyWeekRoles();
   const dates = useMemo(() => datesForWeek(weekStart), [weekStart]);
   // One scale for every day's heat map, so Friday lunch and Monday lunch shade
   // the same way when they are staffed the same.
@@ -190,9 +221,11 @@ export function Scheduler({
     setTimeOff(fresh.timeOff);
     setDeletedTimeOff(fresh.deletedTimeOff);
     setRecurring(fresh.recurringTimeOff);
+    setRoles(fresh.roles);
     // Drop the rest of the cache: other weeks may have been touched too, and
     // they will be re-read when navigated to.
     setWeeks({ [forWeek]: fresh.week });
+    setRoleWeeks({ [forWeek]: fresh.weekRoles });
   }, []);
 
   /**
@@ -252,6 +285,7 @@ export function Scheduler({
     async (target: string) => {
       setWeekStart(target);
       setEditing(null);
+      setPickingRole(null);
       void refreshPublishState(target);
       if (weeks[target]) return;
 
@@ -259,7 +293,8 @@ export function Scheduler({
       setLoadingWeek(true);
       try {
         const loaded = await loadWeekAction(target);
-        setWeeks((current) => ({ ...current, [target]: loaded }));
+        setWeeks((current) => ({ ...current, [target]: loaded.week }));
+        setRoleWeeks((current) => ({ ...current, [target]: loaded.weekRoles }));
       } catch (cause) {
         console.error(`[scheduler] Could not load ${target}:`, cause);
         if (pendingWeek.current === target) {
@@ -311,6 +346,13 @@ export function Scheduler({
         for (const target of targets) next[target] = source.map((row) => [...row]);
         return next;
       });
+      // Roles go with the shifts they are on.
+      setRoleWeeks((current) => {
+        const roleWeek = current[weekStart] ?? makeEmptyWeekRoles();
+        const next = { ...roleWeek };
+        for (const target of targets) next[target] = roleWeek[from].map((cell) => ({ ...cell }));
+        return { ...current, [weekStart]: next };
+      });
       markDirty();
       void save("copy that day", () => copyDayAction(weekStart, from, targets));
     },
@@ -335,6 +377,16 @@ export function Scheduler({
       setTimeOff((current) => current.filter((request) => request.employeeId !== id));
       setDeletedTimeOff((current) => current.filter((request) => request.employeeId !== id));
       setRecurring((current) => current.filter((entry) => entry.employeeId !== id));
+      setRoleWeeks((current) =>
+        Object.fromEntries(
+          Object.entries(current).map(([key, value]) => [
+            key,
+            Object.fromEntries(
+              DAY_KEYS.map((day) => [day, value[day].filter((cell) => cell.employeeId !== id)]),
+            ) as WeekRoles,
+          ]),
+        ),
+      );
       setWeeks((current) =>
         Object.fromEntries(
           Object.entries(current).map(([key, value]) => [
@@ -433,7 +485,7 @@ export function Scheduler({
       // Has to be checked against the database, not just the cache — otherwise
       // an unvisited week would look empty and get overwritten without asking.
       try {
-        existing = await loadWeekAction(target);
+        existing = (await loadWeekAction(target)).week;
       } catch (cause) {
         console.error(`[scheduler] Could not check ${target} before copying:`, cause);
         setError(`Couldn't check whether ${formatWeekRange(target)} is empty. Nothing was copied.`);
@@ -460,12 +512,101 @@ export function Scheduler({
       DAY_KEYS.map((day) => [day, (source[day] ?? []).map((row) => [...row])]),
     ) as WeekSchedule;
 
+    const sourceRoles = roleWeeks[weekStart] ?? makeEmptyWeekRoles();
+    const rolesCopy = Object.fromEntries(
+      DAY_KEYS.map((day) => [day, sourceRoles[day].map((cell) => ({ ...cell }))]),
+    ) as WeekRoles;
+
     setWeeks((current) => ({ ...current, [target]: copy }));
+    setRoleWeeks((current) => ({ ...current, [target]: rolesCopy }));
     setWeekStart(target);
     await save("copy the week", () => copyWeekAction(weekStart, target));
     // The week we've landed on has its own publish history, not this one's.
     await refreshPublishState(target);
   };
+
+  /* ----------------------------------------------------------------- roles */
+
+  /** A name on the grid was clicked: open the role picker for that shift. */
+  const pickRole = useCallback(
+    (day: DayKey, employeeId: string, slotIndex: number, el: HTMLElement) => {
+      const range = shiftAt(week[day] ?? makeEmptyDay(), employeeId, slotIndex);
+      if (!range) return;
+      setEditing(null);
+      setPickingRole({ day, employeeId, range, el });
+    },
+    [week],
+  );
+
+  const setShiftRole = useCallback(
+    (day: DayKey, employeeId: string, range: ShiftRange, roleId: string | null) => {
+      setRoleWeeks((current) => {
+        const roleWeek = current[weekStart] ?? makeEmptyWeekRoles();
+        return {
+          ...current,
+          [weekStart]: {
+            ...roleWeek,
+            [day]: withShiftRole(roleWeek[day], employeeId, range, roleId),
+          },
+        };
+      });
+      markDirty();
+      void save("save that role", () =>
+        setShiftRoleAction(weekStart, day, employeeId, range, roleId),
+      );
+    },
+    [markDirty, save, weekStart],
+  );
+
+  const addRole = useCallback(async (name: string, color: RoleColor) => {
+    try {
+      const result = await addRoleAction(name, color);
+      if (!result.ok) return result.error;
+      setRoles((current) => [...current, result.value]);
+      return null;
+    } catch (cause) {
+      console.error("[scheduler] Could not add a role:", cause);
+      return "Couldn't save that role. Please try again.";
+    }
+  }, []);
+
+  const updateRole = useCallback(
+    async (id: string, name: string, color: RoleColor) => {
+      try {
+        const result = await updateRoleAction(id, name, color);
+        if (!result.ok) return result.error;
+        setRoles((current) => current.map((role) => (role.id === id ? result.value : role)));
+        // A role shown to staff now reads differently from what they have.
+        markDirty();
+        return null;
+      } catch (cause) {
+        console.error("[scheduler] Could not update a role:", cause);
+        return "Couldn't save that role. Please try again.";
+      }
+    },
+    [markDirty],
+  );
+
+  const deleteRole = useCallback(
+    (id: string) => {
+      setRoles((current) => current.filter((role) => role.id !== id));
+      // It comes off every shift with it, in every week already loaded.
+      setRoleWeeks((current) =>
+        Object.fromEntries(
+          Object.entries(current).map(([key, value]) => [
+            key,
+            Object.fromEntries(
+              DAY_KEYS.map((day) => [day, value[day].filter((cell) => cell.roleId !== id)]),
+            ) as WeekRoles,
+          ]),
+        ),
+      );
+      setPickingRole(null);
+      markDirty();
+      void save("delete that role", () => deleteRoleAction(id));
+    },
+    [markDirty, save],
+  );
 
   /* -------------------------------------------------------------- time off */
 
@@ -684,6 +825,16 @@ export function Scheduler({
             Copy to next week
           </Button>
 
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRolesOpen(true)}
+            title="Create, rename and delete the roles a shift can be given"
+          >
+            <Tag data-icon="inline-start" />
+            Roles
+          </Button>
+
           <ExportMenu employees={employees} exporting={exporting} onExport={handleExport} />
 
           <GoLiveButton state={publishState} publishing={publishing} onPublish={publish} />
@@ -724,6 +875,7 @@ export function Scheduler({
         onSelect={(next) => {
           setView(next);
           setEditing(null);
+          setPickingRole(null);
         }}
       />
 
@@ -796,8 +948,14 @@ export function Scheduler({
               off={offByDay[day]}
               peak={peak}
               selection={editing?.day === day ? editing.range : null}
-              onEditRange={(range, el) => setEditing({ day, range, el })}
+              onEditRange={(range, el) => {
+                setPickingRole(null);
+                setEditing({ day, range, el });
+              }}
               onCopyToDays={copyDay}
+              roleCells={weekRoles[day] ?? []}
+              roles={roles}
+              onPickRole={(employeeId, slotIndex, el) => pickRole(day, employeeId, slotIndex, el)}
             />
           ))}
         </div>
@@ -818,6 +976,49 @@ export function Scheduler({
             setEditing(null);
           }}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {pickingRole &&
+        view === "scheduler" &&
+        (() => {
+          const employee = employees.find((entry) => entry.id === pickingRole.employeeId);
+          if (!employee) return null;
+          const current = roleCellForShift(
+            weekRoles[pickingRole.day] ?? [],
+            pickingRole.employeeId,
+            pickingRole.range,
+          );
+          const selectedId =
+            current && roles.some((role) => role.id === current.roleId) ? current.roleId : null;
+          return (
+            <RolePicker
+              anchorEl={pickingRole.el}
+              employee={employee}
+              day={pickingRole.day}
+              range={pickingRole.range}
+              roles={roles}
+              selectedId={selectedId}
+              onSelect={(roleId) => {
+                setShiftRole(pickingRole.day, pickingRole.employeeId, pickingRole.range, roleId);
+                setPickingRole(null);
+              }}
+              onManageRoles={() => {
+                setPickingRole(null);
+                setRolesOpen(true);
+              }}
+              onClose={() => setPickingRole(null)}
+            />
+          );
+        })()}
+
+      {rolesOpen && (
+        <RoleManager
+          roles={roles}
+          onAdd={addRole}
+          onUpdate={updateRole}
+          onDelete={deleteRole}
+          onClose={() => setRolesOpen(false)}
         />
       )}
     </div>

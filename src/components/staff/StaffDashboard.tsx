@@ -3,51 +3,42 @@
 import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  CalendarDays,
   CalendarX,
   ChevronLeft,
   ChevronRight,
   FileText,
   HandCoins,
   LoaderCircle,
-  LogOut,
-  Send,
+  Menu,
   TriangleAlert,
   X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
-  staffLogout,
   loadPublishedWeekAction,
-  myRequestsAction,
-  requestTimeOffAction,
   scheduledDatesAction,
 } from "@/app/staff/actions";
 import {
-  SHIFT_GROUP_LABELS,
-  TIME_OFF_STATUS_LABELS,
-  compareTimeOff,
   formatDateRange,
   formatWeekRange,
-  requestDayCount,
+  type DayKey,
   type Employee,
+  type PublishedRoleCell,
+  type StaffShiftDay,
   type TimeOffRequest,
-  type TimeOffStatus,
   type WeekSchedule,
 } from "@/lib/schedule";
 import { formatPayDate } from "@/lib/pay-stubs";
 import { formatMoney, formatPeriod, type PublishedTipRate } from "@/lib/tips";
 import { type RuleSignature } from "@/lib/staff-rules";
+import { STAFF_VIEW_LABELS, type StaffView } from "@/lib/staff-views";
+import type { Weather } from "@/lib/weather";
 import { RulesSlideshow } from "./RulesSlideshow";
-import { TimeOffCalendar } from "./TimeOffCalendar";
+import { StaffHome, type StaffToday } from "./StaffHome";
+import { StaffMenu } from "./StaffMenu";
+import { TimeOffPage } from "./TimeOffPage";
 import { WeekSchedule as WeekScheduleView } from "./WeekSchedule";
-
-const STATUS_BADGE: Record<TimeOffStatus, string> = {
-  pending: "bg-amber-100 text-amber-900",
-  approved: "bg-emerald-100 text-emerald-900",
-  denied: "bg-rose-100 text-rose-900",
-};
 
 /** One released pay stub of this employee's, as the list needs it. */
 export type MyPayStub = {
@@ -63,6 +54,8 @@ export type StaffDashboardProps = {
   publishedWeeks: { weekStart: string; publishedAt: string }[];
   initialWeekStart: string | null;
   initialWeek: WeekSchedule | null;
+  /** This person's roles on that week's shifts. */
+  initialRoles?: Record<DayKey, PublishedRoleCell[]> | null;
   initialRequests: TimeOffRequest[];
   /** Days this person is on, over the span the page loaded up front. */
   initialScheduledDates: string[];
@@ -74,6 +67,14 @@ export type StaffDashboardProps = {
   tipRates: PublishedTipRate[];
   /** Which rules slides this person has signed, on their current wording. */
   ruleSignatures: RuleSignature[];
+  /** Today's shifts, for the home page. */
+  today: StaffToday;
+  /** The next day after today with a shift on it. */
+  upcoming: StaffShiftDay | null;
+  /** Today's weather at the restaurant, or `null` if the forecast didn't load. */
+  weather?: Weather | null;
+  /** Which section to open on — `/staff?view=payStubs`, say. */
+  initialView?: StaffView;
 };
 
 export function StaffDashboard({
@@ -81,16 +82,26 @@ export function StaffDashboard({
   publishedWeeks,
   initialWeekStart,
   initialWeek,
+  initialRoles,
   initialRequests,
   initialScheduledDates,
   scheduledRange,
   payStubs,
   tipRates,
   ruleSignatures,
+  today,
+  upcoming,
+  weather = null,
+  initialView = "home",
 }: StaffDashboardProps) {
+  const [view, setView] = useState<StaffView>(initialView);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [weekStart, setWeekStart] = useState(initialWeekStart);
   const [weeks, setWeeks] = useState<Record<string, WeekSchedule>>(
     initialWeekStart && initialWeek ? { [initialWeekStart]: initialWeek } : {},
+  );
+  const [roleWeeks, setRoleWeeks] = useState<Record<string, Record<DayKey, PublishedRoleCell[]>>>(
+    initialWeekStart && initialRoles ? { [initialWeekStart]: initialRoles } : {},
   );
   const [requests, setRequests] = useState(initialRequests);
   const [scheduledDates, setScheduledDates] = useState(initialScheduledDates);
@@ -101,10 +112,6 @@ export function StaffDashboard({
   const [rateIndex, setRateIndex] = useState(tipRates.length - 1);
   const rate = tipRates[rateIndex];
 
-  const [selection, setSelection] = useState<{ start: string; end: string } | null>(null);
-  const [reason, setReason] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [confirmation, setConfirmation] = useState<string | null>(null);
 
   const index = weekStart ? publishedWeeks.findIndex((w) => w.weekStart === weekStart) : -1;
   const week = weekStart ? weeks[weekStart] : undefined;
@@ -115,7 +122,8 @@ export function StaffDashboard({
     setLoading(true);
     try {
       const loaded = await loadPublishedWeekAction(target);
-      setWeeks((current) => ({ ...current, [target]: loaded }));
+      setWeeks((current) => ({ ...current, [target]: loaded.week }));
+      setRoleWeeks((current) => ({ ...current, [target]: loaded.roles }));
     } catch (cause) {
       console.error("[staff] Could not load a week:", cause);
       setError("Couldn't load that week. Please try again.");
@@ -149,55 +157,33 @@ export function StaffDashboard({
     }
   }, []);
 
-  const submitRequest = async () => {
-    if (!selection || !reason.trim()) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      await requestTimeOffAction({
-        startDate: selection.start,
-        endDate: selection.end,
-        reason,
-      });
-      setRequests(await myRequestsAction());
-      setConfirmation(
-        `Request sent for ${formatDateRange(selection.start, selection.end)}. Your manager will review it.`,
-      );
-      setSelection(null);
-      setReason("");
-    } catch (cause) {
-      console.error("[staff] Could not file a request:", cause);
-      setError(
-        cause instanceof Error && cause.message
-          ? cause.message
-          : "Couldn't send that request. Please try again.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
+  const selectView = (next: StaffView) => {
+    setView(next);
+    // Keep the address in step, so a refresh or the back link from a pay stub
+    // lands on the same section. Replaced, not pushed: the Menu is not history.
+    const url = next === "home" ? "/staff" : `/staff?view=${next}`;
+    window.history.replaceState(null, "", url);
+    window.scrollTo({ top: 0 });
   };
-
-  const sorted = [...requests].sort(compareTimeOff);
-  const selectedDays = selection
-    ? requestDayCount({ startDate: selection.start, endDate: selection.end })
-    : 0;
 
   return (
     <div className="min-h-screen bg-muted">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-3 sm:px-6">
-          <div className="mr-auto min-w-0">
-            <h1 className="truncate font-heading text-lg font-bold tracking-tight">
-              {employee.name}
+          <Button
+            variant="ghost"
+            onClick={() => setMenuOpen(true)}
+            aria-expanded={menuOpen}
+            className="-ml-2 gap-2 px-2 text-base font-semibold"
+          >
+            <Menu className="size-5" />
+            Menu
+          </Button>
+          {view !== "home" && (
+            <h1 className="min-w-0 truncate font-heading text-base font-bold">
+              {STAFF_VIEW_LABELS[view]}
             </h1>
-            <p className="text-xs text-muted-foreground">{SHIFT_GROUP_LABELS[employee.group]}</p>
-          </div>
-          <form action={staffLogout}>
-            <Button type="submit" variant="ghost" size="sm">
-              <LogOut data-icon="inline-start" />
-              Sign out
-            </Button>
-          </form>
+          )}
         </div>
 
         {error && (
@@ -214,11 +200,26 @@ export function StaffDashboard({
         )}
       </header>
 
+      <StaffMenu open={menuOpen} view={view} onOpenChange={setMenuOpen} onSelect={selectView} />
+
       <main className="mx-auto w-full max-w-3xl space-y-4 p-4 sm:px-6">
-        {/* The rules come first, above everything else on the page. */}
-        <RulesSlideshow employeeName={employee.name} initialSignatures={ruleSignatures} />
+        {view === "home" && (
+          <StaffHome
+            today={today}
+            upcoming={upcoming}
+            weather={weather}
+            workDates={scheduledDates}
+            timeOff={requests}
+            onLoadDates={loadScheduled}
+          />
+        )}
+
+        {view === "rules" && (
+          <RulesSlideshow employeeName={employee.name} initialSignatures={ruleSignatures} />
+        )}
 
         {/* ------------------------------------------------------- schedule */}
+        {view === "schedule" && (
         <section className="rounded-xl border border-border bg-background shadow-sm">
           <header className="flex items-center gap-2 border-b border-border px-4 py-3">
             <h2 className="mr-auto font-heading text-base font-bold">My schedule</h2>
@@ -261,151 +262,28 @@ export function StaffDashboard({
                 publishes it.
               </p>
             ) : (
-              <WeekScheduleView week={week} employeeId={employee.id} weekStart={weekStart} />
+              <WeekScheduleView
+                week={week}
+                roles={roleWeeks[weekStart]}
+                employeeId={employee.id}
+                weekStart={weekStart}
+              />
             )}
           </div>
         </section>
+        )}
 
-        {/* ------------------------------------------------------- calendar */}
-        <section className="rounded-xl border border-border bg-background shadow-sm">
-          <header className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border px-4 py-3">
-            <h2 className="flex items-center gap-2 font-heading text-base font-bold">
-              <CalendarDays className="size-4 text-brand" />
-              Schedule
-            </h2>
-            {/* The same two marks the calendar draws, so the key and the grid
-                can never say different things. */}
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span aria-hidden className="size-1.5 rounded-full bg-orange-500" />
-                Scheduled days
-              </span>
-              <span className="flex items-center gap-1.5">
-                <X aria-hidden strokeWidth={3.5} className="size-3 text-red-600" />
-                Requested days off
-              </span>
-            </p>
-          </header>
-
-          <div className="space-y-3 p-4">
-            <TimeOffCalendar
-              requests={requests}
-              scheduledDates={scheduledDates}
-              selection={selection}
-              onSelect={(next) => {
-                setSelection(next);
-                setConfirmation(null);
-              }}
-              onRangeChange={loadScheduled}
-            />
-
-            {selection && (
-              <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
-                <p className="text-sm">
-                  <span className="font-semibold">
-                    {formatDateRange(selection.start, selection.end)}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {" · "}
-                    {selectedDays} {selectedDays === 1 ? "day" : "days"}
-                  </span>
-                </p>
-
-                <label htmlFor="staff-reason" className="sr-only">
-                  Reason
-                </label>
-                <input
-                  id="staff-reason"
-                  value={reason}
-                  onChange={(event) => setReason(event.target.value)}
-                  placeholder="Reason (required)"
-                  required
-                  maxLength={200}
-                  className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                />
-
-                <div className="flex gap-2">
-                  <Button onClick={submitRequest} disabled={submitting || !reason.trim()}>
-                    <Send data-icon="inline-start" />
-                    {submitting ? "Sending…" : "Send request"}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setSelection(null);
-                      setReason("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {confirmation && (
-              <p
-                role="status"
-                className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
-              >
-                {confirmation}
-              </p>
-            )}
-          </div>
-        </section>
-
-        {/* ----------------------------------------------------- my requests */}
-        <section className="rounded-xl border border-border bg-background shadow-sm">
-          <header className="border-b border-border px-4 py-3">
-            <h2 className="font-heading text-base font-bold">
-              My requests{" "}
-              <span className="text-sm font-normal text-muted-foreground">({requests.length})</span>
-            </h2>
-          </header>
-
-          <div className="p-4">
-            {sorted.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Requested days off will appear here.
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {sorted.map((request) => {
-                  const days = requestDayCount(request);
-                  return (
-                    <li
-                      key={request.id}
-                      className="rounded-lg border border-border px-3 py-2.5 text-sm"
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="min-w-0 flex-1 font-semibold">
-                          {formatDateRange(request.startDate, request.endDate)}
-                        </span>
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[0.65rem] font-bold ${STATUS_BADGE[request.status]
-                            }`}
-                        >
-                          {TIME_OFF_STATUS_LABELS[request.status]}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {days} {days === 1 ? "day" : "days"}
-                        <span className="mx-1">·</span>
-                        asked on {formatDateRange(request.requestedAt, request.requestedAt)}
-                      </p>
-                      {request.reason && (
-                        <p className="mt-1 text-xs break-words text-foreground/80">
-                          {request.reason}
-                        </p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        </section>
+        {view === "timeOff" && (
+          <TimeOffPage
+            requests={requests}
+            onRequestsChange={setRequests}
+            scheduledDates={scheduledDates}
+            onRangeChange={loadScheduled}
+          />
+        )}
 
         {/* ------------------------------------------------------ online tips */}
+        {view === "tips" && (
         <section className="rounded-xl border border-border bg-background shadow-sm">
           <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border px-4 py-3">
             <h2 className="mr-auto flex items-center gap-2 font-heading text-base font-bold">
@@ -461,7 +339,10 @@ export function StaffDashboard({
           </div>
         </section>
 
+        )}
+
         {/* ---------------------------------------------------- my pay stubs */}
+        {view === "payStubs" && (
         <section className="rounded-xl border border-border bg-background shadow-sm">
           <header className="border-b border-border px-4 py-3">
             <h2 className="flex items-center gap-2 font-heading text-base font-bold">
@@ -511,6 +392,7 @@ export function StaffDashboard({
             )}
           </div>
         </section>
+        )}
       </main>
     </div>
   );

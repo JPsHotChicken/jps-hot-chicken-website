@@ -13,6 +13,8 @@ vi.mock("@/app/staff/actions", () => ({
   loadPublishedWeekAction: vi.fn(),
   myRequestsAction: vi.fn(),
   requestTimeOffAction: vi.fn(),
+  updateTimeOffRequestAction: vi.fn(),
+  deleteTimeOffRequestAction: vi.fn(),
   scheduledDatesAction: vi.fn(),
   signRulesSlideAction: vi.fn(),
 }));
@@ -38,6 +40,9 @@ function dashboard(tipRates: PublishedTipRate[]) {
       payStubs={[]}
       tipRates={tipRates}
       ruleSignatures={[]}
+      today={{ date: "2026-08-12", closed: false, posted: false, shifts: [] }}
+      upcoming={null}
+      initialView="tips"
     />,
   );
 }

@@ -59,9 +59,9 @@ export default async function StaffPayStubPage({
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-3xl items-center gap-3 px-4 py-3 sm:px-6">
           <Link
-            href="/staff"
+            href="/staff?view=payStubs"
             className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
-            aria-label="Back to my schedule"
+            aria-label="Back to my pay stubs"
           >
             <ChevronLeft />
           </Link>

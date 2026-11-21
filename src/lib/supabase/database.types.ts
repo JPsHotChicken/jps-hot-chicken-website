@@ -451,6 +451,78 @@ export type Database = {
         };
         Relationships: [];
       };
+      shift_roles: {
+        Row: { id: string; name: string; color: string; created_at: string };
+        Insert: { id?: string; name: string; color?: string; created_at?: string };
+        Update: { id?: string; name?: string; color?: string; created_at?: string };
+        Relationships: [];
+      };
+      shift_role_assignments: {
+        Row: {
+          shift_date: string;
+          employee_id: string;
+          start_minute: number;
+          role_id: string;
+          created_at: string;
+        };
+        Insert: {
+          shift_date: string;
+          employee_id: string;
+          start_minute: number;
+          role_id: string;
+          created_at?: string;
+        };
+        Update: {
+          shift_date?: string;
+          employee_id?: string;
+          start_minute?: number;
+          role_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "shift_role_assignments_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "shift_role_assignments_role_id_fkey";
+            columns: ["role_id"];
+            isOneToOne: false;
+            referencedRelation: "shift_roles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      published_shift_roles: {
+        Row: {
+          week_start: string;
+          shift_date: string;
+          employee_id: string;
+          start_minute: number;
+          role_name: string;
+          role_color: string;
+        };
+        Insert: {
+          week_start: string;
+          shift_date: string;
+          employee_id: string;
+          start_minute: number;
+          role_name: string;
+          role_color: string;
+        };
+        Update: {
+          week_start?: string;
+          shift_date?: string;
+          employee_id?: string;
+          start_minute?: number;
+          role_name?: string;
+          role_color?: string;
+        };
+        Relationships: [];
+      };
       shift_assignments: {
         Row: {
           created_at: string;

@@ -59,6 +59,9 @@ That is the intended posture, not a finding to fix.
 | `recurring_time_off` | Standing weekly conflicts, one per person per weekday. |
 | `published_weeks` | One row per week the owner has sent to staff. |
 | `published_shifts` | Snapshot of the grid as of the last "Go Live". |
+| `shift_roles` | Roles the owner defines in the schedule maker (name + colour key). Name is unique ignoring case. |
+| `shift_role_assignments` | A role on a shift, one row per half hour of that shift per person. Rows on time the person is no longer on are ignored, not deleted. |
+| `published_shift_roles` | Snapshot of roles as of the last "Go Live", with the role's name and colour copied in. |
 | `published_tip_rates` | One row per week of tips the owner has sent to staff: the dates, and what an hour earned. Nothing else off the labor summary. |
 | `staff_login_attempts` | Sign-in throttling for `/staff`. |
 | `staff_rule_signatures` | One row per person per rules slide they have signed on `/staff`: the slide, its version, the name they typed, and when. |

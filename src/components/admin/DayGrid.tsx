@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Copy, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { employeeColors } from "@/lib/employee-colors";
+import { roleColorClasses } from "@/lib/role-colors";
 import {
   DAY_KEYS,
   DAY_LABELS,
@@ -19,12 +20,17 @@ import {
   formatShortDate,
   formatSlotBlock,
   isClosedDay,
+  roleCellForShift,
+  shiftsForDay,
+  slotMinute,
   unscheduledOnDay,
   type DayKey,
   type DayOff,
   type DayOffKind,
   type DaySchedule,
   type Employee,
+  type RoleCell,
+  type ShiftRole,
 } from "@/lib/schedule";
 
 /**
@@ -130,7 +136,23 @@ type Props = {
   selection: CellRange | null;
   onEditRange: (range: CellRange, anchor: HTMLElement) => void;
   onCopyToDays: (from: DayKey, targets: DayKey[]) => void;
+  /** This day's role cells, and the roles they point at. */
+  roleCells?: RoleCell[];
+  roles?: ShiftRole[];
+  /** A name on the grid was clicked: pick a role for that person's shift. */
+  onPickRole?: (employeeId: string, slotIndex: number, anchor: HTMLElement) => void;
 };
+
+/**
+ * How long a click on a name waits before opening the role picker, so the
+ * second click of a double-click (which opens the employee picker) can cancel
+ * it first. Short enough not to feel like lag.
+ */
+const ROLE_CLICK_DELAY_MS = 220;
+
+// Stable empties, so the memo below isn't redone on every render without roles.
+const NO_ROLE_CELLS: RoleCell[] = [];
+const NO_ROLES: ShiftRole[] = [];
 
 /** Inclusive rectangle of cells, always stored lowest-first. */
 export type CellRange = { rowStart: number; rowEnd: number; slotStart: number; slotEnd: number };
@@ -194,6 +216,9 @@ export function DayGrid({
   selection,
   onEditRange,
   onCopyToDays,
+  roleCells = NO_ROLE_CELLS,
+  roles = NO_ROLES,
+  onPickRole,
 }: Props) {
   const [copyOpen, setCopyOpen] = useState(false);
   const [targets, setTargets] = useState<DayKey[]>([]);
@@ -204,6 +229,40 @@ export function DayGrid({
   const coverage = coverageBySlot(schedule);
   const anyoneOn = coverage.some((count) => count > 0);
   const unscheduled = unscheduledOnDay(employees, schedule, off);
+  const roleClick = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelRoleClick = () => {
+    if (roleClick.current) clearTimeout(roleClick.current);
+    roleClick.current = null;
+  };
+  useEffect(() => cancelRoleClick, []);
+
+  /**
+   * Each person's shifts today with the role on each, worked out once per day
+   * rather than for every named cell on the grid.
+   */
+  const shiftRoles = useMemo(() => {
+    const roleById = new Map(roles.map((role) => [role.id, role]));
+    const byEmployee = new Map<string, { start: number; end: number; role?: ShiftRole }[]>();
+    const onToday = new Set(schedule.flatMap((row) => row ?? []).filter(Boolean) as string[]);
+    for (const employeeId of onToday) {
+      byEmployee.set(
+        employeeId,
+        shiftsForDay(schedule, employeeId).map((range) => {
+          const cell = roleCellForShift(roleCells, employeeId, range);
+          return { ...range, role: cell ? roleById.get(cell.roleId) : undefined };
+        }),
+      );
+    }
+    return byEmployee;
+  }, [schedule, roleCells, roles]);
+
+  const roleAt = (employeeId: string, slotIndex: number): ShiftRole | undefined => {
+    const minute = slotMinute(slotIndex);
+    return shiftRoles
+      .get(employeeId)
+      ?.find((shift) => shift.start <= minute && minute < shift.end)?.role;
+  };
 
   // Finish the drag wherever the pointer is released — including outside the
   // grid, so a stray release can't leave the day stuck in selection mode.
@@ -217,7 +276,17 @@ export function DayGrid({
       // single cells to double-click so clicking around doesn't open the menu.
       if (anchor.row !== head.row || anchor.slot !== head.slot) {
         onEditRange(rangeBetween(anchor, head), headEl);
+        return;
       }
+      // A click on somebody's shift picks a role for it — after a beat, in
+      // case it turns out to be the first half of a double-click.
+      const employeeId = schedule[anchor.row]?.[anchor.slot];
+      if (!employeeId || !onPickRole) return;
+      cancelRoleClick();
+      roleClick.current = setTimeout(() => {
+        roleClick.current = null;
+        onPickRole(employeeId, anchor.slot, headEl);
+      }, ROLE_CLICK_DELAY_MS);
     };
 
     window.addEventListener("pointerup", finish);
@@ -226,7 +295,7 @@ export function DayGrid({
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", finish);
     };
-  }, [drag, onEditRange]);
+  }, [drag, onEditRange, onPickRole, schedule]);
 
   // While dragging, show the live rectangle; otherwise show what's being edited.
   const highlight = drag ? rangeBetween(drag.anchor, drag.head) : selection;
@@ -435,12 +504,17 @@ export function DayGrid({
                   const named =
                     employeeId !== null && (startsRun || slotIndex % SLOTS_PER_HOUR === 0);
                   const span = named ? labelSpan(cells, slotIndex) : 1;
+                  const role = named && employeeId ? roleAt(employeeId, slotIndex) : undefined;
 
                   return (
                     <button
                       key={minute}
                       type="button"
-                      title={`${DAY_LABELS[day]} ${formatSlotBlock(slotIndex)} · ${position.label} — double-click to assign, or drag across cells`}
+                      title={
+                        employee
+                          ? `${employee.name}${role ? ` (${role.name})` : ""} · ${DAY_LABELS[day]} ${formatSlotBlock(slotIndex)} · ${position.label} — click to set a role, double-click to change who, or drag across cells`
+                          : `${DAY_LABELS[day]} ${formatSlotBlock(slotIndex)} · ${position.label} — double-click to assign, or drag across cells`
+                      }
                       onPointerDown={(event) => {
                         // Left button only; ignore right-click and middle-click.
                         if (event.button !== 0) return;
@@ -463,10 +537,16 @@ export function DayGrid({
                           return { ...current, head: cell, headEl: target };
                         });
                       }}
-                      onDoubleClick={(event) =>
-                        onEditRange(rangeBetween(cell, cell), event.currentTarget)
-                      }
+                      onDoubleClick={(event) => {
+                        cancelRoleClick();
+                        onEditRange(rangeBetween(cell, cell), event.currentTarget);
+                      }}
                       onKeyDown={(event) => {
+                        if ((event.key === "r" || event.key === "R") && employeeId && onPickRole) {
+                          event.preventDefault();
+                          onPickRole(employeeId, slotIndex, event.currentTarget);
+                          return;
+                        }
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
                           onEditRange(rangeBetween(cell, cell), event.currentTarget);
@@ -494,9 +574,24 @@ export function DayGrid({
                               (span - 1) * HOUR_GUTTER_PX
                             }px - 0.5rem)`,
                           }}
-                          className="pointer-events-none absolute inset-y-0 left-1 z-[1] truncate leading-8"
+                          className={`pointer-events-none absolute inset-y-0 left-1 z-[1] ${
+                            role ? "flex flex-col justify-center gap-0.5" : "truncate leading-8"
+                          }`}
                         >
-                          {employee.name}
+                          {role ? (
+                            <>
+                              <span className="truncate leading-tight">{employee.name}</span>
+                              <span
+                                className={`max-w-full self-start truncate rounded px-1 py-px text-[0.6rem] leading-tight font-bold ${
+                                  roleColorClasses(role.color).pill
+                                }`}
+                              >
+                                {role.name}
+                              </span>
+                            </>
+                          ) : (
+                            employee.name
+                          )}
                         </span>
                       )}
                     </button>

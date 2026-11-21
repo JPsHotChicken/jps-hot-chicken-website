@@ -239,3 +239,75 @@ summary {
     opacity: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Weather card on the staff home page (/staff). Sun rays turn, clouds drift,
+   rain falls, stars twinkle. Every piece is laid out so the still frame reads
+   as the same weather, because under prefers-reduced-motion nothing moves.
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  .wx-spin {
+    animation: wx-spin 40s linear infinite;
+  }
+  .wx-glow {
+    animation: wx-glow 4s ease-in-out infinite;
+  }
+  .wx-drift {
+    animation: wx-drift var(--wx-duration, 24s) ease-in-out infinite alternate;
+  }
+  .wx-fall {
+    animation: wx-fall var(--wx-duration, 0.9s) linear infinite;
+    animation-delay: var(--wx-delay, 0s);
+  }
+  .wx-twinkle {
+    animation: wx-twinkle var(--wx-duration, 3s) ease-in-out infinite;
+    animation-delay: var(--wx-delay, 0s);
+  }
+}
+
+@keyframes wx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes wx-glow {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.8;
+  }
+}
+
+@keyframes wx-drift {
+  from {
+    transform: translateX(calc(var(--wx-distance, 24px) * -1));
+  }
+  to {
+    transform: translateX(var(--wx-distance, 24px));
+  }
+}
+
+@keyframes wx-fall {
+  from {
+    transform: translate(0, -170px) rotate(12deg);
+  }
+  to {
+    transform: translate(-30px, 170px) rotate(12deg);
+  }
+}
+
+@keyframes wx-twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+

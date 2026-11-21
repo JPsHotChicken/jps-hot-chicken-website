@@ -475,6 +475,53 @@ export function datesForWeek(weekStartISO: string): Record<DayKey, Date> {
   ) as Record<DayKey, Date>;
 }
 
+/** Where the restaurant is. "Today" means today here, not on the server's clock. */
+export const RESTAURANT_TIME_ZONE = "America/Chicago";
+
+/**
+ * Today's date at the restaurant, `YYYY-MM-DD`. The server runs in UTC, which
+ * is already tomorrow by early evening in Tennessee.
+ */
+export function restaurantTodayISO(now: Date = new Date()): string {
+  // en-CA writes dates as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: RESTAURANT_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+/** The weekday a `YYYY-MM-DD` date falls on. */
+export function dayKeyOf(dateISO: string): DayKey {
+  // getDay(): 0 = Sunday; DAY_KEYS starts on Monday.
+  return DAY_KEYS[(fromISODate(dateISO).getDay() + 6) % 7];
+}
+
+/**
+ * The seven dates of the Sunday-to-Saturday week a date falls in, as
+ * `YYYY-MM-DD`. The staff home page shows weeks this way round, the way a wall
+ * calendar does, even though the schedule itself is built Monday to Sunday.
+ */
+export function sundayWeekOf(dateISO: string): string[] {
+  const date = fromISODate(dateISO);
+  const sunday = addDays(date, -date.getDay());
+  return Array.from({ length: 7 }, (_, i) => toISODate(addDays(sunday, i)));
+}
+
+function ordinalSuffix(n: number): string {
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return "th";
+  return ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+}
+
+/** "Nov 22nd" */
+export function formatOrdinalDate(dateISO: string): string {
+  const date = fromISODate(dateISO);
+  const month = date.toLocaleDateString("en-US", { month: "short" });
+  return `${month} ${date.getDate()}${ordinalSuffix(date.getDate())}`;
+}
+
 /* --------------------------------------------------- the staff calendar */
 
 /** Whole weeks the staff calendar shows before and after the current one. */
@@ -569,6 +616,28 @@ export function shiftsForDay(day: DaySchedule, employeeId: string): ShiftRange[]
   return ranges;
 }
 
+/**
+ * Half hours somebody is on, folded into shifts — the same answer
+ * `shiftsForDay` gives, from a plain list of start minutes rather than a grid.
+ * Duplicates (one person on two stations at once) count once.
+ */
+export function rangesFromMinutes(minutes: Iterable<number>): ShiftRange[] {
+  const sorted = [...new Set(minutes)].sort((a, b) => a - b);
+  const ranges: ShiftRange[] = [];
+  for (const minute of sorted) {
+    const last = ranges[ranges.length - 1];
+    if (last && last.end === minute) last.end = minute + SLOT_MINUTES;
+    else ranges.push({ start: minute, end: minute + SLOT_MINUTES });
+  }
+  return ranges;
+}
+
+/** One shift as the staff home page shows it: its hours and its role, if any. */
+export type StaffShift = ShiftRange & { role: { name: string; color: string } | null };
+
+/** Every shift somebody has on one date. */
+export type StaffShiftDay = { date: string; shifts: StaffShift[] };
+
 /** Total time covered by a set of ranges, in hours — 6.5 for a half-hour start. */
 export function rangeHours(ranges: ShiftRange[]): number {
   return ranges.reduce((total, range) => total + (range.end - range.start), 0) / 60;
@@ -600,6 +669,115 @@ export function employeeWeek(week: WeekSchedule, employeeId: string) {
   }));
   const totalHours = days.reduce((total, entry) => total + rangeHours(entry.ranges), 0);
   return { days, totalHours };
+}
+
+/* -------------------------------------------------------------------- roles */
+
+/**
+ * The colours a role can be. Stored by key, never by class name, so the palette
+ * can be repainted without touching the database. The classes live in
+ * `role-colors.ts`.
+ */
+export const ROLE_COLORS = [
+  "blue",
+  "emerald",
+  "amber",
+  "violet",
+  "pink",
+  "orange",
+  "teal",
+  "slate",
+] as const;
+export type RoleColor = (typeof ROLE_COLORS)[number];
+
+export function isRoleColor(value: string): value is RoleColor {
+  return (ROLE_COLORS as readonly string[]).includes(value);
+}
+
+/** Longest role name the schedule maker will save. The database agrees. */
+export const ROLE_NAME_MAX_LENGTH = 40;
+
+/** A role the owner defined — "Shift lead", "Opener", "Trainee". */
+export type ShiftRole = { id: string; name: string; color: RoleColor };
+
+/**
+ * One half hour of somebody's shift carrying a role.
+ *
+ * A role is saved against every half hour of the shift it was given to, not
+ * just its start, so trimming the front of a shift or splitting it in two keeps
+ * the role on what is left. A half hour the person is no longer on is simply
+ * ignored, which is why nothing has to tidy these up when the grid changes.
+ */
+export type RoleCell = { employeeId: string; minute: number; roleId: string };
+
+/**
+ * A role cell as staff receive it from a published week: the role's name and
+ * colour as they were at Go Live, rather than an id pointing at the live role.
+ */
+export type PublishedRoleCell = { employeeId: string; minute: number; name: string; color: string };
+
+/** A week's role cells, by day. */
+export type WeekRoles = Record<DayKey, RoleCell[]>;
+
+export function makeEmptyWeekRoles(): WeekRoles {
+  return Object.fromEntries(DAY_KEYS.map((day) => [day, []])) as unknown as WeekRoles;
+}
+
+/**
+ * The shift a half-hour cell belongs to for one person — the whole run of time
+ * they are on around it, across every position, the same way `shiftsForDay`
+ * merges them.
+ */
+export function shiftAt(
+  day: DaySchedule,
+  employeeId: string,
+  slotIndex: number,
+): ShiftRange | undefined {
+  const minute = slotMinute(slotIndex);
+  return shiftsForDay(day, employeeId).find(
+    (range) => range.start <= minute && minute < range.end,
+  );
+}
+
+/**
+ * The role cell that names a shift: the earliest one inside it. Generic so the
+ * staff side, whose published cells carry a name and colour instead of an id,
+ * can use the same rule.
+ */
+export function roleCellForShift<T extends { employeeId: string; minute: number }>(
+  cells: T[],
+  employeeId: string,
+  range: ShiftRange,
+): T | undefined {
+  let found: T | undefined;
+  for (const cell of cells) {
+    if (cell.employeeId !== employeeId) continue;
+    if (cell.minute < range.start || cell.minute >= range.end) continue;
+    if (!found || cell.minute < found.minute) found = cell;
+  }
+  return found;
+}
+
+/**
+ * A day's role cells with one shift's role replaced — or removed, with `null`.
+ * Everything inside the shift is cleared first, so a shift never carries two.
+ */
+export function withShiftRole(
+  cells: RoleCell[],
+  employeeId: string,
+  range: ShiftRange,
+  roleId: string | null,
+): RoleCell[] {
+  const kept = cells.filter(
+    (cell) =>
+      cell.employeeId !== employeeId || cell.minute < range.start || cell.minute >= range.end,
+  );
+  if (!roleId) return kept;
+  const added: RoleCell[] = [];
+  for (let minute = range.start; minute < range.end; minute += SLOT_MINUTES) {
+    added.push({ employeeId, minute, roleId });
+  }
+  return [...kept, ...added];
 }
 
 /** Sort helper: group order first (morning → night → other), then name. */

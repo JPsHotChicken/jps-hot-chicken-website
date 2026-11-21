@@ -23,7 +23,7 @@ export function StaffLoginForm() {
           autoFocus
           required
           aria-describedby={state.error ? "staff-login-error" : undefined}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-base outline-none sm:text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
       </div>
 

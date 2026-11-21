@@ -8,7 +8,7 @@ import { STAFF_PASSWORD_MIN_LENGTH } from "@/lib/staff-auth";
 import { staffCreatePassword, type StaffSetupState } from "../../actions";
 
 const FIELD =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "w-full rounded-lg border border-border bg-background px-3 py-2 text-base outline-none sm:text-sm focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function CreatePasswordForm({ name }: { name: string }) {
   const [state, formAction, pending] = useActionState<StaffSetupState, FormData>(

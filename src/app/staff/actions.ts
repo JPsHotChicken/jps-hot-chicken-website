@@ -20,7 +20,13 @@ import {
 import * as staff from "@/lib/staff-repo";
 import { listRuleSignatures, saveRuleSignature } from "@/lib/staff-rules-repo";
 import { insertTimeOff } from "@/lib/schedule-repo";
-import { type TimeOffRequest, type WeekSchedule } from "@/lib/schedule";
+import {
+  restaurantTodayISO,
+  type DayKey,
+  type PublishedRoleCell,
+  type TimeOffRequest,
+  type WeekSchedule,
+} from "@/lib/schedule";
 import {
   RULE_SLIDES,
   checkSignature,
@@ -190,10 +196,16 @@ export async function staffLogout(): Promise<void> {
  * One published week's grid. The staff view merges the position rows anyway, so
  * all it takes from the grid is the hours each person is on.
  */
-export async function loadPublishedWeekAction(weekStart: string): Promise<WeekSchedule> {
-  await requireStaff();
+export async function loadPublishedWeekAction(
+  weekStart: string,
+): Promise<{ week: WeekSchedule; roles: Record<DayKey, PublishedRoleCell[]> }> {
+  const employeeId = await requireStaff();
   if (!ISO_DATE.test(weekStart)) throw new Error("Bad week.");
-  return staff.loadPublishedWeek(weekStart);
+  const [week, roles] = await Promise.all([
+    staff.loadPublishedWeek(weekStart),
+    staff.loadPublishedRoles(weekStart, employeeId),
+  ]);
+  return { week, roles };
 }
 
 /**
@@ -223,7 +235,11 @@ export async function requestTimeOffAction(input: {
   reason: string;
 }): Promise<void> {
   const employeeId = await requireStaff();
+  await insertTimeOff({ employeeId, ...checkRequest(input) });
+}
 
+/** The same checks for a new request and an edited one. */
+function checkRequest(input: { startDate: string; endDate: string; reason: string }) {
   const { startDate, endDate } = input;
   if (!ISO_DATE.test(startDate) || !ISO_DATE.test(endDate)) {
     throw new Error("Pick the days you need off.");
@@ -233,9 +249,49 @@ export async function requestTimeOffAction(input: {
   const reason = input.reason.trim();
   if (!reason) throw new Error("Please give a reason for your request.");
   if (reason.length > 200) throw new Error("Please keep the reason under 200 characters.");
-
-  await insertTimeOff({ employeeId, startDate, endDate, reason });
+  return { startDate, endDate, reason };
 }
+
+/**
+ * Change or delete one of your own requests. A refusal comes back as a value
+ * so its wording survives production, where Next.js hides thrown messages.
+ */
+export type ChangeRequestResult = { ok: true } | { ok: false; error: string };
+
+async function changeRequest(run: () => Promise<void>): Promise<ChangeRequestResult> {
+  try {
+    await run();
+    return { ok: true };
+  } catch (cause) {
+    if (cause instanceof staff.RequestLockedError) return { ok: false, error: cause.message };
+    throw cause;
+  }
+}
+
+export async function updateTimeOffRequestAction(
+  id: string,
+  input: { startDate: string; endDate: string; reason: string },
+): Promise<ChangeRequestResult> {
+  const employeeId = await requireStaff();
+  if (!UUID.test(id)) return { ok: false, error: "That request couldn't be found." };
+  let checked: ReturnType<typeof checkRequest>;
+  try {
+    checked = checkRequest(input);
+  } catch (cause) {
+    return { ok: false, error: cause instanceof Error ? cause.message : "Check your request." };
+  }
+  return changeRequest(() =>
+    staff.updateOwnRequest(employeeId, id, restaurantTodayISO(), checked),
+  );
+}
+
+export async function deleteTimeOffRequestAction(id: string): Promise<ChangeRequestResult> {
+  const employeeId = await requireStaff();
+  if (!UUID.test(id)) return { ok: false, error: "That request couldn't be found." };
+  return changeRequest(() => staff.deleteOwnRequest(employeeId, id, restaurantTodayISO()));
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Sign one of the rules slides with a typed name.
