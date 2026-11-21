@@ -2,10 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import {
-  CalendarDays,
   CalendarRange,
   FileText,
-  HandCoins,
   House,
   LogOut,
   ScrollText,
@@ -19,8 +17,6 @@ import { STAFF_VIEWS, STAFF_VIEW_LABELS, type StaffView } from "@/lib/staff-view
 const ICONS: Record<StaffView, React.ReactNode> = {
   home: <House className="size-4" />,
   schedule: <CalendarRange className="size-4" />,
-  timeOff: <CalendarDays className="size-4" />,
-  tips: <HandCoins className="size-4" />,
   payStubs: <FileText className="size-4" />,
   rules: <ScrollText className="size-4" />,
 };

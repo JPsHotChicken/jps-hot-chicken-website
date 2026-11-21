@@ -4,17 +4,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import {
-  DAY_LABELS,
   addDays,
-  coversDate,
-  dayKeyOf,
-  formatOrdinalDate,
   formatShortDate,
   fromISODate,
   sundayWeekOf,
   toISODate,
+  type DayKey,
   type TimeOffRequest,
 } from "@/lib/schedule";
+import { WeekLegend, WeekRow, useDayMarks } from "./WeekRow";
 
 /** How many weeks either side of this one can be swiped to. */
 export const WEEKS_BACK = 3;
@@ -27,6 +25,8 @@ type Props = {
   workDates: string[];
   /** Their time-off requests; days still asked for (not declined) get a red ring. */
   timeOff?: TimeOffRequest[];
+  /** Weekdays they have off every week — ringed red like a request. */
+  recurringDays?: DayKey[];
   /**
    * Asked for the span of dates the strip can show, so the page can fetch any
    * work days it doesn't already have.
@@ -59,7 +59,13 @@ function prefersReducedMotion(): boolean {
  * a phone and works with a trackpad; the arrows and dots do the same for a
  * mouse or keyboard, and say where you are.
  */
-export function WeekStrip({ todayISO, workDates, timeOff = [], onRangeChange }: Props) {
+export function WeekStrip({
+  todayISO,
+  workDates,
+  timeOff = [],
+  recurringDays = [],
+  onRangeChange,
+}: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(WEEKS_BACK);
   // Hidden until it has been scrolled to this week, so it never flashes the
@@ -75,11 +81,7 @@ export function WeekStrip({ todayISO, workDates, timeOff = [], onRangeChange }: 
       }),
     [todayISO],
   );
-  const working = useMemo(() => new Set(workDates), [workDates]);
-  // A declined request means they're working, so it doesn't count — the same
-  // rule as the calendar and the owner's grid.
-  const standing = useMemo(() => timeOff.filter((request) => request.status !== "denied"), [timeOff]);
-  const isRequestedOff = (iso: string) => standing.some((request) => coversDate(request, iso));
+  const marks = useDayMarks(workDates, timeOff, recurringDays);
 
   useEffect(() => {
     onRangeChange?.(weeks[0].days[0], weeks[weeks.length - 1].days[6]);
@@ -162,56 +164,15 @@ export function WeekStrip({ todayISO, workDates, timeOff = [], onRangeChange }: 
         }`}
       >
         {weeks.map((week, weekIndex) => (
-          <ol
+          <WeekRow
             key={week.days[0]}
-            aria-label={week.label}
-            aria-hidden={weekIndex !== index}
-            className="grid w-full shrink-0 snap-start snap-always grid-cols-7 gap-1 text-center"
-          >
-            {week.days.map((date) => {
-              const isToday = date === todayISO;
-              const isWorking = working.has(date);
-              const requestedOff = isRequestedOff(date);
-              const weekday = DAY_LABELS[dayKeyOf(date)];
-              // Asking for a day off says more than being on the rota for it,
-              // so red wins over green.
-              const ring = requestedOff
-                ? "border-2 border-red-500 text-foreground"
-                : isWorking
-                  ? "border-2 border-emerald-500 text-foreground"
-                  : "border border-gray-300 text-muted-foreground";
-              const dayOfMonth = fromISODate(date).getDate();
-              return (
-                <li
-                  key={date}
-                  aria-current={isToday ? "date" : undefined}
-                  aria-label={`${weekday} ${formatOrdinalDate(date)}${isToday ? ", today" : ""}, ${
-                    isWorking ? "working" : "off"
-                  }${requestedOff ? ", day off requested" : ""}`}
-                  className="flex flex-col items-center gap-1.5"
-                >
-                  <span
-                    aria-hidden
-                    className="text-[0.65rem] font-bold text-muted-foreground uppercase"
-                  >
-                    {weekday.slice(0, 3)}
-                  </span>
-                  <span
-                    aria-hidden
-                    className={`flex size-9 items-center justify-center rounded-full bg-background text-sm font-bold tabular-nums sm:size-10 ${ring}`}
-                  >
-                    {isToday ? (
-                      <span className="flex size-[calc(100%-10px)] items-center justify-center rounded-full bg-blue-600 text-xs text-white sm:text-sm">
-                        {dayOfMonth}
-                      </span>
-                    ) : (
-                      dayOfMonth
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
+            days={week.days}
+            todayISO={todayISO}
+            marks={marks}
+            label={week.label}
+            hidden={weekIndex !== index}
+            className="w-full shrink-0 snap-start snap-always"
+          />
         ))}
       </div>
 
@@ -235,24 +196,7 @@ export function WeekStrip({ todayISO, workDates, timeOff = [], onRangeChange }: 
         ))}
       </div>
 
-      <p className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span aria-hidden className="size-2.5 rounded-full bg-blue-600" />
-          Today
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span aria-hidden className="size-2.5 rounded-full border-2 border-emerald-500" />
-          Working
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span aria-hidden className="size-2.5 rounded-full border-2 border-red-500" />
-          Requested off
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span aria-hidden className="size-2.5 rounded-full border border-gray-300" />
-          Off
-        </span>
-      </p>
+      <WeekLegend className="mt-3" />
     </div>
   );
 }

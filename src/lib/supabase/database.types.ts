@@ -451,6 +451,35 @@ export type Database = {
         };
         Relationships: [];
       };
+      position_preferences: {
+        Row: {
+          employee_id: string;
+          shift_date: string;
+          position_key: string;
+          updated_at: string;
+        };
+        Insert: {
+          employee_id: string;
+          shift_date: string;
+          position_key: string;
+          updated_at?: string;
+        };
+        Update: {
+          employee_id?: string;
+          shift_date?: string;
+          position_key?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "position_preferences_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       shift_roles: {
         Row: { id: string; name: string; color: string; created_at: string };
         Insert: { id?: string; name: string; color?: string; created_at?: string };

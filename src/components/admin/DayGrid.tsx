@@ -21,6 +21,7 @@ import {
   formatSlotBlock,
   isClosedDay,
   roleCellForShift,
+  positionGroupLabel,
   shiftsForDay,
   slotMinute,
   unscheduledOnDay,
@@ -29,6 +30,7 @@ import {
   type DayOffKind,
   type DaySchedule,
   type Employee,
+  type PositionPreference,
   type RoleCell,
   type ShiftRole,
 } from "@/lib/schedule";
@@ -139,6 +141,8 @@ type Props = {
   /** This day's role cells, and the roles they point at. */
   roleCells?: RoleCell[];
   roles?: ShiftRole[];
+  /** Stations staff have asked for today, from their `/staff` settings. */
+  preferences?: PositionPreference[];
   /** A name on the grid was clicked: pick a role for that person's shift. */
   onPickRole?: (employeeId: string, slotIndex: number, anchor: HTMLElement) => void;
 };
@@ -153,6 +157,7 @@ const ROLE_CLICK_DELAY_MS = 220;
 // Stable empties, so the memo below isn't redone on every render without roles.
 const NO_ROLE_CELLS: RoleCell[] = [];
 const NO_ROLES: ShiftRole[] = [];
+const NO_PREFERENCES: PositionPreference[] = [];
 
 /** Inclusive rectangle of cells, always stored lowest-first. */
 export type CellRange = { rowStart: number; rowEnd: number; slotStart: number; slotEnd: number };
@@ -218,6 +223,7 @@ export function DayGrid({
   onCopyToDays,
   roleCells = NO_ROLE_CELLS,
   roles = NO_ROLES,
+  preferences = NO_PREFERENCES,
   onPickRole,
 }: Props) {
   const [copyOpen, setCopyOpen] = useState(false);
@@ -358,6 +364,39 @@ export function DayGrid({
               ))}
             </ul>
           )
+        )}
+
+        {/* What staff asked for from their own page — a hint, never applied
+            automatically. */}
+        {!closed && preferences.length > 0 && (
+          <div className="flex basis-full flex-wrap items-center gap-1.5">
+            <span className="mr-0.5 text-xs font-semibold text-muted-foreground">Prefers</span>
+            <ul
+              aria-label={`Position preferences on ${DAY_LABELS[day]}`}
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              {preferences.map((preference) => {
+                const employee = employeeById.get(preference.employeeId);
+                if (!employee) return null;
+                return (
+                  <li
+                    key={preference.employeeId}
+                    className="flex max-w-56 items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 ring-1 ring-sky-200"
+                  >
+                    <span
+                      aria-hidden
+                      className={`size-1.5 shrink-0 rounded-full ${
+                        colorById.get(employee.id)?.dot ?? "bg-muted-foreground"
+                      }`}
+                    />
+                    <span className="truncate">{employee.name}</span>
+                    <span className="font-normal opacity-70">→</span>
+                    <span className="truncate">{positionGroupLabel(preference.positionKey)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
 
         {!closed &&

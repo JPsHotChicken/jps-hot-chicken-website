@@ -19,8 +19,14 @@ type Props = {
   requests: TimeOffRequest[];
   /** Days this person is on, from the schedule the owner has published. */
   scheduledDates: string[];
-  selection: { start: string; end: string } | null;
-  onSelect: (selection: { start: string; end: string } | null) => void;
+  /** Range-picking mode: the days being asked for, and a way to change them. */
+  selection?: { start: string; end: string } | null;
+  onSelect?: (selection: { start: string; end: string } | null) => void;
+  /**
+   * Day mode: a tap on a day just hands it over, for a popup to take it from
+   * there. When given, there is no range picking at all.
+   */
+  onDayClick?: (iso: string) => void;
   /** The span now on screen, so days outside what's loaded can be fetched. */
   onRangeChange?: (fromISO: string, toISO: string) => void;
 };
@@ -41,8 +47,9 @@ function spanLabel(first: Date, last: Date): string {
 export function TimeOffCalendar({
   requests,
   scheduledDates,
-  selection,
+  selection = null,
   onSelect,
+  onDayClick,
   onRangeChange,
 }: Props) {
   /**
@@ -85,6 +92,11 @@ export function TimeOffCalendar({
     requests.some((request) => request.status !== "denied" && coversDate(request, iso));
 
   const handleClick = (iso: string) => {
+    if (onDayClick) {
+      onDayClick(iso);
+      return;
+    }
+    if (!onSelect) return;
     if (!anchor) {
       setAnchor(iso);
       onSelect({ start: iso, end: iso });
@@ -186,7 +198,8 @@ export function TimeOffCalendar({
               disabled={past}
               onClick={() => handleClick(iso)}
               onPointerEnter={() => anchor && setHovered(iso)}
-              aria-pressed={selected}
+              aria-pressed={onDayClick ? undefined : selected}
+              aria-haspopup={onDayClick ? "dialog" : undefined}
               aria-label={
                 dayLabel +
                 (working ? ", scheduled to work" : "") +
@@ -200,7 +213,7 @@ export function TimeOffCalendar({
                     : otherMonth
                       ? "text-muted-foreground/50 hover:bg-muted"
                       : "hover:bg-muted"
-              } ${isToday && !selected ? "ring-1 ring-brand ring-inset" : ""} ${
+              } ${isToday && !selected ? "ring-2 ring-blue-600 ring-inset" : ""} ${
                 past ? "cursor-not-allowed" : ""
               }`}
             >
@@ -210,7 +223,7 @@ export function TimeOffCalendar({
               <span aria-hidden className="mt-1 flex h-3 items-center justify-center gap-0.5">
                 {working && (
                   <span
-                    className={`size-1.5 rounded-full ${selected ? "bg-white" : "bg-orange-500"}`}
+                    className={`size-1.5 rounded-full ${selected ? "bg-white" : "bg-emerald-500"}`}
                   />
                 )}
                 {requestedOff && (
@@ -226,9 +239,11 @@ export function TimeOffCalendar({
       </div>
 
       <p className="mt-2 text-xs text-muted-foreground">
-        {anchor
-          ? "Now pick the last day — or click the same day again for a single day off."
-          : "Click a day, then click the last day to ask for a range."}
+        {onDayClick
+          ? "Tap a day to ask for it off, or to see a request you've made."
+          : anchor
+            ? "Now pick the last day — or click the same day again for a single day off."
+            : "Click a day, then click the last day to ask for a range."}
       </p>
     </div>
   );

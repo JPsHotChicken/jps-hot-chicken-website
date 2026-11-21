@@ -12,6 +12,7 @@ import {
   fromISODate,
   isRoleColor,
   makeEmptyWeek,
+  makeEmptyWeekPreferences,
   makeEmptyWeekRoles,
   minuteSlot,
   rowForStoredIndex,
@@ -26,6 +27,7 @@ import {
   type ShiftRole,
   type TimeOffRequest,
   type TimeOffStatus,
+  type WeekPreferences,
   type WeekRoles,
   type WeekSchedule,
 } from "@/lib/schedule";
@@ -180,6 +182,29 @@ export async function loadWeekRoles(weekStartISO: string): Promise<WeekRoles> {
     roles[day].push({ employeeId: row.employee_id, minute: row.start_minute, roleId: row.role_id });
   }
   return roles;
+}
+
+/** The stations staff have asked for on each day of one week. */
+export async function loadWeekPreferences(weekStartISO: string): Promise<WeekPreferences> {
+  const weekEndISO = toISODate(addDays(fromISODate(weekStartISO), 6));
+  const { data, error } = await getDb()
+    .from("position_preferences")
+    .select("employee_id, shift_date, position_key")
+    .gte("shift_date", weekStartISO)
+    .lte("shift_date", weekEndISO);
+  if (error) fail(`loading position preferences for ${weekStartISO}`, error);
+
+  const preferences = makeEmptyWeekPreferences();
+  for (const row of data) {
+    const day = dayOf(weekStartISO, row.shift_date);
+    if (!day) continue;
+    preferences[day].push({
+      employeeId: row.employee_id,
+      date: row.shift_date,
+      positionKey: row.position_key,
+    });
+  }
+  return preferences;
 }
 
 /* -------------------------------------------------------------------- roles */

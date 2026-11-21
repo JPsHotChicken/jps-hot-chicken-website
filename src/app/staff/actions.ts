@@ -21,11 +21,13 @@ import * as staff from "@/lib/staff-repo";
 import { listRuleSignatures, saveRuleSignature } from "@/lib/staff-rules-repo";
 import { insertTimeOff } from "@/lib/schedule-repo";
 import {
+  DAY_KEYS,
+  isClosedDay,
+  isPositionKey,
   restaurantTodayISO,
+  type RecurringTimeOff,
   type DayKey,
-  type PublishedRoleCell,
   type TimeOffRequest,
-  type WeekSchedule,
 } from "@/lib/schedule";
 import {
   RULE_SLIDES,
@@ -193,22 +195,6 @@ export async function staffLogout(): Promise<void> {
 }
 
 /**
- * One published week's grid. The staff view merges the position rows anyway, so
- * all it takes from the grid is the hours each person is on.
- */
-export async function loadPublishedWeekAction(
-  weekStart: string,
-): Promise<{ week: WeekSchedule; roles: Record<DayKey, PublishedRoleCell[]> }> {
-  const employeeId = await requireStaff();
-  if (!ISO_DATE.test(weekStart)) throw new Error("Bad week.");
-  const [week, roles] = await Promise.all([
-    staff.loadPublishedWeek(weekStart),
-    staff.loadPublishedRoles(weekStart, employeeId),
-  ]);
-  return { week, roles };
-}
-
-/**
  * The days the signed-in employee is scheduled on, for one stretch of calendar.
  * Called again whenever they page the calendar somewhere it hasn't been yet.
  */
@@ -292,6 +278,49 @@ export async function deleteTimeOffRequestAction(id: string): Promise<ChangeRequ
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/* ------------------------------------------------- schedule settings */
+
+export type SettingResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * A weekday off, every week. No reason is asked for — the day is the whole
+ * request. Sunday is never offered: the store is closed.
+ */
+export async function addRecurringDayOffAction(
+  day: string,
+): Promise<{ ok: true; recurring: RecurringTimeOff[] } | { ok: false; error: string }> {
+  const employeeId = await requireStaff();
+  if (!DAY_KEYS.includes(day as DayKey) || isClosedDay(day as DayKey)) {
+    return { ok: false, error: "Pick a day the restaurant is open." };
+  }
+  await staff.addOwnRecurring(employeeId, day as DayKey);
+  return { ok: true, recurring: await staff.listRecurringForEmployee(employeeId) };
+}
+
+export async function removeRecurringDayOffAction(id: string): Promise<RecurringTimeOff[]> {
+  const employeeId = await requireStaff();
+  if (UUID.test(id)) await staff.removeOwnRecurring(employeeId, id);
+  return staff.listRecurringForEmployee(employeeId);
+}
+
+export async function setPositionPreferenceAction(
+  dateISO: string,
+  positionKey: string | null,
+): Promise<SettingResult> {
+  const employeeId = await requireStaff();
+  if (!ISO_DATE.test(dateISO)) return { ok: false, error: "Pick a day." };
+  if (positionKey !== null && !isPositionKey(positionKey)) {
+    return { ok: false, error: "That position isn't on the list." };
+  }
+  try {
+    await staff.setOwnPreference(employeeId, dateISO, restaurantTodayISO(), positionKey);
+    return { ok: true };
+  } catch (cause) {
+    if (cause instanceof staff.PreferenceRefusedError) return { ok: false, error: cause.message };
+    throw cause;
+  }
+}
 
 /**
  * Sign one of the rules slides with a typed name.

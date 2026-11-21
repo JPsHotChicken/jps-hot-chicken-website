@@ -26,6 +26,7 @@ import {
   type ShiftRole,
   type TimeOffRequest,
   type TimeOffStatus,
+  type WeekPreferences,
   type WeekRoles,
   type WeekSchedule,
 } from "@/lib/schedule";
@@ -102,16 +103,22 @@ function assertText(value: string, field: string, { max = 200, required = false 
 
 /* ------------------------------------------------------------------- reads */
 
-export type WeekData = { week: WeekSchedule; weekRoles: WeekRoles };
+export type WeekData = {
+  week: WeekSchedule;
+  weekRoles: WeekRoles;
+  /** Stations staff have asked for, by day. */
+  preferences: WeekPreferences;
+};
 
 export async function loadWeekAction(weekStart: string): Promise<WeekData> {
   await requireAdmin();
   assertMonday(weekStart);
-  const [week, weekRoles] = await Promise.all([
+  const [week, weekRoles, preferences] = await Promise.all([
     repo.loadWeek(weekStart),
     repo.loadWeekRoles(weekStart),
+    repo.loadWeekPreferences(weekStart),
   ]);
-  return { week, weekRoles };
+  return { week, weekRoles, preferences };
 }
 
 /**
@@ -124,12 +131,13 @@ export async function reloadAction(
 ): Promise<repo.ScheduleBase & WeekData> {
   await requireAdmin();
   assertMonday(weekStart);
-  const [base, week, weekRoles] = await Promise.all([
+  const [base, week, weekRoles, preferences] = await Promise.all([
     repo.loadScheduleBase(),
     repo.loadWeek(weekStart),
     repo.loadWeekRoles(weekStart),
+    repo.loadWeekPreferences(weekStart),
   ]);
-  return { ...base, week, weekRoles };
+  return { ...base, week, weekRoles, preferences };
 }
 
 /* --------------------------------------------------------------- employees */

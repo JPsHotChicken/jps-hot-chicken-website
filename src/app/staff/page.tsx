@@ -7,14 +7,13 @@ import {
   findEmployeeById,
   listPublishedWeeks,
   listRequestsForEmployee,
+  listOwnPreferences,
+  listRecurringForEmployee,
   listScheduledDates,
   loadShiftDays,
-  loadPublishedRoles,
-  loadPublishedWeek,
 } from "@/lib/staff-repo";
 import { payStubsForEmployee } from "@/lib/pay-stubs-repo";
 import { listRuleSignatures } from "@/lib/staff-rules-repo";
-import { listPublishedTipRates } from "@/lib/tip-rates-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import {
   CALENDAR_DAY_COUNT,
@@ -25,9 +24,10 @@ import {
   isClosedDay,
   mondayOf,
   restaurantTodayISO,
+  sundayWeekOf,
   toISODate,
 } from "@/lib/schedule";
-import { isStaffView } from "@/lib/staff-views";
+import { MOVED_STAFF_VIEWS, isStaffView } from "@/lib/staff-views";
 import { loadTodaysWeather } from "@/lib/weather-repo";
 import { WEATHER_KINDS, type Weather, type WeatherKind } from "@/lib/weather";
 import { StaffDashboard } from "@/components/staff/StaffDashboard";
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-/** How far ahead the home page looks for somebody's next shift. */
+/** How far ahead the home page looks for somebody's next shift, in days. */
 const UPCOMING_DAYS = 28;
 
 export default async function StaffPage({
@@ -63,7 +63,9 @@ export default async function StaffPage({
 
   const params = await searchParams;
   const requestedView = params.view;
-  const initialView = isStaffView(requestedView) ? requestedView : "home";
+  const initialView = isStaffView(requestedView)
+    ? requestedView
+    : (MOVED_STAFF_VIEWS[requestedView ?? ""] ?? "home");
 
   // The restaurant's today, not the server's: Vercel runs in UTC.
   const todayISO = restaurantTodayISO();
@@ -78,14 +80,20 @@ export default async function StaffPage({
     to: toISODate(addDays(scheduledFrom, CALENDAR_DAY_COUNT + 13)),
   };
 
+  // Shifts are read from this week's Sunday, so My schedule can show the days of
+  // this week already gone, and well past next Saturday for the home page.
+  const shiftsFrom = sundayWeekOf(todayISO)[0];
+  const shiftsTo = toISODate(addDays(fromISODate(todayISO), UPCOMING_DAYS));
+
   const [
     publishedWeeks,
     requests,
     scheduledDates,
     payStubs,
-    tipRates,
     ruleSignatures,
     shiftDays,
+    recurring,
+    preferences,
     weather,
   ] = await Promise.all([
     listPublishedWeeks(thisWeek),
@@ -94,16 +102,10 @@ export default async function StaffPage({
     // Only released stubs come back, and only this person's — a draft pay run
     // is invisible here the same way it is invisible to the file route.
     payStubsForEmployee(employee.id),
-    // The same handful of rates for everybody: an hour earned what an hour
-    // earned, whoever worked it. Short enough to hand over whole, so paging
-    // back through the weeks costs no further trips.
-    listPublishedTipRates(),
     listRuleSignatures(employee.id),
-    loadShiftDays(
-      employee.id,
-      todayISO,
-      toISODate(addDays(fromISODate(todayISO), UPCOMING_DAYS)),
-    ),
+    loadShiftDays(employee.id, shiftsFrom, shiftsTo),
+    listRecurringForEmployee(employee.id),
+    listOwnPreferences(employee.id, todayISO, shiftsTo),
     // Never throws, and gives up after a couple of seconds: decoration only.
     loadTodaysWeather(),
   ]);
@@ -133,34 +135,19 @@ export default async function StaffPage({
         }
       : weather;
 
-  // Show the current week when it's published, otherwise the next one that is.
-  const initialWeekStart =
-    publishedWeeks.find((entry) => entry.weekStart === thisWeek)?.weekStart ??
-    publishedWeeks[0]?.weekStart ??
-    null;
-
-  const [initialWeek, initialRoles] = initialWeekStart
-    ? await Promise.all([
-        loadPublishedWeek(initialWeekStart),
-        loadPublishedRoles(initialWeekStart, employee.id),
-      ])
-    : [null, null];
-
   return (
     <StaffDashboard
       employee={employee}
-      publishedWeeks={publishedWeeks}
-      initialWeekStart={initialWeekStart}
-      initialWeek={initialWeek}
-      initialRoles={initialRoles}
       initialRequests={requests}
       initialScheduledDates={scheduledDates}
       scheduledRange={scheduledRange}
       payStubs={payStubs}
-      tipRates={tipRates}
       ruleSignatures={ruleSignatures}
       today={today}
       upcoming={upcoming}
+      shiftDays={shiftDays}
+      initialRecurring={recurring}
+      initialPreferences={preferences}
       weather={shownWeather}
       initialView={initialView}
     />

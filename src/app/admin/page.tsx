@@ -3,7 +3,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/admin-auth";
-import { loadScheduleBase, loadWeek, loadWeekRoles } from "@/lib/schedule-repo";
+import {
+  loadScheduleBase,
+  loadWeek,
+  loadWeekPreferences,
+  loadWeekRoles,
+} from "@/lib/schedule-repo";
 import { loadAliases } from "@/lib/pay-stubs-repo";
 import { getPublishState } from "@/lib/staff-repo";
 import { loadRulesProgress } from "@/lib/staff-rules-repo";
@@ -41,16 +46,18 @@ export default async function AdminPage({
 
   const weekStart = toISODate(mondayOf());
   const base = await loadScheduleBase();
-  const [week, weekRoles, publishState, payrollNames, rulesProgress] = await Promise.all([
-    loadWeek(weekStart),
-    loadWeekRoles(weekStart),
-    getPublishState(weekStart),
-    // How payroll spells each person, shown on the staff tab so a wrong one can
-    // be dropped before it sends somebody the wrong pay stub.
-    loadAliases(),
-    // Who has signed the rules slides on /staff, shown on each person's row.
-    loadRulesProgress(),
-  ]);
+  const [week, weekRoles, preferences, publishState, payrollNames, rulesProgress] =
+    await Promise.all([
+      loadWeek(weekStart),
+      loadWeekRoles(weekStart),
+      loadWeekPreferences(weekStart),
+      getPublishState(weekStart),
+      // How payroll spells each person, shown on the staff tab so a wrong one can
+      // be dropped before it sends somebody the wrong pay stub.
+      loadAliases(),
+      // Who has signed the rules slides on /staff, shown on each person's row.
+      loadRulesProgress(),
+    ]);
 
   return (
     <Scheduler
@@ -61,6 +68,7 @@ export default async function AdminPage({
       weekStart={weekStart}
       week={week}
       weekRoles={weekRoles}
+      preferences={preferences}
       roles={base.roles}
       publishState={publishState}
       payrollNames={payrollNames}

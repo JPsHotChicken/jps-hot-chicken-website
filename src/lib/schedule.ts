@@ -359,6 +359,30 @@ export type PositionRow = {
   storedIndex: number;
 };
 
+/** Is this one of the stations above? Used to check a staff preference. */
+export function isPositionKey(value: string): value is PositionKey {
+  return POSITION_GROUPS.some((group) => group.key === value);
+}
+
+/** "Fryer" for `fryer` — or the key itself for a station that has since gone. */
+export function positionGroupLabel(key: string): string {
+  return POSITION_GROUPS.find((group) => group.key === key)?.label ?? key;
+}
+
+/**
+ * A station somebody would like on a day they're scheduled, set from their own
+ * `/staff` page. The owner sees these in the schedule maker; nothing assigns
+ * them automatically.
+ */
+export type PositionPreference = { employeeId: string; date: string; positionKey: string };
+
+/** A week's preferences, by day. */
+export type WeekPreferences = Record<DayKey, PositionPreference[]>;
+
+export function makeEmptyWeekPreferences(): WeekPreferences {
+  return Object.fromEntries(DAY_KEYS.map((day) => [day, []])) as unknown as WeekPreferences;
+}
+
 /** One entry per grid row, in the order the rows are drawn. */
 export const POSITION_ROWS: PositionRow[] = POSITION_GROUPS.flatMap((group) => {
   // Widened from the literal tuple, which knows no station has one spot today.

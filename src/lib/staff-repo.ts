@@ -8,34 +8,23 @@ import {
 } from "@/lib/staff-auth";
 import {
   DAY_KEYS,
-  SLOT_COUNT,
   addDays,
   fromISODate,
-  makeEmptyWeek,
-  minuteSlot,
   rangesFromMinutes,
   roleCellForShift,
-  rowForStoredIndex,
   toISODate,
   type DayKey,
   type Employee,
-  type PublishedRoleCell,
+  type PositionPreference,
+  type RecurringTimeOff,
   type StaffShiftDay,
   type TimeOffRequest,
-  type WeekSchedule,
 } from "@/lib/schedule";
 
 /** Reads and writes for the employee-facing side of the scheduler. */
 
 function fail(context: string, error: { message: string } | null): never {
   throw new Error(`[staff] ${context}: ${error?.message ?? "unknown error"}`);
-}
-
-function dayOf(weekStartISO: string, dateISO: string): DayKey | undefined {
-  const offset = Math.round(
-    (fromISODate(dateISO).getTime() - fromISODate(weekStartISO).getTime()) / 86_400_000,
-  );
-  return DAY_KEYS[offset];
 }
 
 /* ------------------------------------------------------------- setup codes */
@@ -221,62 +210,6 @@ export async function listPublishedWeeks(fromWeekISO: string): Promise<Published
 
   if (error) fail("listing published weeks", error);
   return data.map((row) => ({ weekStart: row.week_start, publishedAt: row.published_at }));
-}
-
-/**
- * The published grid for one week, in the same shape the admin grid uses so the
- * existing `employeeWeek` helpers work unchanged.
- */
-export async function loadPublishedWeek(weekStartISO: string): Promise<WeekSchedule> {
-  const { data, error } = await getDb()
-    .from("published_shifts")
-    .select("shift_date, row_index, start_minute, employee_id")
-    .eq("week_start", weekStartISO);
-
-  if (error) fail(`loading published week ${weekStartISO}`, error);
-
-  const week = makeEmptyWeek();
-  for (const row of data) {
-    const day = dayOf(weekStartISO, row.shift_date);
-    const slotIndex = minuteSlot(row.start_minute);
-    const rowIndex = rowForStoredIndex(row.row_index);
-    if (!day || rowIndex === undefined || slotIndex < 0 || slotIndex >= SLOT_COUNT) continue;
-    week[day][rowIndex][slotIndex] = row.employee_id;
-  }
-  return week;
-}
-
-/**
- * One person's roles in a published week, by day. Only their own: nobody needs
- * to see what everybody else was given to read their own schedule.
- */
-export async function loadPublishedRoles(
-  weekStartISO: string,
-  employeeId: string,
-): Promise<Record<DayKey, PublishedRoleCell[]>> {
-  const { data, error } = await getDb()
-    .from("published_shift_roles")
-    .select("shift_date, employee_id, start_minute, role_name, role_color")
-    .eq("week_start", weekStartISO)
-    .eq("employee_id", employeeId);
-
-  if (error) fail(`loading published roles for ${weekStartISO}`, error);
-
-  const roles = Object.fromEntries(DAY_KEYS.map((day) => [day, []])) as unknown as Record<
-    DayKey,
-    PublishedRoleCell[]
-  >;
-  for (const row of data) {
-    const day = dayOf(weekStartISO, row.shift_date);
-    if (!day) continue;
-    roles[day].push({
-      employeeId: row.employee_id,
-      minute: row.start_minute,
-      name: row.role_name,
-      color: row.role_color,
-    });
-  }
-  return roles;
 }
 
 /**
@@ -509,6 +442,111 @@ export async function deleteOwnRequest(
     .eq("id", id)
     .eq("employee_id", employeeId);
   if (error) fail("deleting your request", error);
+}
+
+/* ------------------------------------------------- recurring days off */
+
+/** This person's standing weekly days off, Monday first. */
+export async function listRecurringForEmployee(employeeId: string): Promise<RecurringTimeOff[]> {
+  const { data, error } = await getDb()
+    .from("recurring_time_off")
+    .select("id, employee_id, day, reason")
+    .eq("employee_id", employeeId);
+  if (error) fail("loading your days off every week", error);
+  return data
+    .map((row) => ({ id: row.id, employeeId: row.employee_id, day: row.day, reason: row.reason }))
+    .sort((a, b) => DAY_KEYS.indexOf(a.day) - DAY_KEYS.indexOf(b.day));
+}
+
+/**
+ * Add a weekday off, every week. It lands in the same table the owner fills
+ * from the time-off panel, so it shows on the schedule maker straight away.
+ */
+export async function addOwnRecurring(employeeId: string, day: DayKey): Promise<void> {
+  // Upserting only the day leaves alone any reason the owner already wrote
+  // against it; a new row takes the column's empty default.
+  const { error } = await getDb()
+    .from("recurring_time_off")
+    .upsert({ employee_id: employeeId, day }, { onConflict: "employee_id,day" });
+  if (error) fail("adding a day off every week", error);
+}
+
+/** Remove one of your own weekly days off. Somebody else's id matches nothing. */
+export async function removeOwnRecurring(employeeId: string, id: string): Promise<void> {
+  const { error } = await getDb()
+    .from("recurring_time_off")
+    .delete()
+    .eq("id", id)
+    .eq("employee_id", employeeId);
+  if (error) fail("removing a day off every week", error);
+}
+
+/* ----------------------------------------------- position preferences */
+
+export async function listOwnPreferences(
+  employeeId: string,
+  fromISO: string,
+  toISO: string,
+): Promise<PositionPreference[]> {
+  const { data, error } = await getDb()
+    .from("position_preferences")
+    .select("employee_id, shift_date, position_key")
+    .eq("employee_id", employeeId)
+    .gte("shift_date", fromISO)
+    .lte("shift_date", toISO);
+  if (error) fail("loading your position preferences", error);
+  return data.map((row) => ({
+    employeeId: row.employee_id,
+    date: row.shift_date,
+    positionKey: row.position_key,
+  }));
+}
+
+/** Raised when a preference is set for a day it can't be set for. */
+export class PreferenceRefusedError extends Error {}
+
+/**
+ * Say which station you'd like on a day you're working, or clear it with
+ * `null`. Only for days from today on that you have a published shift: a
+ * preference for a day you aren't on has nothing to attach to.
+ */
+export async function setOwnPreference(
+  employeeId: string,
+  dateISO: string,
+  todayISO: string,
+  positionKey: string | null,
+): Promise<void> {
+  const db = getDb();
+  if (dateISO < todayISO) throw new PreferenceRefusedError("That day has already gone.");
+
+  if (positionKey === null) {
+    const { error } = await db
+      .from("position_preferences")
+      .delete()
+      .eq("employee_id", employeeId)
+      .eq("shift_date", dateISO);
+    if (error) fail("clearing a position preference", error);
+    return;
+  }
+
+  const { count, error: shiftError } = await db
+    .from("published_shifts")
+    .select("shift_date", { count: "exact", head: true })
+    .eq("employee_id", employeeId)
+    .eq("shift_date", dateISO);
+  if (shiftError) fail("checking your shift", shiftError);
+  if (!count) throw new PreferenceRefusedError("You're not scheduled that day.");
+
+  const { error } = await db.from("position_preferences").upsert(
+    {
+      employee_id: employeeId,
+      shift_date: dateISO,
+      position_key: positionKey,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "employee_id,shift_date" },
+  );
+  if (error) fail("saving a position preference", error);
 }
 
 /* -------------------------------------------------------------- publishing */

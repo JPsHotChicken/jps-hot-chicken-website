@@ -223,3 +223,18 @@ describe("requested days off in the week row", () => {
     expect(screen.getByText("Requested off")).toBeInTheDocument();
   });
 });
+
+describe("the Menu reminder", () => {
+  it("opens the Menu", () => {
+    const onOpenMenu = vi.fn();
+    render(
+      <StaffHome
+        today={{ date: "2026-11-18", closed: false, posted: true, shifts: [] }}
+        upcoming={null}
+        onOpenMenu={onOpenMenu}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /more: tap Menu/ }));
+    expect(onOpenMenu).toHaveBeenCalled();
+  });
+});

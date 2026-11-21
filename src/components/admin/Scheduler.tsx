@@ -50,6 +50,7 @@ import {
   fromISODate,
   makeEmptyDay,
   makeEmptyWeek,
+  makeEmptyWeekPreferences,
   makeEmptyWeekRoles,
   mondayOf,
   offOnDay,
@@ -69,6 +70,7 @@ import {
   type ShiftRole,
   type TimeOffRequest,
   type TimeOffStatus,
+  type WeekPreferences,
   type WeekRoles,
   type WeekSchedule,
 } from "@/lib/schedule";
@@ -109,6 +111,8 @@ export type SchedulerProps = {
   weekRoles: WeekRoles;
   /** Every role a shift can be given. */
   roles: ShiftRole[];
+  /** Stations staff have asked for that week, by day. */
+  preferences?: WeekPreferences;
   /** Whether that week has been sent to staff, and whether it has drifted since. */
   publishState: PublishState;
   /** Which half of the dashboard to open on — `/admin?view=staff` picks staff. */
@@ -145,6 +149,7 @@ export function Scheduler({
   week: initialWeek,
   weekRoles: initialWeekRoles,
   roles: initialRoles,
+  preferences: initialPreferences,
   publishState: initialPublishState,
   payrollNames: initialPayrollNames = [],
   rulesProgress = {},
@@ -162,6 +167,9 @@ export function Scheduler({
   const [roles, setRoles] = useState(initialRoles);
   const [roleWeeks, setRoleWeeks] = useState<Record<string, WeekRoles>>({
     [initialWeekStart]: initialWeekRoles,
+  });
+  const [preferenceWeeks, setPreferenceWeeks] = useState<Record<string, WeekPreferences>>({
+    [initialWeekStart]: initialPreferences ?? makeEmptyWeekPreferences(),
   });
   const [pickingRole, setPickingRole] = useState<PickingRole | null>(null);
   const [rolesOpen, setRolesOpen] = useState(false);
@@ -185,6 +193,7 @@ export function Scheduler({
 
   const week = weeks[weekStart] ?? makeEmptyWeek();
   const weekRoles = roleWeeks[weekStart] ?? makeEmptyWeekRoles();
+  const weekPreferences = preferenceWeeks[weekStart] ?? makeEmptyWeekPreferences();
   const dates = useMemo(() => datesForWeek(weekStart), [weekStart]);
   // One scale for every day's heat map, so Friday lunch and Monday lunch shade
   // the same way when they are staffed the same.
@@ -226,6 +235,7 @@ export function Scheduler({
     // they will be re-read when navigated to.
     setWeeks({ [forWeek]: fresh.week });
     setRoleWeeks({ [forWeek]: fresh.weekRoles });
+    setPreferenceWeeks({ [forWeek]: fresh.preferences });
   }, []);
 
   /**
@@ -295,6 +305,7 @@ export function Scheduler({
         const loaded = await loadWeekAction(target);
         setWeeks((current) => ({ ...current, [target]: loaded.week }));
         setRoleWeeks((current) => ({ ...current, [target]: loaded.weekRoles }));
+        setPreferenceWeeks((current) => ({ ...current, [target]: loaded.preferences }));
       } catch (cause) {
         console.error(`[scheduler] Could not load ${target}:`, cause);
         if (pendingWeek.current === target) {
@@ -954,6 +965,7 @@ export function Scheduler({
               }}
               onCopyToDays={copyDay}
               roleCells={weekRoles[day] ?? []}
+              preferences={weekPreferences[day] ?? []}
               roles={roles}
               onPickRole={(employeeId, slotIndex, el) => pickRole(day, employeeId, slotIndex, el)}
             />

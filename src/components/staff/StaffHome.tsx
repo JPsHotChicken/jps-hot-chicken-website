@@ -1,4 +1,4 @@
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, Menu } from "lucide-react";
 
 import { roleColorClasses } from "@/lib/role-colors";
 import {
@@ -7,6 +7,7 @@ import {
   formatOrdinalDate,
   formatRange,
   type StaffShift,
+  type DayKey,
   type StaffShiftDay,
   type TimeOffRequest,
 } from "@/lib/schedule";
@@ -35,6 +36,10 @@ type Props = {
   workDates?: string[];
   /** Their time-off requests, so requested days are ringed in red. */
   timeOff?: TimeOffRequest[];
+  /** Weekdays they have off every week, ringed red in the week row. */
+  recurringDays?: DayKey[];
+  /** Open the Menu, from the reminder at the bottom of the page. */
+  onOpenMenu?: () => void;
   /** Fetch work days for a span of dates the week strip can swipe to. */
   onLoadDates?: (fromISO: string, toISO: string) => void;
 };
@@ -76,6 +81,8 @@ export function StaffHome({
   weather,
   workDates = [],
   timeOff = [],
+  recurringDays = [],
+  onOpenMenu,
   onLoadDates,
 }: Props) {
   const working = today.shifts.length > 0;
@@ -167,9 +174,23 @@ export function StaffHome({
           todayISO={today.date}
           workDates={workDates}
           timeOff={timeOff}
+          recurringDays={recurringDays}
           onRangeChange={onLoadDates}
         />
       </section>
+
+      {/* Everything else lives behind the Menu; say so, once, at the bottom. */}
+      <button
+        type="button"
+        onClick={onOpenMenu}
+        className="mx-auto flex w-fit max-w-full items-center gap-2.5 rounded-full border border-border bg-background px-4 py-2 text-left text-sm text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <Menu aria-hidden className="size-4 shrink-0 text-brand" />
+        <span>
+          Pay stubs, time off &amp; more: tap{" "}
+          <span className="font-bold text-foreground">Menu</span>
+        </span>
+      </button>
     </div>
   );
 }
