@@ -11,7 +11,10 @@ import { siteConfig } from "@/data/site";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/order", label: "Locations" },
+  { href: "/menu", label: "Menu" },
+  // The locations hub, which links to each store's page. Ordering keeps its
+  // own "Order Now" button, which goes to /order.
+  { href: "/locations", label: "Locations" },
   { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },
 ] as const;

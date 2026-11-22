@@ -281,6 +281,11 @@ export default function HomePage() {
               Order Big Combo Now
             </OrderButton>
           </div>
+          <p className="mt-4 text-center">
+            <Link href="/menu" className="font-semibold text-brand underline-offset-2 hover:underline">
+              See the full menu, prices &amp; heat levels
+            </Link>
+          </p>
         </div>
       </section>
 

@@ -366,6 +366,11 @@ export default async function LocationPage({ params }: { params: Params }) {
               </li>
             ))}
           </ul>
+          <p className="mt-4">
+            <Link href="/menu" className="font-semibold text-brand hover:underline">
+              See the full menu with prices and heat levels
+            </Link>
+          </p>
           {loc.orderingUrl && (
             <div className="mt-6">
               <TrackedOrderButton
@@ -373,7 +378,7 @@ export default async function LocationPage({ params }: { params: Params }) {
                 className={PRIMARY_BUTTON}
                 eventParams={{ location: loc.slug, platform: orderingPlatform(loc.orderingUrl) }}
               >
-                See the full menu &amp; order
+                Order pickup from {loc.street}
               </TrackedOrderButton>
             </div>
           )}

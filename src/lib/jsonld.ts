@@ -1,5 +1,6 @@
 import { siteConfig, type Location, type WeekHours } from "@/data/site";
 import { DAY_KEYS, DAY_LABELS } from "@/lib/hours";
+import { MENU, type StorePrices } from "@/data/menu";
 
 /**
  * schema.org structured data, built from `siteConfig` so it can never drift from
@@ -19,6 +20,8 @@ export function serializeJsonLd(data: object): string {
 
 const JSONLD_CONTEXT = { "@context": "https://schema.org" } as const;
 const ORG_ID = `${siteConfig.url}/#organization`;
+const MENU_URL = `${siteConfig.url}/menu`;
+const MENU_ID = `${MENU_URL}#menu`;
 
 function buildOpeningHours(hours: WeekHours) {
   return DAY_KEYS.flatMap((key) => {
@@ -90,9 +93,8 @@ function locationNode(loc: Location) {
     },
     openingHoursSpecification: buildOpeningHours(loc.hours ?? siteConfig.hours),
     hasMap: googleMapsUrl(loc),
-    // The store's own online-ordering menu (Toast / SkyTab) — the live menu
-    // with current prices, until /menu exists on this site.
-    ...(loc.orderingUrl && { menu: loc.orderingUrl }),
+    menu: MENU_URL,
+    hasMenu: { "@id": MENU_ID },
     ...(loc.googleBusinessUrl && { sameAs: [loc.googleBusinessUrl] }),
     parentOrganization: { "@id": ORG_ID },
     acceptsReservations: false,
@@ -109,6 +111,46 @@ function locationNode(loc: Location) {
 /** Site-wide Organization node, injected from the root layout. */
 export function buildOrganizationJsonLd() {
   return { ...JSONLD_CONTEXT, ...organizationNode() };
+}
+
+/** One price for an item, or undefined when the stores charge differently. */
+function singlePrice(at: StorePrices): number | undefined {
+  const prices = Object.values(at);
+  if (prices.length === 0 || prices.some((p) => p == null)) return undefined;
+  return prices.every((p) => p === prices[0]) ? (prices[0] as number) : undefined;
+}
+
+/**
+ * The /menu page as schema.org Menu, generated from the same data the page
+ * renders, so the markup always matches what visitors see. Prices are only
+ * given where both stores agree (or only one sells it).
+ */
+export function buildMenuJsonLd() {
+  return {
+    ...JSONLD_CONTEXT,
+    "@type": "Menu",
+    "@id": MENU_ID,
+    name: `${siteConfig.name} Menu`,
+    url: MENU_URL,
+    inLanguage: "en-US",
+    hasMenuSection: MENU.map((section) => ({
+      "@type": "MenuSection",
+      name: section.title,
+      ...(section.intro && { description: section.intro }),
+      hasMenuItem: section.items.map((item) => {
+        const price = singlePrice(item.at);
+        return {
+          "@type": "MenuItem",
+          name: item.name,
+          ...(item.description && { description: item.description }),
+          ...(item.image && { image: new URL(encodeURI(item.image.src), siteConfig.url).toString() }),
+          ...(price !== undefined && {
+            offers: { "@type": "Offer", price: price.toFixed(2), priceCurrency: "USD" },
+          }),
+        };
+      }),
+    })),
+  };
 }
 
 /** Visible breadcrumb trail as BreadcrumbList. Paths are site-relative. */

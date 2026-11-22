@@ -7,6 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
   const routes: { path: string; priority: number; changeFrequency: "weekly" | "monthly" }[] = [
     { path: "/", priority: 1, changeFrequency: "weekly" },
+    { path: "/menu", priority: 0.9, changeFrequency: "weekly" },
     { path: "/locations", priority: 0.8, changeFrequency: "monthly" },
     ...siteConfig.locations.map((loc) => ({
       path: `/locations/${loc.pageSlug}`,

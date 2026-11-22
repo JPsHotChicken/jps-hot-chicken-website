@@ -23,9 +23,10 @@ describe("Nav", () => {
     render(<Nav />);
     const nav = within(screen.getByRole("navigation", { name: "Primary" }));
     expect(nav.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
+    expect(nav.getByRole("link", { name: "Menu" })).toHaveAttribute("href", "/menu");
     expect(nav.getByRole("link", { name: "Locations" })).toHaveAttribute(
       "href",
-      "/order",
+      "/locations",
     );
     expect(nav.getByRole("link", { name: "Careers" })).toHaveAttribute(
       "href",
