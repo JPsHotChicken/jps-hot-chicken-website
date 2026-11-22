@@ -4,10 +4,9 @@
 // ⚠️ MISSING BUSINESS DATA (owner to provide). These fields are *omitted* — never
 // faked — so no placeholder can reach the live site, Google, or the structured data:
 //   - socials: real Instagram / Facebook page URLs (published as schema.org sameAs)
-//   - googleBusinessUrl per location: Google Business Profile / Maps listing link
 // ✏️ CONFIRM with the owner:
-//   - Oak Grove phone number
 //   - Clarksville phone 931-266-0025 (supplied by the owner 2026-09-16)
+//   (Oak Grove phone 270-697-5036 confirmed by the owner 2026-11-21.)
 //   - lat/lng (geocoded from each address — check they pin the right storefront;
 //     Oak Grove matched at street level, Clarksville matched the exact address)
 
@@ -31,7 +30,18 @@ export type SocialLinks = {
 };
 
 export type RestaurantLocation = {
+  /** Internal key, used by /order/[slug] and staff tools. Do not rename. */
   slug: string;
+  /**
+   * Public location page URL segment: /locations/<pageSlug>, in "city-st" form.
+   * Changing it needs a 301 from the old URL in next.config.ts.
+   */
+  pageSlug: string;
+  /**
+   * How to spot the store, in the owner's words (2026-11-21). Shown on the
+   * location page; keep it identical to any landmark line on the Google profile.
+   */
+  landmark?: string;
   name: string;
   /** How the owner refers to the store in short labels ("Fort Campbell", "Trenton"). */
   shortLabel: string;
@@ -62,6 +72,8 @@ export type RestaurantLocation = {
 const locations: readonly RestaurantLocation[] = [
   {
     slug: "oak-grove",
+    pageSlug: "oak-grove-ky",
+    landmark: "Near Gate 6 of Fort Campbell, in front of the casino.",
     name: "Oak Grove",
     shortLabel: "Fort Campbell",
     streetNumber: "15224",
@@ -77,11 +89,16 @@ const locations: readonly RestaurantLocation[] = [
       "https://www.doordash.com/store/jp's-hot-chicken-oak-grove-654727/52036546/?cursor=eyJzdG9yZV9wcmltYXJ5X3ZlcnRpY2FsX2lkcyI6WzEsNCwxNzcsMTkzLDE5NV19&pickup=false",
     uberEatsUrl:
       "https://www.ubereats.com/store/jps-hot-chicken-oak-grove/VOMPrQmMSH-RHVYUoOLrYA?utm_campaign=place-action-link&utm_medium=organic&utm_source=google",
+    // Owner sent share.google/IIUtAYjM4GHX8jA5C (2026-11-22); this is the same
+    // listing's stable Maps ID, checked to show 15224 Fort Campbell Blvd.
+    googleBusinessUrl: "https://maps.google.com/?cid=16567515929952874024",
     isOpen: true,
     isNew: false,
   },
   {
     slug: "clarksville",
+    pageSlug: "clarksville-tn",
+    landmark: "Across from the Honda dealership, in the new white building.",
     name: "Clarksville",
     shortLabel: "Trenton",
     streetNumber: "2670",
@@ -103,6 +120,9 @@ const locations: readonly RestaurantLocation[] = [
     // renames the slug it 404s, which is loud and obvious rather than silent.
     // Verified 2026-09-17: preserves the gclid query parameter.
     orderingUrl: "https://jpshotchicken.toast.site/order/jps-hot-chicken-trenton",
+    // Owner sent share.google/ImbyilpYVcpIIB24U (2026-11-22); this is the same
+    // listing's stable Maps ID, checked to show 2670 Trenton Rd, (931) 266-0025.
+    googleBusinessUrl: "https://maps.google.com/?cid=15198272338403306919",
     doordashUrl:
       "https://www.doordash.com/store/jp's-hot-chicken-clarksville-47994625/116482960/?event_type=autocomplete&pickup=false",
     isOpen: true,

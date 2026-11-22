@@ -41,8 +41,11 @@ export const LANDING_PAGES: readonly LandingPage[] = [
     adGroup: "Hot Chicken | Clarksville",
     h1: "Nashville Hot Chicken in Clarksville, TN",
     subhead:
-      "Fried to order, six heat levels, from no-heat to genuinely blazing. Two minutes off Trenton Road.",
-    title: "Hot Chicken in Clarksville, TN",
+      "Fried to order, four heat levels, from no-heat Southern up to Extra Hot. On Trenton Rd, across from the Honda dealership.",
+    // Not "Hot Chicken in Clarksville, TN": that exact title belongs to the
+    // /locations/clarksville-tn page, and two pages with one title compete in
+    // Google. This one is the ad page, so it leads with ordering (2026-11-22).
+    title: "Order Hot Chicken Online, Clarksville",
     description:
       "Nashville-style hot chicken in Clarksville, TN. Sandwiches, jumbo tenders, wings and chicken & waffles, fried fresh to order. Order online for pickup.",
     foodHeading: "What people order",
@@ -50,7 +53,7 @@ export const LANDING_PAGES: readonly LandingPage[] = [
     points: [
       {
         heading: "Heat you pick",
-        body: "From plain through to our hottest. You choose the level, we don't guess it for you.",
+        body: "Southern, Mild, Hot or Extra Hot. You choose the level, we don't guess it for you.",
       },
       {
         heading: "Fried when you order it",

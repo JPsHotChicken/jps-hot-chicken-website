@@ -190,8 +190,15 @@ export function LandingPageView({ page }: { page: LandingPage }) {
             {location.phone && <TrackedCallButton phone={location.phone} />}
           </div>
           <p className="mt-6 text-sm text-muted-foreground">
+            <Link
+              href={`/locations/${location.pageSlug}`}
+              className="font-semibold text-brand hover:underline"
+            >
+              Hours, parking &amp; directions for {location.street}
+            </Link>
+            {" · "}
             <Link href="/locations" className="font-semibold text-brand hover:underline">
-              Both locations and hours
+              All locations
             </Link>
           </p>
         </div>

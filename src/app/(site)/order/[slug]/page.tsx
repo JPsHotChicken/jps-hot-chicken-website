@@ -180,6 +180,12 @@ export default async function LocationOrderPage({ params }: { params: Params }) 
               <br />
               {loc.city}, {loc.state} {loc.zip}
             </p>
+            <Link
+              href={`/locations/${loc.pageSlug}`}
+              className="mt-1.5 text-xs font-semibold text-brand hover:underline"
+            >
+              Store info &amp; directions
+            </Link>
             <div className="mt-2.5 flex flex-col gap-2 sm:flex-row">
               <a
                 href={googleMapsHref}

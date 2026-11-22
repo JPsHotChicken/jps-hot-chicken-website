@@ -101,3 +101,26 @@ export function getOnlineWeekRows(
     isToday: key === todayKey,
   }));
 }
+
+/**
+ * A week of hours as plain sentences-in-waiting, consecutive days with the same
+ * hours merged: [{ days: "Monday–Saturday", hours: "10 AM – 9 PM" },
+ * { days: "Sunday", hours: "Closed" }]. Static (no "today"), so it is safe in
+ * build-time HTML.
+ */
+export function summarizeWeek(
+  hours: WeekHours = siteConfig.hours,
+  dayHours: (key: DayKey) => DayHours = (key) => hours[key],
+): { days: string; hours: string }[] {
+  const groups: { first: DayKey; last: DayKey; hours: string }[] = [];
+  for (const key of DAY_KEYS) {
+    const label = formatDayHours(dayHours(key));
+    const prev = groups[groups.length - 1];
+    if (prev && prev.hours === label) prev.last = key;
+    else groups.push({ first: key, last: key, hours: label });
+  }
+  return groups.map((g) => ({
+    days: g.first === g.last ? DAY_LABELS[g.first] : `${DAY_LABELS[g.first]}–${DAY_LABELS[g.last]}`,
+    hours: g.hours,
+  }));
+}

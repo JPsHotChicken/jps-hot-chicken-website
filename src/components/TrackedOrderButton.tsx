@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { trackConversion } from "@/lib/google-ads";
 import { decorateOrderingUrl, readAttribution } from "@/lib/attribution";
+import { trackEvent, type ClickEventParams } from "@/lib/analytics";
 
 type TrackedOrderButtonProps = {
   /** The ordering platform URL (Toast, SkyTab) or an internal /order path. */
@@ -11,6 +12,8 @@ type TrackedOrderButtonProps = {
   variant?: "solid" | "outline";
   className?: string;
   children?: React.ReactNode;
+  /** Extra GA4 context for the `order_pickup_click` event (store, platform). */
+  eventParams?: ClickEventParams;
 };
 
 /**
@@ -31,6 +34,7 @@ export function TrackedOrderButton({
   variant = "solid",
   className,
   children = "Order Online",
+  eventParams,
 }: TrackedOrderButtonProps) {
   const isExternal = /^https?:\/\//.test(href);
 
@@ -49,6 +53,7 @@ export function TrackedOrderButton({
     }
 
     event.preventDefault();
+    trackEvent("order_pickup_click", { link_url: href, ...eventParams });
     // Carry the click id across to the ordering platform so a completed order
     // over there can still be credited to the keyword that paid for the click.
     // Read at click time, not at render, so a click id captured after this

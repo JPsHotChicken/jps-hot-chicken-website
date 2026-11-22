@@ -5,6 +5,7 @@ import { Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatPhone, telHref } from "@/lib/format";
 import { trackConversion } from "@/lib/google-ads";
+import { trackEvent } from "@/lib/analytics";
 
 type TrackedCallButtonProps = {
   phone: string;
@@ -35,7 +36,10 @@ export function TrackedCallButton({
   return (
     <a
       href={telHref(phone)}
-      onClick={() => trackConversion("call")}
+      onClick={() => {
+        trackEvent("call_click", { link_url: telHref(phone) });
+        trackConversion("call");
+      }}
       className={cn(
         "inline-flex items-center justify-center gap-2 rounded-full border border-foreground/25 bg-background font-heading font-semibold tracking-wide text-foreground transition-all hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-foreground/30",
         size === "lg" ? "h-14 px-8 text-lg" : "h-11 px-6 text-base",

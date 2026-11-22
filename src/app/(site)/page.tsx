@@ -348,6 +348,14 @@ export default function HomePage() {
                           — {loc.street}, {loc.city}
                         </span>
                       </Link>
+                      {/* Sits above the card-wide order link so it stays clickable. */}
+                      <Link
+                        href={`/locations/${loc.pageSlug}`}
+                        className="relative z-10 self-start text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-brand hover:underline"
+                      >
+                        Hours &amp; directions
+                        <span className="sr-only"> for {loc.city}, {loc.state}</span>
+                      </Link>
                     </div>
                   </div>
                 </div>

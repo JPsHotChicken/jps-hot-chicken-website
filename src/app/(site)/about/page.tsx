@@ -28,8 +28,9 @@ export default function AboutPage() {
           <p>
             {siteConfig.name} started with a simple obsession: get Nashville-style hot
             chicken exactly right. Hand-breaded, fried to order, and brushed with a
-            cayenne-forward spice blend that you control — from a no-heat{" "}
-            <strong>Southern</strong> all the way up to <strong>Cluckin&apos; Hot</strong>.
+            cayenne-forward spice blend that you control, across four heat levels: no-heat{" "}
+            <strong>Southern</strong>, <strong>Mild</strong>, <strong>Hot</strong>, and{" "}
+            <strong>Extra Hot</strong>.
           </p>
           <p>
             We&apos;re a small kitchen that cares about the details: fresh oil, jumbo
@@ -60,7 +61,7 @@ export default function AboutPage() {
           },
           {
             title: "Your Heat, Your Call",
-            body: "Five levels from Southern to Cluckin' Hot — you set the pace.",
+            body: "Four levels, from no-heat Southern up to Extra Hot. You set the pace.",
           },
           {
             title: "Southern Sides",

@@ -9,7 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/", priority: 1, changeFrequency: "weekly" },
     { path: "/locations", priority: 0.8, changeFrequency: "monthly" },
     ...siteConfig.locations.map((loc) => ({
-      path: `/locations/${loc.slug}`,
+      path: `/locations/${loc.pageSlug}`,
       priority: 0.9,
       changeFrequency: "weekly" as const,
     })),

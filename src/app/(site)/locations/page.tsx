@@ -70,7 +70,7 @@ export default function LocationsPage() {
                 )}
                 <div className="flex flex-1 flex-col px-6 py-6 sm:px-8">
                   <h2 className="font-heading text-2xl font-bold uppercase tracking-tight sm:text-3xl">
-                    {loc.city}, {loc.state}
+                    Hot Chicken in {loc.city}, {loc.state}
                   </h2>
                   <p className="mt-1 flex items-start gap-1.5 text-base text-muted-foreground">
                     <MapPin className="mt-1 size-4 shrink-0 text-brand" aria-hidden="true" />
@@ -83,7 +83,7 @@ export default function LocationsPage() {
 
                   <div className="mt-6 flex flex-col gap-3">
                   <Link
-                    href={`/order/${loc.slug}`}
+                    href={`/locations/${loc.pageSlug}`}
                     className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-brand px-6 font-heading text-base font-bold uppercase tracking-wide text-brand-foreground shadow-sm transition-all after:absolute after:inset-0 after:content-[''] group-hover:brightness-110 group-hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand/50"
                   >
                     Hours, info &amp; directions

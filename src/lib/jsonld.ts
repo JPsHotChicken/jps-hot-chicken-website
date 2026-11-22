@@ -5,7 +5,7 @@ import { DAY_KEYS, DAY_LABELS } from "@/lib/hours";
  * schema.org structured data, built from `siteConfig` so it can never drift from
  * the visible content. One brand-level `Organization` node is injected site-wide
  * (root layout); a full `Restaurant` node per store is injected on its
- * `/locations/[slug]` page; the home page carries the whole graph. Shared `@id`s
+ * `/locations/[pageSlug]` page; the home page carries the whole graph. Shared `@id`s
  * let Google merge nodes seen on different pages.
  *
  * Fields without a confirmed real value (phone, ordering links, socials, GBP
@@ -53,8 +53,16 @@ function organizationNode() {
 }
 
 /** One physical store, with its real NAP (name/address/phone), geo, and hours. */
+/** Google Maps search link for one store — the visible "Get directions" target. */
+export function googleMapsUrl(loc: Location): string {
+  const q = encodeURIComponent(
+    `${siteConfig.name}, ${loc.streetNumber} ${loc.street}, ${loc.city}, ${loc.state} ${loc.zip}`,
+  );
+  return `https://www.google.com/maps/search/?api=1&query=${q}`;
+}
+
 function locationNode(loc: Location) {
-  const pageUrl = `${siteConfig.url}/locations/${loc.slug}`;
+  const pageUrl = `${siteConfig.url}/locations/${loc.pageSlug}`;
   return {
     "@type": "Restaurant",
     "@id": `${pageUrl}#restaurant`,
@@ -81,6 +89,10 @@ function locationNode(loc: Location) {
       longitude: loc.lng,
     },
     openingHoursSpecification: buildOpeningHours(loc.hours ?? siteConfig.hours),
+    hasMap: googleMapsUrl(loc),
+    // The store's own online-ordering menu (Toast / SkyTab) — the live menu
+    // with current prices, until /menu exists on this site.
+    ...(loc.orderingUrl && { menu: loc.orderingUrl }),
     ...(loc.googleBusinessUrl && { sameAs: [loc.googleBusinessUrl] }),
     parentOrganization: { "@id": ORG_ID },
     acceptsReservations: false,
@@ -99,7 +111,34 @@ export function buildOrganizationJsonLd() {
   return { ...JSONLD_CONTEXT, ...organizationNode() };
 }
 
-/** Full Restaurant node for one store, injected on its /locations/[slug] page. */
+/** Visible breadcrumb trail as BreadcrumbList. Paths are site-relative. */
+export function buildBreadcrumbJsonLd(items: { name: string; path: string }[]) {
+  return {
+    ...JSONLD_CONTEXT,
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: item.name,
+      item: new URL(item.path, siteConfig.url).toString(),
+    })),
+  };
+}
+
+/** FAQPage for questions answered in visible text on the same page. */
+export function buildFaqJsonLd(faqs: { question: string; answer: string }[]) {
+  return {
+    ...JSONLD_CONTEXT,
+    "@type": "FAQPage",
+    mainEntity: faqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: { "@type": "Answer", text: faq.answer },
+    })),
+  };
+}
+
+/** Full Restaurant node for one store, injected on its /locations/[pageSlug] page. */
 export function buildLocationJsonLd(loc: Location) {
   return { ...JSONLD_CONTEXT, ...locationNode(loc) };
 }
