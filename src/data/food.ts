@@ -63,7 +63,5 @@ export const combos: FoodImage[] = [
   { src: "/images/food/combos/cropped/breastQuarterCombo.png", name: "Breast Quarter Combo", alt: "Hot chicken breast quarter combo" },
   { src: "/images/food/combos/cropped/legQuarterCombo.png", name: "Leg Quarter Combo", alt: "Hot chicken leg quarter combo" },
   { src: "/images/food/combos/cropped/burritoCombo.png", name: "JP's Burrito Combo", alt: "Hot chicken burrito combo" },
-  { src: "/images/food/combos/cropped/shrimpBurritoCombo.png", name: "Shrimp Burrito Combo", alt: "Shrimp burrito combo" },
-  { src: "/images/food/combos/cropped/shrimpBitesCombo.png", name: "Shrimp Bites Combo", alt: "Fried shrimp bites combo" },
   { src: "/images/food/combos/cropped/catfishCombo.png", name: "Catfish Combo", alt: "Fried catfish combo" },
 ];

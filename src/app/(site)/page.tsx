@@ -30,13 +30,16 @@ const INTERIOR_IMAGES = Array.from({ length: 9 }, (_, i) => ({
   alt: `Inside the JP's Hot Chicken Trenton Rd dining room (photo ${i + 1} of 9)`,
 }));
 
+const CITY_LIST = siteConfig.locations.map((loc) => `${loc.city}, ${loc.state}`).join(" & ");
+
 export const metadata: Metadata = {
+  // Kept under ~60 characters so Google shows it whole; both cities named.
   title: {
-    absolute: `${siteConfig.name} — ${siteConfig.tagline} in ${siteConfig.locations
-      .map((loc) => `${loc.city}, ${loc.state}`)
-      .join(" & ")}`,
+    absolute: `${siteConfig.name} | ${CITY_LIST}`,
   },
-  description: siteConfig.description,
+  description: `Nashville-style hot chicken in ${siteConfig.locations
+    .map((loc) => `${loc.city}, ${loc.state}`)
+    .join(" and ")}: sandwiches, jumbo tenders, wings and catfish in four heat levels. Order pickup online.`,
   alternates: { canonical: "/" },
 };
 
@@ -138,10 +141,6 @@ export default function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(buildHomeJsonLd()) }}
       />
-      {/* Visually-hidden page title (the logo carries the brand visually). */}
-      <h1 className="sr-only">
-        {siteConfig.name} — {siteConfig.tagline}
-      </h1>
       {/* Hero photo */}
       <section className="mx-auto w-full max-w-6xl px-4 pt-3 sm:px-6 sm:pt-8">
         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl bg-muted sm:aspect-[16/9]">
@@ -156,11 +155,17 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Order options */}
+      {/* Order options, under the one H1 that says what we serve and where. */}
       <section
-        aria-label="Order online"
+        aria-labelledby="home-title"
         className="mx-auto w-full max-w-6xl px-4 py-4 sm:px-6 sm:py-10"
       >
+        <h1
+          id="home-title"
+          className="mx-auto mb-4 max-w-2xl text-center font-heading text-xl font-extrabold uppercase leading-tight tracking-tight sm:mb-6 sm:text-3xl"
+        >
+          Nashville Hot Chicken in {CITY_LIST}
+        </h1>
         <div className="mx-auto grid max-w-xs grid-cols-2 gap-3 sm:max-w-md sm:gap-4">
           {ORDER_OPTIONS.map(({ href, label, Icon, external }) => {
             const cardClass =

@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/menu", label: "Menu" },
   { href: "/locations", label: "Locations" },
+  { href: "/faq", label: "FAQ" },
   // Careers temporarily hidden — restore when hiring resumes.
   // { href: "/careers", label: "Careers" },
   { href: "/contact", label: "Contact" },

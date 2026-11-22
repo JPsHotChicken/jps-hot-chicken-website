@@ -7,7 +7,7 @@ import { OrderButton } from "@/components/OrderButton";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "The story behind JP's Hot Chicken — Nashville-style heat, hand-breaded and fried to order, brought to Clarksville, TN.",
+    "The story behind JP's Hot Chicken: Nashville-style hot chicken, fried to order in four heat levels, in Clarksville, TN and Oak Grove, KY.",
   alternates: { canonical: "/about" },
 };
 
