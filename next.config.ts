@@ -27,6 +27,11 @@ const nextConfig: NextConfig = {
         destination: "/locations/clarksville-tn",
         permanent: true,
       },
+      // Short URLs from the Oct 2026 brief (never live, but easy to type or
+      // print on a flyer) go to the page that now covers them.
+      { source: "/clarksville", destination: "/locations/clarksville-tn", permanent: true },
+      { source: "/oak-grove", destination: "/locations/oak-grove-ky", permanent: true },
+      { source: "/catering", destination: "/menu#catering", permanent: true },
       {
         source: "/privacy-policy",
         destination: "/privacy",

@@ -32,15 +32,25 @@ const INTERIOR_IMAGES = Array.from({ length: 9 }, (_, i) => ({
 
 const CITY_LIST = siteConfig.locations.map((loc) => `${loc.city}, ${loc.state}`).join(" & ");
 
+const HOME_DESCRIPTION = `Nashville-style hot chicken in ${siteConfig.locations
+  .map((loc) => `${loc.city}, ${loc.state}`)
+  .join(" and ")}: sandwiches, jumbo tenders, wings and catfish in four heat levels. Order pickup online.`;
+
 export const metadata: Metadata = {
   // Kept under ~60 characters so Google shows it whole; both cities named.
   title: {
     absolute: `${siteConfig.name} | ${CITY_LIST}`,
   },
-  description: `Nashville-style hot chicken in ${siteConfig.locations
-    .map((loc) => `${loc.city}, ${loc.state}`)
-    .join(" and ")}: sandwiches, jumbo tenders, wings and catfish in four heat levels. Order pickup online.`,
+  description: HOME_DESCRIPTION,
   alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: siteConfig.name,
+    locale: "en_US",
+    url: "/",
+    title: `${siteConfig.name} | ${CITY_LIST}`,
+    description: HOME_DESCRIPTION,
+  },
 };
 
 const ORDER_OPTIONS = [

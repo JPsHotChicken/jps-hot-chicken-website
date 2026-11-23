@@ -35,21 +35,17 @@ export const metadata: Metadata = {
     "chicken tenders",
     "chicken sandwich",
   ],
-  alternates: {
-    canonical: "/",
-  },
+  // No canonical, og:url, og:title or description here: Next copies a
+  // layout's nested metadata onto every page that doesn't set its own, so these
+  // made /menu, /faq etc. claim to be the home page when shared or crawled.
+  // Each page sets its own canonical; social previews fall back to its <title>.
   openGraph: {
     type: "website",
     siteName: siteConfig.name,
-    title: `${siteConfig.name} — ${siteConfig.tagline}`,
-    description: siteConfig.description,
-    url: siteConfig.url,
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: `${siteConfig.name} — ${siteConfig.tagline}`,
-    description: siteConfig.description,
   },
   robots: {
     index: true,
