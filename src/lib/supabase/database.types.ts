@@ -13,6 +13,44 @@ export type Database = {
   };
   public: {
     Tables: {
+      attendance_entries: {
+        Row: {
+          created_at: string;
+          employee_id: string | null;
+          employee_name: string;
+          entry_date: string;
+          entry_time: string;
+          id: string;
+          reason: string;
+        };
+        Insert: {
+          created_at?: string;
+          employee_id?: string | null;
+          employee_name: string;
+          entry_date: string;
+          entry_time: string;
+          id?: string;
+          reason: string;
+        };
+        Update: {
+          created_at?: string;
+          employee_id?: string | null;
+          employee_name?: string;
+          entry_date?: string;
+          entry_time?: string;
+          id?: string;
+          reason?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "attendance_entries_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       employees: {
         Row: {
           active: boolean;

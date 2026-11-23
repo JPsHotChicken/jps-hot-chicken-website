@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import {
+  CalendarCheck,
   CalendarRange,
   ClipboardCheck,
   ClipboardList,
@@ -28,7 +29,8 @@ export type AdminView =
   | "applications"
   | "performance"
   | "payStubs"
-  | "reports";
+  | "reports"
+  | "attendance";
 
 /** The two halves of `/admin`, which switch in place rather than navigating. */
 export type SchedulerView = Extract<AdminView, "scheduler" | "staff">;
@@ -99,6 +101,13 @@ const TABS: {
     icon: <FileText className="size-4" />,
     hint: "Split the payroll PDF and release it",
     href: "/admin/pay-stubs",
+  },
+  {
+    view: "attendance",
+    label: "Attendance tracker",
+    icon: <CalendarCheck className="size-4" />,
+    hint: "Lates and call-outs, exported per person",
+    href: "/admin/attendance",
   },
   {
     view: "performance",
