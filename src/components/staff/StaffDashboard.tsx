@@ -122,6 +122,7 @@ export function StaffDashboard({
             variant="ghost"
             onClick={() => setMenuOpen(true)}
             aria-expanded={menuOpen}
+            data-tour="menu"
             className="-ml-2 gap-2 px-2 text-base font-semibold"
           >
             <Menu className="size-5" />
@@ -166,6 +167,7 @@ export function StaffDashboard({
             recurringDays={recurringDays}
             shiftDays={shiftDays}
             recurring={recurring}
+            tourFor={employee}
             onLoadDates={loadScheduled}
             onOpenMenu={() => setMenuOpen(true)}
           />

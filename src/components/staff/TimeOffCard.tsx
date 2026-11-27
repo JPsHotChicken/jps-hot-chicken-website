@@ -431,6 +431,9 @@ export function TimeOffCard({ requests, onRequestsChange, scheduledDates, onRang
         <TimeOffCalendar
           requests={requests}
           scheduledDates={scheduledDates}
+          // The day whose popup is open stays highlighted, so it's clear which
+          // day the request is for.
+          selection={openDay ? { start: openDay, end: openDay } : null}
           onDayClick={(iso) => open(iso)}
           onRangeChange={onRangeChange}
         />

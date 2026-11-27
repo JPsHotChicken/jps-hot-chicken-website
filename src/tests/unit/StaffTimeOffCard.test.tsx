@@ -124,6 +124,16 @@ describe("Request time off card", () => {
     ).toBeInTheDocument();
   });
 
+  it("highlights the chosen day while its popup is open", () => {
+    card();
+    fireEvent.click(day(/^Tuesday, November 24/));
+    expect(day(/^Tuesday, November 24/)).toHaveClass("bg-brand");
+    expect(day(/^Wednesday, November 25/)).not.toHaveClass("bg-brand");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(day(/^Tuesday, November 24/)).not.toHaveClass("bg-brand");
+  });
+
   it("closes with Escape", () => {
     card();
     fireEvent.click(day(/^Tuesday, November 24/));

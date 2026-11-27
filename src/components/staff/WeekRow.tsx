@@ -97,6 +97,7 @@ export function WeekRow({
         return (
           <li
             key={date}
+            data-day={date}
             aria-current={isToday ? "date" : undefined}
             aria-label={`${weekday} ${formatOrdinalDate(date)}${isToday ? ", today" : ""}, ${
               isWorking ? "working" : "off"
