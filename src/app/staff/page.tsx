@@ -18,6 +18,8 @@ import { listRuleSignatures } from "@/lib/staff-rules-repo";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import {
   CALENDAR_DAY_COUNT,
+  HOME_WEEKS_AHEAD,
+  HOME_WEEKS_BACK,
   addDays,
   calendarStart,
   dayKeyOf,
@@ -81,10 +83,15 @@ export default async function StaffPage({
     to: toISODate(addDays(scheduledFrom, CALENDAR_DAY_COUNT + 13)),
   };
 
-  // Shifts are read from this week's Sunday, so My schedule can show the days of
-  // this week already gone, and well past next Saturday for the home page.
-  const shiftsFrom = sundayWeekOf(todayISO)[0];
-  const shiftsTo = toISODate(addDays(fromISODate(todayISO), UPCOMING_DAYS));
+  // Shifts are read for every day the home page's week strip can swipe to, so
+  // tapping any of its days opens that day's hours and role — past weeks
+  // included. That also covers this week's days already gone on My schedule,
+  // and well past next Saturday for the home page's next shift.
+  const thisSunday = fromISODate(sundayWeekOf(todayISO)[0]);
+  const shiftsFrom = toISODate(addDays(thisSunday, -7 * HOME_WEEKS_BACK));
+  const stripEnd = toISODate(addDays(thisSunday, 7 * HOME_WEEKS_AHEAD + 6));
+  const upcomingEnd = toISODate(addDays(fromISODate(todayISO), UPCOMING_DAYS));
+  const shiftsTo = stripEnd > upcomingEnd ? stripEnd : upcomingEnd;
 
   const [
     publishedWeeks,

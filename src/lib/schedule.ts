@@ -539,6 +539,14 @@ export function formatOrdinalDate(dateISO: string): string {
 /* --------------------------------------------------- the staff calendar */
 
 /** Whole weeks the staff calendar shows before and after the current one. */
+/**
+ * How many weeks either side of this one the home page's week strip can be
+ * swiped to. Here rather than in the strip so the server can load shift details
+ * for every day it can show.
+ */
+export const HOME_WEEKS_BACK = 3;
+export const HOME_WEEKS_AHEAD = 4;
+
 export const CALENDAR_WEEKS_BEFORE = 2;
 export const CALENDAR_WEEKS_AFTER = 3;
 

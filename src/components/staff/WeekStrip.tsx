@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import {
+  HOME_WEEKS_AHEAD,
+  HOME_WEEKS_BACK,
   addDays,
   formatShortDate,
   fromISODate,
@@ -15,8 +17,8 @@ import {
 import { WeekLegend, WeekRow, useDayMarks } from "./WeekRow";
 
 /** How many weeks either side of this one can be swiped to. */
-export const WEEKS_BACK = 3;
-export const WEEKS_AHEAD = 4;
+export const WEEKS_BACK = HOME_WEEKS_BACK;
+export const WEEKS_AHEAD = HOME_WEEKS_AHEAD;
 
 type Props = {
   /** Today at the restaurant, `YYYY-MM-DD`. */
@@ -32,6 +34,8 @@ type Props = {
    * work days it doesn't already have.
    */
   onRangeChange?: (fromISO: string, toISO: string) => void;
+  /** When given, tapping a day hands it over, for a popup to show its shift. */
+  onSelectDay?: (iso: string) => void;
 };
 
 /** "This week", "Last week", "Next week", or the dates for anything further. */
@@ -65,6 +69,7 @@ export function WeekStrip({
   timeOff = [],
   recurringDays = [],
   onRangeChange,
+  onSelectDay,
 }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(WEEKS_BACK);
@@ -171,6 +176,7 @@ export function WeekStrip({
             marks={marks}
             label={week.label}
             hidden={weekIndex !== index}
+            onSelectDay={onSelectDay}
             className="w-full shrink-0 snap-start snap-always"
           />
         ))}

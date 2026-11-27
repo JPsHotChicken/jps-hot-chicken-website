@@ -164,6 +164,8 @@ export function StaffDashboard({
             workDates={scheduledDates}
             timeOff={requests}
             recurringDays={recurringDays}
+            shiftDays={shiftDays}
+            recurring={recurring}
             onLoadDates={loadScheduled}
             onOpenMenu={() => setMenuOpen(true)}
           />

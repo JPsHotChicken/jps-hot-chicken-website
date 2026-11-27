@@ -78,6 +78,7 @@ export function WeekRow({
     <ol
       aria-label={label}
       aria-hidden={hidden}
+      inert={hidden}
       className={`grid grid-cols-7 gap-1 text-center ${className}`}
     >
       {days.map((date) => {

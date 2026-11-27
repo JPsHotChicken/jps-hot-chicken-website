@@ -238,3 +238,36 @@ describe("the Menu reminder", () => {
     expect(onOpenMenu).toHaveBeenCalled();
   });
 });
+
+describe("tapping a day in the week strip", () => {
+  const today = { date: "2026-11-22", closed: false, posted: true, shifts: [] };
+
+  it("opens that day's hours and role", () => {
+    render(
+      <StaffHome
+        today={today}
+        upcoming={null}
+        workDates={["2026-11-25"]}
+        shiftDays={[
+          {
+            date: "2026-11-25",
+            shifts: [{ start: 660, end: 1140, role: { name: "Fry station", color: "orange" } }],
+          },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Details for Wednesday Nov 25th" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("11:00 AM – 7:00 PM")).toBeInTheDocument();
+    expect(within(dialog).getByText("Fry station")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("says so on a day they're off", () => {
+    render(<StaffHome today={today} upcoming={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Details for Monday Nov 23rd" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("You're not scheduled to work.");
+  });
+});

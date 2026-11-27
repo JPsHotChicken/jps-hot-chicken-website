@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { CalendarClock, Menu } from "lucide-react";
 
 import { roleColorClasses } from "@/lib/role-colors";
@@ -8,10 +11,12 @@ import {
   formatRange,
   type StaffShift,
   type DayKey,
+  type RecurringTimeOff,
   type StaffShiftDay,
   type TimeOffRequest,
 } from "@/lib/schedule";
 import type { Weather } from "@/lib/weather";
+import { DayDetails } from "./DayDetails";
 import { Coffee } from "./TodayArt";
 import { WeatherCard } from "./WeatherCard";
 import { WeekStrip } from "./WeekStrip";
@@ -38,6 +43,10 @@ type Props = {
   timeOff?: TimeOffRequest[];
   /** Weekdays they have off every week, ringed red in the week row. */
   recurringDays?: DayKey[];
+  /** Their published shifts by day, for the popup a tapped day opens. */
+  shiftDays?: StaffShiftDay[];
+  /** Their every-week days off, for that popup. */
+  recurring?: RecurringTimeOff[];
   /** Open the Menu, from the reminder at the bottom of the page. */
   onOpenMenu?: () => void;
   /** Fetch work days for a span of dates the week strip can swipe to. */
@@ -82,9 +91,13 @@ export function StaffHome({
   workDates = [],
   timeOff = [],
   recurringDays = [],
+  shiftDays = [],
+  recurring = [],
   onOpenMenu,
   onLoadDates,
 }: Props) {
+  /** The day tapped in the week strip, whose shift the popup is showing. */
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const working = today.shifts.length > 0;
   const empty = working ? null : noShiftLine(today);
 
@@ -170,6 +183,7 @@ export function StaffHome({
         )}
 
         <WeekStrip
+          onSelectDay={setSelectedDay}
           todayISO={today.date}
           workDates={workDates}
           timeOff={timeOff}
@@ -190,6 +204,17 @@ export function StaffHome({
           <span className="font-bold text-foreground">Menu</span>
         </span>
       </button>
+
+      {selectedDay && (
+        <DayDetails
+          date={selectedDay}
+          todayISO={today.date}
+          shiftDay={shiftDays.find((entry) => entry.date === selectedDay)}
+          timeOff={timeOff}
+          recurring={recurring}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
     </div>
   );
 }

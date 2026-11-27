@@ -90,7 +90,7 @@ export default async function StaffPayStubPage({
       <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:px-6">
         <PayStubViewer stubId={stub.id} />
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          This is your pay stub. Only you and the owner can open it.
+          This is your pay stub. Only you can open it.
         </p>
       </main>
     </div>
