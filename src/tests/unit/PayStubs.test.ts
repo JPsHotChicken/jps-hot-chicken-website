@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkTotal,
   formatPayDate,
+  mondayOfISO,
+  payWeekOf,
+  readCheckAmounts,
   matchName,
   normalizeName,
   parsePayrollText,
@@ -245,5 +249,73 @@ describe("parsePayrollText", () => {
       "JPS HOT CHICKEN TN INC\n08/19/26\nNet Check\nTotal Pay\n",
     ]);
     expect(parsed.pages.at(-1)!.payrollName).toBeNull();
+  });
+});
+
+/**
+ * The Wages table as unpdf reads it off a real check: this check first, then the
+ * year to date, each starting with a Weekly line.
+ */
+const CHECK_TEXT = [
+  "Rate Hours Amount Deductions AmountWages",
+  "13.00 9.89Weekly 128.57 19.50 0.00 26.00 0.00 9.89 128.57",
+  "Reported Tips 31.56 0.00 0.00 31.56",
+  "FICA-SS 9.92",
+  "153.34Weekly 1,944.53 0.00 0.00 153.34 1,944.53",
+  "Reported Tips 306.84 0.00 0.00 306.84",
+  "Bonus 8.88 0.00 0.00 8.88",
+].join("\n");
+
+describe("readCheckAmounts", () => {
+  it("reads this check's pay and tips, not the year to date", () => {
+    expect(readCheckAmounts(CHECK_TEXT)).toEqual({
+      wages: 128.57,
+      tips: 31.56,
+      bonus: 0,
+      hours: 9.89,
+    });
+  });
+
+  it("takes the row total, so overtime counts", () => {
+    const text = [
+      "12.00 40.00Weekly 480.00 18.00 4.18 75.24 24.00 0.00 44.18 555.24",
+      "Reported Tips 30.02 0.00 0.00 30.02",
+      "Bonus 37.08 0.00 0.00 37.08",
+      "40.00Weekly 480.00 4.18 75.24 0.00 44.18 555.24",
+    ].join("\n");
+    expect(readCheckAmounts(text)).toEqual({ wages: 555.24, tips: 30.02, bonus: 37.08, hours: 44.18 });
+  });
+
+  it("reads thousands", () => {
+    expect(readCheckAmounts("1.00 1.00Weekly 1,234.50 1.00 1,234.50")?.wages).toBe(1234.5);
+  });
+
+  it("gives up rather than guessing when there's no Weekly line", () => {
+    expect(readCheckAmounts("Net Check\n147.89")).toBeNull();
+  });
+
+  it("adds pay, tips and bonus without float drift", () => {
+    expect(checkTotal({ wages: 128.57, tips: 31.56, bonus: 0 })).toBe(160.13);
+  });
+});
+
+describe("payWeekOf", () => {
+  it("finds the Monday of a Monday-to-Sunday period", () => {
+    expect(mondayOfISO("2026-11-15")).toBe("2026-11-09");
+    expect(
+      payWeekOf({ payDate: "2026-11-16", periodStart: "2026-11-09", periodEnd: "2026-11-15" }),
+    ).toBe("2026-11-09");
+  });
+
+  it("puts a period printed a day early on the week it mostly covers", () => {
+    expect(
+      payWeekOf({ payDate: "2026-11-02", periodStart: "2026-10-25", periodEnd: "2026-11-01" }),
+    ).toBe("2026-10-26");
+  });
+
+  it("falls back to the week before the pay date", () => {
+    expect(payWeekOf({ payDate: "2026-08-19", periodStart: null, periodEnd: null })).toBe(
+      "2026-08-10",
+    );
   });
 });

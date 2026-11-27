@@ -1,7 +1,9 @@
 import "server-only";
 
 import { getDb } from "@/lib/supabase/server";
+import { readStubAmounts } from "@/lib/pay-stubs-pdf";
 import {
+  type CheckAmounts,
   normalizeName,
   suggestAssignments,
   type MatchSource,
@@ -254,16 +256,25 @@ export async function saveBatch(input: {
       }),
     );
 
-    const { error: rowError } = await db.from("pay_stubs").insert(
-      suggestions.map((suggestion) => ({
-        batch_id: batch.id,
-        page_number: suggestion.pageNumber,
-        employee_id: suggestion.employeeId,
-        payroll_name: suggestion.payrollName,
-        match_source: suggestion.match,
-        storage_path: pagePath(batch.id, suggestion.pageNumber),
-      })),
+    const rows = suggestions.map((suggestion) => ({
+      batch_id: batch.id,
+      page_number: suggestion.pageNumber,
+      employee_id: suggestion.employeeId,
+      payroll_name: suggestion.payrollName,
+      match_source: suggestion.match,
+      storage_path: pagePath(batch.id, suggestion.pageNumber),
+    }));
+    const amountsByPage = new Map(parsed.pages.map((page) => [page.pageNumber, page.amounts]));
+    const readAt = new Date().toISOString();
+
+    let { error: rowError } = await db.from("pay_stubs").insert(
+      rows.map((row) => ({ ...row, ...amountColumns(amountsByPage.get(row.page_number) ?? null, readAt) })),
     );
+    // Until the amount columns exist, an upload still has to work; the staff
+    // page reads the amounts off the stored pages later instead.
+    if (rowError && isMissingColumn(rowError)) {
+      ({ error: rowError } = await db.from("pay_stubs").insert(rows));
+    }
     if (rowError) fail("recording pages", rowError);
 
     return batch.id;
@@ -444,30 +455,108 @@ export async function readStubFile(storagePath: string): Promise<ArrayBuffer> {
   return data.arrayBuffer();
 }
 
-/** Every released stub belonging to one person, newest pay run first. */
-export async function payStubsForEmployee(employeeId: string): Promise<
-  { id: string; payDate: string | null; periodStart: string | null; periodEnd: string | null }[]
-> {
-  const { data, error } = await getDb()
-    .from("pay_stubs")
-    .select("id, pay_stub_batches!inner(pay_date, period_start, period_end, released_at)")
-    .eq("employee_id", employeeId)
-    .not("pay_stub_batches.released_at", "is", null);
-  if (error) fail("reading someone's pay stubs", error);
+/* ----------------------------------------------------------------- amounts */
 
-  return data
-    .map((row) => {
-      const batch = row.pay_stub_batches as unknown as {
+/** Postgres "undefined column", or PostgREST not finding it in its schema cache. */
+function isMissingColumn(error: { code?: string }): boolean {
+  return error.code === "42703" || error.code === "PGRST204";
+}
+
+/** The row values for a check's amounts; `readAt` is set even when none were read. */
+function amountColumns(amounts: CheckAmounts | null, readAt: string) {
+  return {
+    wages: amounts?.wages ?? null,
+    tips: amounts?.tips ?? null,
+    bonus: amounts?.bonus ?? null,
+    hours: amounts?.hours ?? null,
+    amounts_read_at: readAt,
+  };
+}
+
+/**
+ * Reads the amounts off a stored page and keeps them on its row, so the PDF is
+ * only opened once. This is how stubs uploaded before amounts were saved catch
+ * up. A failure here only means the page shows "see the check" for now.
+ */
+async function fillAmounts(stubId: string, storagePath: string): Promise<CheckAmounts | null> {
+  try {
+    const amounts = await readStubAmounts(new Uint8Array(await readStubFile(storagePath)));
+    const { error } = await getDb()
+      .from("pay_stubs")
+      .update(amountColumns(amounts, new Date().toISOString()))
+      .eq("id", stubId);
+    if (error && !isMissingColumn(error)) {
+      console.error("[pay-stubs] saving read amounts:", error.message);
+    }
+    return amounts;
+  } catch (problem) {
+    console.error("[pay-stubs] reading amounts off a stored page:", problem);
+    return null;
+  }
+}
+
+const toNumber = (value: unknown) => (value === null || value === undefined ? null : Number(value));
+
+export type EmployeePayStub = {
+  id: string;
+  payDate: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  /** This check's pay before taxes, or null when it couldn't be read. */
+  amounts: CheckAmounts | null;
+};
+
+/** Every released stub belonging to one person, newest pay run first. */
+export async function payStubsForEmployee(employeeId: string): Promise<EmployeePayStub[]> {
+  const db = getDb();
+  const batchColumns = "pay_stub_batches!inner(pay_date, period_start, period_end, released_at)";
+  const query = (columns: string) =>
+    db
+      .from("pay_stubs")
+      .select(`${columns}, ${batchColumns}`)
+      .eq("employee_id", employeeId)
+      .not("pay_stub_batches.released_at", "is", null);
+
+  let { data, error } = await query(
+    "id, storage_path, wages, tips, bonus, hours, amounts_read_at",
+  );
+  // Before the amount columns exist: amounts are read off the pages each time.
+  const columnsMissing = Boolean(error && isMissingColumn(error));
+  if (columnsMissing) ({ data, error } = await query("id, storage_path"));
+  if (error || !data) fail("reading someone's pay stubs", error);
+
+  const stubs = await Promise.all(
+    (data as unknown as Record<string, unknown>[]).map(async (row) => {
+      const batch = row.pay_stub_batches as {
         pay_date: string | null;
         period_start: string | null;
         period_end: string | null;
       };
+
+      let amounts: CheckAmounts | null = null;
+      if (!columnsMissing && row.amounts_read_at) {
+        amounts =
+          row.wages === null
+            ? null
+            : {
+                wages: toNumber(row.wages)!,
+                tips: toNumber(row.tips) ?? 0,
+                bonus: toNumber(row.bonus) ?? 0,
+                hours: toNumber(row.hours),
+              };
+      } else {
+        amounts = await fillAmounts(row.id as string, row.storage_path as string);
+      }
+
       return {
-        id: row.id,
+        id: row.id as string,
         payDate: batch.pay_date,
         periodStart: batch.period_start,
         periodEnd: batch.period_end,
+        amounts,
       };
-    })
-    .sort((a, b) => (b.payDate ?? "").localeCompare(a.payDate ?? ""));
+    }),
+  );
+
+  return stubs.sort((a, b) => (b.payDate ?? "").localeCompare(a.payDate ?? ""));
 }

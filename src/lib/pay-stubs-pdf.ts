@@ -3,7 +3,12 @@ import "server-only";
 import { PDFDocument } from "pdf-lib";
 import { extractText, getDocumentProxy } from "unpdf";
 
-import { parsePayrollText, type ParsedPayroll } from "@/lib/pay-stubs";
+import {
+  parsePayrollText,
+  readCheckAmounts,
+  type CheckAmounts,
+  type ParsedPayroll,
+} from "@/lib/pay-stubs";
 
 /**
  * Turning the accountant's payroll PDF into one PDF per person.
@@ -63,4 +68,19 @@ export async function readPayrollPdf(bytes: Uint8Array): Promise<ReadPayroll> {
   }
 
   return { ...parsePayrollText(pageTexts), pageFiles };
+}
+
+/**
+ * The pay and tips on one stored stub, for stubs saved before amounts were
+ * read at upload. Null when the page can't be read or the layout isn't the
+ * one expected.
+ */
+export async function readStubAmounts(bytes: Uint8Array): Promise<CheckAmounts | null> {
+  try {
+    const document = await getDocumentProxy(new Uint8Array(bytes));
+    const { text } = await extractText(document, { mergePages: true });
+    return readCheckAmounts(text);
+  } catch {
+    return null;
+  }
 }

@@ -152,9 +152,8 @@ export function StaffHome({
                   {formatRange(shift)}
                   {shift.role && (
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                        roleColorClasses(shift.role.color).pill
-                      }`}
+                      className={`rounded-full px-2 py-0.5 text-xs font-bold ${roleColorClasses(shift.role.color).pill
+                        }`}
                     >
                       {shift.role.name}
                     </span>
@@ -187,7 +186,7 @@ export function StaffHome({
       >
         <Menu aria-hidden className="size-4 shrink-0 text-brand" />
         <span>
-          Pay stubs, time off &amp; more: tap{" "}
+          {" "}
           <span className="font-bold text-foreground">Menu</span>
         </span>
       </button>

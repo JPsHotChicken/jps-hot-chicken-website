@@ -160,6 +160,11 @@ export type Database = {
       };
       pay_stubs: {
         Row: {
+          amounts_read_at: string | null;
+          bonus: number | null;
+          hours: number | null;
+          tips: number | null;
+          wages: number | null;
           batch_id: string;
           created_at: string;
           employee_id: string | null;
@@ -171,6 +176,11 @@ export type Database = {
           storage_path: string;
         };
         Insert: {
+          amounts_read_at?: string | null;
+          bonus?: number | null;
+          hours?: number | null;
+          tips?: number | null;
+          wages?: number | null;
           batch_id: string;
           created_at?: string;
           employee_id?: string | null;
@@ -182,6 +192,11 @@ export type Database = {
           storage_path: string;
         };
         Update: {
+          amounts_read_at?: string | null;
+          bonus?: number | null;
+          hours?: number | null;
+          tips?: number | null;
+          wages?: number | null;
           batch_id?: string;
           created_at?: string;
           employee_id?: string | null;

@@ -18,6 +18,6 @@ export const MOVED_STAFF_VIEWS: Record<string, StaffView> = { timeOff: "schedule
 export const STAFF_VIEW_LABELS: Record<StaffView, string> = {
   home: "Home",
   schedule: "My schedule",
-  payStubs: "Pay stubs",
+  payStubs: "Pay Out",
   rules: "Rules",
 };

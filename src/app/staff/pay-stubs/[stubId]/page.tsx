@@ -61,7 +61,7 @@ export default async function StaffPayStubPage({
           <Link
             href="/staff?view=payStubs"
             className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
-            aria-label="Back to my pay stubs"
+            aria-label="Back to Pay Out"
           >
             <ChevronLeft />
           </Link>

@@ -23,6 +23,20 @@ export type ParsedPage = {
   pageNumber: number;
   /** The name as payroll printed it, or null when no name could be read. */
   payrollName: string | null;
+  /** This check's pay and tips, or null when the layout couldn't be read. */
+  amounts: CheckAmounts | null;
+};
+
+/** The money on one check, before taxes, as the left-hand Wages table prints it. */
+export type CheckAmounts = {
+  /** The Weekly line's total: regular, overtime and double time together. */
+  wages: number;
+  /** The Reported Tips line; 0 when the check has none. */
+  tips: number;
+  /** The Bonus line; 0 when the check has none. */
+  bonus: number;
+  /** Total hours on the Weekly line, or null if they didn't read cleanly. */
+  hours: number | null;
 };
 
 export type ParsedPayroll = {
@@ -150,7 +164,7 @@ export function matchName(
  * for the owner to settle.
  */
 export function suggestAssignments(
-  pages: ParsedPage[],
+  pages: Pick<ParsedPage, "pageNumber" | "payrollName">[],
   roster: RosterEntry[],
   aliases: PayrollAlias[] = [],
 ): PageSuggestion[] {
@@ -276,9 +290,136 @@ export function parsePayrollText(pageTexts: string[]): ParsedPayroll {
     pages: pages.map((lines, index) => ({
       pageNumber: index + 1,
       payrollName: readPayrollName(lines, boilerplate),
+      amounts: readCheckAmounts(pageTexts[index]),
     })),
     ...readPayrollDates(dates),
   };
+}
+
+/* ----------------------------------------------------------------- amounts */
+
+/** "1,944.53" and "128.57" alike; every amount on the check has two decimals. */
+const MONEY = /\d{1,3}(?:,\d{3})+\.\d{2}|\d+\.\d{2}/g;
+
+function moneyIn(text: string): number[] {
+  return (text.match(MONEY) ?? []).map((value) => Number(value.replace(/,/g, "")));
+}
+
+/** The last amount on the first line starting with `label`, or 0 when it isn't printed. */
+function lineTotal(lines: string[], label: RegExp): number {
+  const line = lines.find((entry) => label.test(entry));
+  return line ? (moneyIn(line.replace(label, "")).at(-1) ?? 0) : 0;
+}
+
+/**
+ * This check's pay, tips and bonus, read off the Wages table on the left.
+ *
+ * The table is printed twice on every page: once for this check, then again
+ * for the year to date. Both start with a "Weekly" line, so everything before
+ * the second one belongs to this check. On each line the last figure is that
+ * row's Total column, which is what has to be read — on the Weekly line the
+ * first figure after the label is regular pay only, and overtime sits further
+ * along. The figure before the total is the row's total hours.
+ *
+ * Null when there's no Weekly line at all, which means the layout has changed
+ * and a guess would show somebody the wrong pay.
+ */
+export function readCheckAmounts(pageText: string): CheckAmounts | null {
+  const lines = pageText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const weekly = lines.findIndex((line) => /\d\s*Weekly\s+\d/.test(line));
+  if (weekly === -1) return null;
+  const yearToDate = lines.findIndex(
+    (line, index) => index > weekly && /\d\s*Weekly\s+\d/.test(line),
+  );
+  const thisCheck = yearToDate === -1 ? lines : lines.slice(0, yearToDate);
+
+  const figures = moneyIn(lines[weekly].slice(lines[weekly].indexOf("Weekly")));
+  if (figures.length === 0) return null;
+
+  return {
+    wages: figures.at(-1)!,
+    tips: lineTotal(thisCheck, /^Reported Tips\b/),
+    bonus: lineTotal(thisCheck, /^Bonus\b/),
+    hours: figures.length >= 2 ? figures.at(-2)! : null,
+  };
+}
+
+/**
+ * Pay, tips and bonus together: what the week earned, before taxes. Not always
+ * the check's own Total Pay — older checks leave reported tips out of it.
+ */
+export function checkTotal(amounts: Pick<CheckAmounts, "wages" | "tips" | "bonus">): number {
+  return Math.round((amounts.wages + amounts.tips + amounts.bonus) * 100) / 100;
+}
+
+/* ------------------------------------------------------------------- weeks */
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Days since the epoch for an ISO date, so date maths ignores time zones. */
+function dayNumber(iso: string): number {
+  const [year, month, day] = iso.split("-").map(Number);
+  return Math.round(Date.UTC(year, month - 1, day) / DAY_MS);
+}
+
+function isoOfDayNumber(days: number): string {
+  return new Date(days * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** The Monday of the week an ISO date falls in. */
+export function mondayOfISO(iso: string): string {
+  const days = dayNumber(iso);
+  // 1970-01-01 was a Thursday, so day 0 is three days after a Monday.
+  const sinceMonday = (((days + 3) % 7) + 7) % 7;
+  return isoOfDayNumber(days - sinceMonday);
+}
+
+/** The ISO date `count` days after (or before) another. */
+export function addDaysISO(iso: string, count: number): string {
+  return isoOfDayNumber(dayNumber(iso) + count);
+}
+
+/**
+ * The Monday of the week a check pays for.
+ *
+ * Pay periods run Monday to Sunday, but payroll sometimes prints a start date
+ * a day early (Sunday Oct 25 – Sunday Nov 1). So rather than trust the start
+ * date, this takes the week the period overlaps most. With no period at all,
+ * the week before the pay date is the best guess, since checks are dated
+ * after the week they pay for.
+ */
+export function payWeekOf(stub: {
+  payDate: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+}): string | null {
+  if (stub.periodStart && stub.periodEnd && stub.periodStart <= stub.periodEnd) {
+    const start = dayNumber(stub.periodStart);
+    const end = dayNumber(stub.periodEnd);
+    let best: { monday: string; overlap: number } | null = null;
+    for (
+      let monday = mondayOfISO(stub.periodStart);
+      monday <= stub.periodEnd;
+      monday = addDaysISO(monday, 7)
+    ) {
+      const first = Math.max(start, dayNumber(monday));
+      const last = Math.min(end, dayNumber(monday) + 6);
+      const overlap = last - first + 1;
+      if (!best || overlap > best.overlap) best = { monday, overlap };
+    }
+    return best?.monday ?? null;
+  }
+  if (stub.payDate) return mondayOfISO(addDaysISO(stub.payDate, -7));
+  return null;
+}
+
+/** "$1,944.53" */
+export function formatMoney(value: number): string {
+  return value.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
 /* ---------------------------------------------------------------- display */
