@@ -9,7 +9,6 @@ import {
   dayKeyOf,
   formatOrdinalDate,
   formatRange,
-  sundayWeekOf,
   type StaffShift,
   type DayKey,
   type RecurringTimeOff,
@@ -18,7 +17,6 @@ import {
 } from "@/lib/schedule";
 import type { Weather } from "@/lib/weather";
 import { DayDetails } from "./DayDetails";
-import { StaffTour, useTourPending, type TourStep } from "./StaffTour";
 import { Coffee } from "./TodayArt";
 import { WeatherCard } from "./WeatherCard";
 import { WeekStrip } from "./WeekStrip";
@@ -49,11 +47,8 @@ type Props = {
   shiftDays?: StaffShiftDay[];
   /** Their every-week days off, for that popup. */
   recurring?: RecurringTimeOff[];
-  /**
-   * Who is signed in, for the first-visit tour of the portal. Left out (tests,
-   * previews), there is no tour.
-   */
-  tourFor?: { id: string; name: string };
+  /** The first-visit tour opens this day's shift popup. */
+  tourDay?: string | null;
   /** Open the Menu, from the reminder at the bottom of the page. */
   onOpenMenu?: () => void;
   /** Fetch work days for a span of dates the week strip can swipe to. */
@@ -100,130 +95,18 @@ export function StaffHome({
   recurringDays = [],
   shiftDays = [],
   recurring = [],
-  tourFor,
+  tourDay = null,
   onOpenMenu,
   onLoadDates,
 }: Props) {
   /** The day tapped in the week strip, whose shift the popup is showing. */
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  // The first-visit tour can open a day's popup too, to show what tapping does.
+  const shownDay = tourDay ?? selectedDay;
   const working = today.shifts.length > 0;
   const empty = working ? null : noShiftLine(today);
-
-  /* ------------------------------------------------------------ the tour */
-
-  const [tourPending, finishTour] = useTourPending(tourFor?.id);
-  // On a day off, the tour shows the role on their next shift instead.
+  // On a day off, the tour points at the role on their next shift instead.
   const upcomingRoleShift = upcoming?.shifts.find((shift) => shift.role) ?? null;
-  const tourSteps = tourFor ? buildTourSteps() : [];
-
-  function buildTourSteps(): TourStep[] {
-    const firstName = tourFor!.name.trim().split(/\s+/)[0] ?? "";
-    const greeting = firstName.charAt(0).toUpperCase() + firstName.slice(1);
-
-    // The day the tour opens for them: their next work day this week, else
-    // any work day this week, else today. This week is what the strip opens on.
-    const thisWeek = sundayWeekOf(today.date);
-    const worked = thisWeek.filter((date) => workDates.includes(date));
-    const demoDay = worked.find((date) => date >= today.date) ?? worked[0] ?? today.date;
-    const demoLabel = `${DAY_LABELS[dayKeyOf(demoDay)]}, ${formatOrdinalDate(demoDay)}`;
-    const demoWorked = worked.includes(demoDay);
-
-    const todayRole = working ? today.shifts[0].role : null;
-    const roleStep: TourStep = working
-      ? {
-          target: '[data-tour="role"]',
-          title: "Your station for today",
-          body: todayRole ? (
-            <p>
-              Under your hours is your role: where you&apos;re stationed for today&apos;s
-              shift. Today you&apos;re on <strong className="text-foreground">{todayRole.name}</strong>.
-            </p>
-          ) : (
-            <p>
-              Under your hours is your role: where you&apos;re stationed for the shift. Your
-              manager hasn&apos;t given you one for today yet. It shows up here when they do.
-            </p>
-          ),
-        }
-      : upcomingRoleShift?.role
-        ? {
-            target: '[data-tour="role"]',
-            title: "Where you're stationed",
-            body: (
-              <p>
-                Every shift now shows your role: where you&apos;re stationed. On your next shift
-                you&apos;re on{" "}
-                <strong className="text-foreground">{upcomingRoleShift.role.name}</strong>. On
-                days you work, it shows right under today&apos;s hours too.
-              </p>
-            ),
-          }
-        : {
-            target: '[data-tour="today"]',
-            title: "Where you're stationed",
-            body: (
-              <p>
-                On days you work, today&apos;s hours show here with your role right under them:
-                where you&apos;re stationed for that shift.
-              </p>
-            ),
-          };
-
-    return [
-      {
-        title: `Welcome to the new staff portal, ${greeting}!`,
-        body: (
-          <>
-            <p>Here&apos;s a quick look at what&apos;s new. It takes under a minute.</p>
-            <p>You can skip it, and nothing on the page changes either way.</p>
-          </>
-        ),
-        next: "Let's go",
-        onEnter: () => setSelectedDay(null),
-      },
-      { ...roleStep, onEnter: () => setSelectedDay(null) },
-      {
-        target: `[data-day="${demoDay}"]`,
-        title: "Tap any day in your week",
-        body: (
-          <p>
-            Every day in your week can be tapped to see that day&apos;s shift. Try{" "}
-            <strong className="text-foreground">{demoLabel}</strong>.
-          </p>
-        ),
-        tapTarget: true,
-        next: "Show me",
-        onEnter: () => setSelectedDay(null),
-      },
-      {
-        target: '[aria-labelledby="day-details-title"]',
-        title: "Your shift details",
-        body: demoWorked ? (
-          <p>
-            Here are your hours and role for {demoLabel}.
-            Any day you open closes again with the ✕.
-          </p>
-        ) : (
-          <p>
-            You&apos;re not on for {demoLabel}, so it says so. On a work day this shows your
-            hours and role. Any day you open closes again with the ✕.
-          </p>
-        ),
-        // Really open it, the same as tapping the day does.
-        onEnter: () => setSelectedDay(demoDay),
-      },
-      {
-        target: '[data-tour="menu"]',
-        title: "Everything else is in the Menu",
-        body: (
-          <p>
-            Your full schedule, time off, Pay Out and the rules are all in the Menu, up here.
-          </p>
-        ),
-        onEnter: () => setSelectedDay(null),
-      },
-    ];
-  }
 
   return (
     <div className="space-y-4">
@@ -332,24 +215,14 @@ export function StaffHome({
         </span>
       </button>
 
-      {selectedDay && (
+      {shownDay && (
         <DayDetails
-          date={selectedDay}
+          date={shownDay}
           todayISO={today.date}
-          shiftDay={shiftDays.find((entry) => entry.date === selectedDay)}
+          shiftDay={shiftDays.find((entry) => entry.date === shownDay)}
           timeOff={timeOff}
           recurring={recurring}
           onClose={() => setSelectedDay(null)}
-        />
-      )}
-
-      {tourPending && tourSteps.length > 0 && (
-        <StaffTour
-          steps={tourSteps}
-          onFinish={() => {
-            setSelectedDay(null);
-            finishTour();
-          }}
         />
       )}
     </div>

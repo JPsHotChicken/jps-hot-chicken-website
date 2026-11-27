@@ -21,6 +21,8 @@ import { PayOutPage, type MyPayStub } from "./PayOutPage";
 import { RulesSlideshow } from "./RulesSlideshow";
 import { StaffHome, type StaffToday } from "./StaffHome";
 import { StaffMenu } from "./StaffMenu";
+import { StaffTour, useTourPending } from "./StaffTour";
+import { buildStaffTour, type TourDemo } from "./staffTourSteps";
 
 export type { MyPayStub };
 
@@ -76,6 +78,10 @@ export function StaffDashboard({
   const [recurring, setRecurring] = useState(initialRecurring);
   const [preferences, setPreferences] = useState(initialPreferences);
   const [error, setError] = useState<string | null>(null);
+
+  /** The first-visit tour, and whichever popup it has opened to show off. */
+  const [tourPending, finishTour] = useTourPending(employee.id);
+  const [tourDemo, setTourDemo] = useState<TourDemo>(null);
 
   /**
    * Spans of calendar whose shifts have already been fetched. A ref rather than
@@ -167,7 +173,7 @@ export function StaffDashboard({
             recurringDays={recurringDays}
             shiftDays={shiftDays}
             recurring={recurring}
-            tourFor={employee}
+            tourDay={tourDemo?.kind === "homeDay" ? tourDemo.date : null}
             onLoadDates={loadScheduled}
             onOpenMenu={() => setMenuOpen(true)}
           />
@@ -186,6 +192,7 @@ export function StaffDashboard({
             preferences={preferences}
             onPreferencesChange={setPreferences}
             roles={roles}
+            tourTimeOffDay={tourDemo?.kind === "timeOffDay" ? tourDemo.date : null}
           />
         )}
 
@@ -193,8 +200,39 @@ export function StaffDashboard({
           <RulesSlideshow employeeName={employee.name} initialSignatures={ruleSignatures} />
         )}
 
-        {view === "payStubs" && <PayOutPage payStubs={payStubs} todayISO={today.date} />}
+        {view === "payStubs" && (
+          <PayOutPage
+            payStubs={payStubs}
+            todayISO={today.date}
+            tourWeek={tourDemo?.kind === "payWeek" ? tourDemo.monday : null}
+          />
+        )}
       </main>
+
+      {tourPending && (
+        <StaffTour
+          steps={buildStaffTour({
+            name: employee.name,
+            today,
+            upcoming,
+            workDates: scheduledDates,
+            timeOff: requests,
+            payStubs,
+            // Each step says which page it's on; only switching when it
+            // changes keeps the page from jumping back to the top every step.
+            // (The steps are rebuilt every render, so `view` here is current.)
+            show: (next) => {
+              if (view !== next) selectView(next);
+            },
+            demo: setTourDemo,
+          })}
+          onFinish={() => {
+            setTourDemo(null);
+            finishTour();
+            selectView("home");
+          }}
+        />
+      )}
     </div>
   );
 }

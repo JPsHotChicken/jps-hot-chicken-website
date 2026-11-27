@@ -51,6 +51,8 @@ type Props = {
   onPreferencesChange: (preferences: RolePreference[]) => void;
   /** The owner's roles — the list a preference is picked from. */
   roles?: ShiftRole[];
+  /** The first-visit tour's day to show the request-off popup for. */
+  tourTimeOffDay?: string | null;
 };
 
 const FIELD =
@@ -162,7 +164,7 @@ function RecurringSettings({
   };
 
   return (
-    <div>
+    <div data-tour="recurring">
       <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
         <Repeat className="size-4 text-brand" />
         Days off every week
@@ -285,7 +287,7 @@ function PreferenceSettings({
   };
 
   return (
-    <div>
+    <div data-tour="preferences">
       <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
         <Shapes className="size-4 text-brand" />
         Position preferences
@@ -369,6 +371,7 @@ export function MySchedulePage({
   preferences,
   onPreferencesChange,
   roles = [],
+  tourTimeOffDay = null,
 }: Props) {
   const marks = useDayMarks(
     workDates,
@@ -415,6 +418,7 @@ export function MySchedulePage({
         onRequestsChange={onTimeOffChange}
         scheduledDates={workDates}
         onRangeChange={onLoadDates}
+        tourDay={tourTimeOffDay}
       />
 
       <section className="rounded-2xl border border-border bg-background shadow-sm">

@@ -194,6 +194,7 @@ export function TimeOffCalendar({
           return (
             <button
               key={iso}
+              data-date={iso}
               type="button"
               disabled={past}
               onClick={() => handleClick(iso)}

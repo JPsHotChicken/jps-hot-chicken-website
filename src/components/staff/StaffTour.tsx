@@ -26,6 +26,8 @@ export type TourStep = {
   onEnter?: () => void;
   /** Tapping the highlighted thing moves on, the same as Next. */
   tapTarget?: boolean;
+  /** What to call that tap in the card: "Tap the highlighted day". */
+  tapHint?: string;
 };
 
 /** How far the highlight sits outside the thing it's around, in pixels. */
@@ -113,19 +115,6 @@ export function StaffTour({
     primary.current?.focus();
   }, [index]);
 
-  const finishRef = useRef(onFinish);
-  useEffect(() => {
-    finishRef.current = onFinish;
-  }, [onFinish]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") finishRef.current();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
-
   const next = () => (last ? onFinish() : setIndex(index + 1));
   const back = () => setIndex(Math.max(0, index - 1));
 
@@ -208,31 +197,24 @@ export function StaffTour({
           {step.tapTarget && (
             <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-foreground">
               <Hand aria-hidden className="size-4 text-brand" />
-              Tap the highlighted day, or press {step.next ?? "Next"}.
+              {step.tapHint ?? "Tap the highlighted spot"}, or press {step.next ?? "Next"}.
             </p>
           )}
 
           <div className="mt-5 flex items-center gap-2">
-            {index === 0 ? (
-              <Button variant="ghost" size="sm" onClick={onFinish}>
-                Skip tour
-              </Button>
-            ) : (
+            {/* Everyone goes through it once, so there's no skipping — only back. */}
+            {index > 0 && (
               <Button variant="ghost" size="sm" onClick={back}>
                 Back
               </Button>
             )}
 
-            {/* Where you are, as dots. */}
-            <span aria-hidden className="mx-auto flex gap-1">
-              {steps.map((_, dot) => (
-                <span
-                  key={dot}
-                  className={`h-1.5 rounded-full transition-all ${
-                    dot === index ? "w-4 bg-brand" : "w-1.5 bg-gray-300"
-                  }`}
-                />
-              ))}
+            {/* How far along, as a thin bar: too many steps for a dot each. */}
+            <span aria-hidden className="mx-auto h-1.5 w-24 overflow-hidden rounded-full bg-gray-200">
+              <span
+                className="block h-full rounded-full bg-brand transition-all duration-300"
+                style={{ width: `${((index + 1) / steps.length) * 100}%` }}
+              />
             </span>
 
             <Button ref={primary} size="sm" onClick={next}>
@@ -252,7 +234,7 @@ export function StaffTour({
  * once more, and can skip it. Bump the version when the tour gains new steps
  * worth showing to people who have already been through it.
  */
-const TOUR_VERSION = 1;
+const TOUR_VERSION = 2;
 
 export function useTourPending(employeeId: string | undefined): [boolean, () => void] {
   const key = `jps-staff-tour-v${TOUR_VERSION}:${employeeId}`;

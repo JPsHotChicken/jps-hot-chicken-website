@@ -40,6 +40,8 @@ type Props = {
   /** Days this person is on, for the green dots. */
   scheduledDates: string[];
   onRangeChange?: (fromISO: string, toISO: string) => void;
+  /** The first-visit tour opens this day's popup to show how asking works. */
+  tourDay?: string | null;
 };
 
 /* ----------------------------------------------------------------- popup */
@@ -370,8 +372,15 @@ function DayOffDialog({
  * a popup to ask for it off (a reason is required) or to look after a request
  * already made. Their requests are listed underneath; tapping one opens it.
  */
-export function TimeOffCard({ requests, onRequestsChange, scheduledDates, onRangeChange }: Props) {
-  const [openDay, setOpenDay] = useState<string | null>(null);
+export function TimeOffCard({
+  requests,
+  onRequestsChange,
+  scheduledDates,
+  onRangeChange,
+  tourDay = null,
+}: Props) {
+  const [chosenDay, setOpenDay] = useState<string | null>(null);
+  const openDay = tourDay ?? chosenDay;
   const [editId, setEditId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -428,15 +437,17 @@ export function TimeOffCard({ requests, onRequestsChange, scheduledDates, onRang
       </header>
 
       <div className="space-y-4 p-5 sm:p-6">
-        <TimeOffCalendar
-          requests={requests}
-          scheduledDates={scheduledDates}
-          // The day whose popup is open stays highlighted, so it's clear which
-          // day the request is for.
-          selection={openDay ? { start: openDay, end: openDay } : null}
-          onDayClick={(iso) => open(iso)}
-          onRangeChange={onRangeChange}
-        />
+        <div data-tour="timeoff-calendar">
+          <TimeOffCalendar
+            requests={requests}
+            scheduledDates={scheduledDates}
+            // The day whose popup is open stays highlighted, so it's clear which
+            // day the request is for.
+            selection={openDay ? { start: openDay, end: openDay } : null}
+            onDayClick={(iso) => open(iso)}
+            onRangeChange={onRangeChange}
+          />
+        </div>
 
         {confirmation && (
           <p
@@ -447,7 +458,7 @@ export function TimeOffCard({ requests, onRequestsChange, scheduledDates, onRang
           </p>
         )}
 
-        <div>
+        <div data-tour="timeoff-list">
           <h3 className="mb-2 text-xs font-bold tracking-widest text-muted-foreground uppercase">
             My requests ({requests.length})
           </h3>

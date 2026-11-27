@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { StaffHome } from "@/components/staff/StaffHome";
 import { WEEKS_AHEAD, WEEKS_BACK } from "@/components/staff/WeekStrip";
@@ -269,71 +269,5 @@ describe("tapping a day in the week strip", () => {
     render(<StaffHome today={today} upcoming={null} />);
     fireEvent.click(screen.getByRole("button", { name: "Details for Monday Nov 23rd" }));
     expect(screen.getByRole("dialog")).toHaveTextContent("You're not scheduled to work.");
-  });
-});
-
-describe("the first-visit tour", () => {
-  const today = {
-    date: "2026-11-24",
-    closed: false,
-    posted: true,
-    shifts: [{ start: 600, end: 960, role: { name: "Register", color: "blue" } }],
-  };
-  const shiftDays = [
-    { date: "2026-11-24", shifts: today.shifts },
-    {
-      date: "2026-11-26",
-      shifts: [{ start: 660, end: 1140, role: { name: "Fry station", color: "orange" } }],
-    },
-  ];
-  const home = () =>
-    render(
-      <StaffHome
-        today={today}
-        upcoming={shiftDays[1]}
-        workDates={["2026-11-24", "2026-11-26"]}
-        shiftDays={shiftDays}
-        tourFor={{ id: "emp-1", name: "rissi" }}
-      />,
-    );
-  const tour = () => within(screen.getByRole("dialog", { name: /welcome|station|tap|shift|menu/i }));
-
-  beforeEach(() => window.localStorage.clear());
-
-  it("welcomes them by name and walks through the role and a day's popup", () => {
-    home();
-    expect(tour().getByRole("heading")).toHaveTextContent("Welcome to the new staff portal, Rissi!");
-
-    fireEvent.click(tour().getByRole("button", { name: "Let's go" }));
-    expect(tour().getByRole("heading")).toHaveTextContent("Your station for today");
-    expect(tour().getByText("Register")).toBeInTheDocument();
-
-    fireEvent.click(tour().getByRole("button", { name: "Next" }));
-    expect(tour().getByRole("heading")).toHaveTextContent("Tap any day in your week");
-    expect(tour().getByText("Tuesday, Nov 24th")).toBeInTheDocument();
-
-    // "Show me" really opens the day, the same as tapping it.
-    fireEvent.click(tour().getByRole("button", { name: "Show me" }));
-    const details = screen.getByRole("dialog", { name: /Tuesday, Nov 24th/ });
-    expect(within(details).getByText("10:00 AM – 4:00 PM")).toBeInTheDocument();
-
-    // Back closes it again.
-    fireEvent.click(tour().getByRole("button", { name: "Back" }));
-    expect(screen.queryByRole("dialog", { name: /Tuesday, Nov 24th/ })).not.toBeInTheDocument();
-  });
-
-  it("is only seen once", () => {
-    const { unmount } = home();
-    fireEvent.click(screen.getByRole("button", { name: "Skip tour" }));
-    expect(screen.queryByText(/Welcome to the new staff portal/)).not.toBeInTheDocument();
-    unmount();
-
-    home();
-    expect(screen.queryByText(/Welcome to the new staff portal/)).not.toBeInTheDocument();
-  });
-
-  it("isn't shown to anybody on its own when no one is named", () => {
-    render(<StaffHome today={today} upcoming={null} />);
-    expect(screen.queryByText(/Welcome to the new staff portal/)).not.toBeInTheDocument();
   });
 });

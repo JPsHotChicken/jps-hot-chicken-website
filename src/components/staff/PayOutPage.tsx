@@ -51,7 +51,16 @@ function weekAmounts(stubs: MyPayStub[]): CheckAmounts | null {
 const shortMoney = (value: number) =>
   value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-export function PayOutPage({ payStubs, todayISO }: { payStubs: MyPayStub[]; todayISO: string }) {
+export function PayOutPage({
+  payStubs,
+  todayISO,
+  tourWeek = null,
+}: {
+  payStubs: MyPayStub[];
+  todayISO: string;
+  /** The first-visit tour opens this week's popup to show the breakdown. */
+  tourWeek?: string | null;
+}) {
   /** Checks by the Monday of the week they pay for. */
   const byWeek = useMemo(() => {
     const weeks = new Map<string, MyPayStub[]>();
@@ -72,6 +81,8 @@ export function PayOutPage({ payStubs, todayISO }: { payStubs: MyPayStub[]; toda
     return new Date(date.getFullYear(), date.getMonth(), 1);
   });
   const [open, setOpen] = useState(false);
+  const shownWeek = tourWeek ?? selected;
+  const popupOpen = tourWeek !== null || open;
 
   const weeks = useMemo(() => {
     const first = toISODate(monthGridStart(month));
@@ -88,7 +99,10 @@ export function PayOutPage({ payStubs, todayISO }: { payStubs: MyPayStub[]; toda
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-border bg-background shadow-sm">
+      <section
+        data-tour="pay-calendar"
+        className="rounded-xl border border-border bg-background shadow-sm"
+      >
         <header className="border-b border-border px-4 py-3">
           <h2 className="flex items-center gap-2 font-heading text-base font-bold">
             <CalendarDays className="size-4 text-brand" />
@@ -137,7 +151,7 @@ export function PayOutPage({ payStubs, todayISO }: { payStubs: MyPayStub[]; toda
             {weeks.map((monday) => {
               const stubs = byWeek.get(monday) ?? [];
               const amounts = weekAmounts(stubs);
-              const isSelected = monday === selected;
+              const isSelected = monday === shownWeek;
               const days = Array.from({ length: 7 }, (_, index) => addDaysISO(monday, index));
 
               return (
@@ -145,6 +159,7 @@ export function PayOutPage({ payStubs, todayISO }: { payStubs: MyPayStub[]; toda
                 // there is no single day to pick.
                 <button
                   key={monday}
+                  data-week={monday}
                   type="button"
                   onClick={() => choose(monday)}
                   aria-pressed={isSelected}
@@ -202,7 +217,10 @@ export function PayOutPage({ payStubs, todayISO }: { payStubs: MyPayStub[]; toda
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-background shadow-sm">
+      <section
+        data-tour="pay-list"
+        className="rounded-xl border border-border bg-background shadow-sm"
+      >
         <header className="border-b border-border px-4 py-3">
           <h2 className="flex items-center gap-2 font-heading text-base font-bold">
             <FileText className="size-4 text-brand" />
@@ -257,10 +275,10 @@ export function PayOutPage({ payStubs, todayISO }: { payStubs: MyPayStub[]; toda
         </div>
       </section>
 
-      {open && (
+      {popupOpen && (
         <WeekPay
-          monday={selected}
-          stubs={byWeek.get(selected) ?? []}
+          monday={shownWeek}
+          stubs={byWeek.get(shownWeek) ?? []}
           onClose={() => setOpen(false)}
         />
       )}
@@ -374,6 +392,7 @@ function WeekPay({
             <Link
               key={stub.id}
               href={`/staff/pay-stubs/${stub.id}`}
+              data-tour={index === 0 ? "see-check" : undefined}
               className={`${buttonVariants()} w-full`}
             >
               <ReceiptText data-icon="inline-start" />
